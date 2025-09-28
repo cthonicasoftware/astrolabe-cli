@@ -336,10 +336,8 @@ func (m Model) View() string {
 }
 
 func (m Model) formView() string {
-	header := []string{
-		titleStyle.Render("QA Agent Capture"),
-		m.renderTabs(),
-	}
+	title := titleStyle.Render("QA Agent Capture")
+	tabs := m.renderTabs()
 
 	var leftParts []string
 	var rightParts []string
@@ -403,11 +401,16 @@ func (m Model) formView() string {
 	rightColumn := lipgloss.NewStyle().Render(strings.Join(rightParts, "\n"))
 	columns := lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, rightColumn)
 
-	tabFrame := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(1, 2).BorderForeground(highlightColor).Render(columns)
+	tabFrame := lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(highlightColor).
+		Padding(1, 2).
+		Render(columns)
 
-	body := lipgloss.JoinVertical(lipgloss.Left, tabFrame, m.submitButtonView())
+	tabbedFrame := mergeTabsAndFrame(tabs, tabFrame)
+	body := lipgloss.JoinVertical(lipgloss.Left, tabbedFrame, m.submitButtonView())
 
-	sections := append(header, body)
+	sections := []string{title, body}
 	return strings.Join(sections, "\n")
 }
 
@@ -710,7 +713,6 @@ func (m *Model) onTabChanged() {
 
 func (m Model) renderTabs() string {
 	var rendered []string
-	total := len(m.tabs)
 	for i, tab := range m.tabs {
 		style := inactiveTabStyle
 		if i == m.activeTab {
@@ -721,20 +723,67 @@ func (m Model) renderTabs() string {
 		}
 		border, _, _, _, _ := style.GetBorder()
 		isFirst := i == 0
-		isLast := i == total-1
-		isActive := i == m.activeTab
-		if isFirst && isActive {
-			border.BottomLeft = "│"
-		} else if isFirst && !isActive {
-			border.BottomLeft = "├"
-		} else if isLast && isActive {
-			border.BottomRight = "│"
-		} else if isLast && !isActive {
-			border.BottomRight = "┤"
+
+		border.BottomLeft = "┴"
+		border.BottomRight = "┴"
+		if isFirst {
+			border.BottomLeft = "╰"
 		}
-		rendered = append(rendered, style.Border(border).Render(tab.name))
+		style = style.Border(border)
+		rendered = append(rendered, style.Render(tab.name))
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Top, rendered...)
+}
+
+func mergeTabsAndFrame(tabs, frame string) string {
+	if tabs == "" {
+		return frame
+	}
+	if frame == "" {
+		return tabs
+	}
+
+	tabLines := strings.Split(tabs, "\n")
+	frameLines := strings.Split(frame, "\n")
+	if len(tabLines) == 0 {
+		return frame
+	}
+	if len(frameLines) == 0 {
+		return tabs
+	}
+
+	tabLines[len(tabLines)-1] = overlayLine(tabLines[len(tabLines)-1], frameLines[0])
+	mergedLines := append(tabLines, frameLines[1:]...)
+	return strings.Join(mergedLines, "\n")
+}
+
+func overlayLine(topOverride, base string) string {
+	topRunes := []rune(topOverride)
+	baseRunes := []rune(base)
+
+	max := len(baseRunes)
+	if len(topRunes) > max {
+		max = len(topRunes)
+	}
+
+	result := make([]rune, max)
+	for i := 0; i < max; i++ {
+		var topRune rune = ' '
+		if i < len(topRunes) {
+			topRune = topRunes[i]
+		}
+		var baseRune rune = ' '
+		if i < len(baseRunes) {
+			baseRune = baseRunes[i]
+		}
+		if topRune != ' ' {
+			result[i] = topRune
+			continue
+		}
+		result[i] = baseRune
+	}
+
+	return string(result)
 }
 
 func startCaptureCommand(cfg capture.Config) tea.Cmd {
