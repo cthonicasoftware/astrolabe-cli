@@ -13,6 +13,7 @@ import (
 	"go.bug.st/serial"
 
 	"qa_cli/internal/capture"
+	tabframe "qa_cli/internal/ui/tabframe"
 )
 
 type focusTarget int
@@ -81,19 +82,7 @@ var (
 	errorStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
 	helpStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("239"))
 	noStyle       = lipgloss.NewStyle()
-
-	highlightColor   = lipgloss.AdaptiveColor{Light: "#874BFD", Dark: "#7D56F4"}
-	inactiveTabStyle = lipgloss.NewStyle().Border(tabBorderWithBottom("┴", "─", "┴"), true).BorderForeground(highlightColor).Padding(0, 1)
-	activeTabStyle   = inactiveTabStyle.Border(tabBorderWithBottom("┘", " ", "└"), true)
 )
-
-func tabBorderWithBottom(left, middle, right string) lipgloss.Border {
-	border := lipgloss.RoundedBorder()
-	border.BottomLeft = left
-	border.Bottom = middle
-	border.BottomRight = right
-	return border
-}
 
 func NewModel() Model {
 	ports, portErr := serial.GetPortsList()
@@ -337,8 +326,8 @@ func (m Model) View() string {
 
 func (m Model) formView() string {
 	title := titleStyle.Render("QA Agent Capture")
-	tabs := m.renderTabs()
 
+	// Build left and right stacks as plain strings
 	var leftParts []string
 	var rightParts []string
 
@@ -376,9 +365,6 @@ func (m Model) formView() string {
 	}
 	leftParts = append(leftParts, m.runIDInput.View())
 
-	leftColumn := strings.Join(leftParts, "\n")
-	leftColumn = lipgloss.NewStyle().PaddingRight(4).Render(leftColumn)
-
 	if m.focused(focusFirmware) {
 		m.firmwareInput.PromptStyle = focusedStyle
 		m.firmwareInput.TextStyle = focusedStyle
@@ -398,17 +384,44 @@ func (m Model) formView() string {
 		rightParts = append(rightParts, errorStyle.Render(fmt.Sprintf("Error: %v", m.err)))
 	}
 
-	rightColumn := lipgloss.NewStyle().Render(strings.Join(rightParts, "\n"))
-	columns := lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, rightColumn)
+	left := strings.Join(leftParts, "\n")
+	right := strings.Join(rightParts, "\n")
 
-	tabFrame := lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(highlightColor).
-		Padding(1, 2).
-		Render(columns)
+	// Tabs
+	tabNames := make([]string, len(m.tabs))
+	for i := range m.tabs {
+		tabNames[i] = m.tabs[i].name
+	}
 
-	tabbedFrame := mergeTabsAndFrame(tabs, tabFrame)
-	body := lipgloss.JoinVertical(lipgloss.Left, tabbedFrame, m.submitButtonView())
+	// Let tabframe render + size everything
+	tabbed, innerW, leftW, rightW := tabframe.RenderTwoColumnTabbedFrame(
+		tabNames,
+		m.activeTab,
+		left,
+		right,
+		m.width,
+		tabframe.TwoColOptions{
+			LeftRatio:     0.60,
+			MinLeft:       32,
+			MinRight:      28,
+			HorizontalGap: 4,
+		},
+	)
+
+	// Optional: use the computed widths to resize inputs so they never overflow
+
+	innerW, _, _ = tabframe.ComputeColumnWidths(m.width, tabframe.TwoColOptions{
+		LeftRatio: 0.60, MinLeft: 32, MinRight: 28, HorizontalGap: 4,
+	})
+	m.statusViewport.Width = innerW
+	m.logViewport.Width = innerW
+	_ = innerW
+	m.portInput.Width = leftW - 2
+	m.baudInput.Width = max(10, leftW/3)
+	m.runIDInput.Width = leftW - 2
+	m.firmwareInput.Width = rightW - 2
+
+	body := lipgloss.JoinVertical(lipgloss.Left, tabbed, m.submitButtonView())
 
 	sections := []string{title, body}
 	return strings.Join(sections, "\n")
@@ -518,24 +531,15 @@ func (m *Model) refreshViewportHeight() {
 	headers := lipgloss.Height(labelStyle.Render("Status")) + lipgloss.Height(labelStyle.Render("Log"))
 	footer := lipgloss.Height(helpStyle.Render("Left/Right to choose driver • Tab to navigate • Esc to quit"))
 	used := lipgloss.Height(form) + headers + footer
-	space := m.height - used
-	if space < 2 {
-		space = 2
-	}
+	space := max(m.height-used, 2)
 	statusHeight := 1
 	if space > 2 {
-		statusHeightCandidate := space / 3
-		if statusHeightCandidate > 3 {
-			statusHeightCandidate = 3
-		}
+		statusHeightCandidate := min(space/3, 3)
 		if statusHeightCandidate > statusHeight {
 			statusHeight = statusHeightCandidate
 		}
 	}
-	logHeight := space - statusHeight
-	if logHeight < 1 {
-		logHeight = 1
-	}
+	logHeight := max(space-statusHeight, 1)
 	m.statusViewport.Height = statusHeight
 	m.logViewport.Height = logHeight
 }
@@ -709,81 +713,6 @@ func (m *Model) onTabChanged() {
 	m.appendStatus(fmt.Sprintf("Capture driver set to %s", m.tabs[m.activeTab].name))
 	m.focusIndex = 0
 	m.refreshViewportHeight()
-}
-
-func (m Model) renderTabs() string {
-	var rendered []string
-	for i, tab := range m.tabs {
-		style := inactiveTabStyle
-		if i == m.activeTab {
-			style = activeTabStyle
-		}
-		if m.focused(focusTabs) && i == m.activeTab {
-			style = style.Copy().Bold(true)
-		}
-		border, _, _, _, _ := style.GetBorder()
-		isFirst := i == 0
-
-		border.BottomLeft = "┴"
-		border.BottomRight = "┴"
-		if isFirst {
-			border.BottomLeft = "╰"
-		}
-		style = style.Border(border)
-		rendered = append(rendered, style.Render(tab.name))
-	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, rendered...)
-}
-
-func mergeTabsAndFrame(tabs, frame string) string {
-	if tabs == "" {
-		return frame
-	}
-	if frame == "" {
-		return tabs
-	}
-
-	tabLines := strings.Split(tabs, "\n")
-	frameLines := strings.Split(frame, "\n")
-	if len(tabLines) == 0 {
-		return frame
-	}
-	if len(frameLines) == 0 {
-		return tabs
-	}
-
-	tabLines[len(tabLines)-1] = overlayLine(tabLines[len(tabLines)-1], frameLines[0])
-	mergedLines := append(tabLines, frameLines[1:]...)
-	return strings.Join(mergedLines, "\n")
-}
-
-func overlayLine(topOverride, base string) string {
-	topRunes := []rune(topOverride)
-	baseRunes := []rune(base)
-
-	max := len(baseRunes)
-	if len(topRunes) > max {
-		max = len(topRunes)
-	}
-
-	result := make([]rune, max)
-	for i := 0; i < max; i++ {
-		var topRune rune = ' '
-		if i < len(topRunes) {
-			topRune = topRunes[i]
-		}
-		var baseRune rune = ' '
-		if i < len(baseRunes) {
-			baseRune = baseRunes[i]
-		}
-		if topRune != ' ' {
-			result[i] = topRune
-			continue
-		}
-		result[i] = baseRune
-	}
-
-	return string(result)
 }
 
 func startCaptureCommand(cfg capture.Config) tea.Cmd {
