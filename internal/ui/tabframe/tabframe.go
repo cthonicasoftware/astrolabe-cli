@@ -6,6 +6,15 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+const (
+	fallbackTermWidth       = 80
+	minContentWidth         = 10
+	windowPaddingVertical   = 2
+	windowPaddingHorizontal = 0
+	framePaddingVertical    = 1
+	framePaddingHorizontal  = 2
+)
+
 var (
 	Highlight = lipgloss.AdaptiveColor{Light: "#874BFD", Dark: "#7D56F4"}
 
@@ -18,13 +27,13 @@ var (
 	// Window that sits under the tabs (no top border, so tabs can “plug in”)
 	windowStyle = lipgloss.NewStyle().
 			BorderForeground(Highlight).
-			Padding(2, 0). // vertical padding = 2, horizontal padding = 0
+			Padding(windowPaddingVertical, windowPaddingHorizontal).
 			Align(lipgloss.Center).
 			Border(lipgloss.NormalBorder()).
 			UnsetBorderTop()
 
 	// Padding around the whole tabbed frame block
-	framePad = lipgloss.NewStyle().Padding(1, 2)
+	framePad = lipgloss.NewStyle().Padding(framePaddingVertical, framePaddingHorizontal)
 )
 
 func tabBorderWithBottom(left, middle, right string) lipgloss.Border {
@@ -35,119 +44,38 @@ func tabBorderWithBottom(left, middle, right string) lipgloss.Border {
 	return b
 }
 
-// ---------- Single-pane (existing) ----------
+// Single-pane
 
 func RenderTabbedFrame(tabs []string, active int, content string, termWidth int) string {
+	frame := New(tabs, active, termWidth)
+	return frame.Render(content)
+}
+
+type Frame struct {
+	tabRow     string
+	innerWidth int
+}
+
+func New(tabs []string, active, termWidth int) Frame {
 	tabRow := renderTabRow(tabs, active)
+	inner := clampInnerWidth(termWidth, lipgloss.Width(tabRow))
+	return Frame{tabRow: tabRow, innerWidth: inner}
+}
 
-	innerW := clampInnerWidth(termWidth, lipgloss.Width(tabRow))
-	win := windowStyle.Width(innerW).Render(content)
+func (f Frame) InnerWidth() int {
+	return f.innerWidth
+}
 
+func (f Frame) Render(content string) string {
+	win := windowStyle.Width(f.innerWidth).Render(content)
 	var b strings.Builder
-	b.WriteString(tabRow)
+	b.WriteString(f.tabRow)
 	b.WriteByte('\n')
 	b.WriteString(win)
 	return framePad.Render(b.String())
 }
 
-// ---------- Two-column helpers ----------
-
-// TwoColOptions controls the split and minimums of the two columns.
-type TwoColOptions struct {
-	LeftRatio       float64 // 0.0-1.0; default 0.60
-	MinLeft         int     // default 32
-	MinRight        int     // default 28
-	HorizontalGap   int     // space between columns; default 4
-	ForceInnerWidth int     // optional: if >0, override inner width
-}
-
-func defaults(o TwoColOptions) TwoColOptions {
-	if o.LeftRatio <= 0 || o.LeftRatio >= 1 {
-		o.LeftRatio = 0.60
-	}
-	if o.MinLeft <= 0 {
-		o.MinLeft = 32
-	}
-	if o.MinRight <= 0 {
-		o.MinRight = 28
-	}
-	if o.HorizontalGap < 0 {
-		o.HorizontalGap = 4
-	}
-	return o
-}
-
-// ComputeColumnWidths returns the content inner width (inside the window box)
-// and the final left/right column widths based on the options and terminal width.
-func ComputeColumnWidths(termWidth int, opts TwoColOptions) (inner, left, right int) {
-	opts = defaults(opts)
-
-	inner = opts.ForceInnerWidth
-	if inner <= 0 {
-		inner = clampInnerWidth(termWidth, termWidth) // best-effort inner width
-	}
-	// Split with ratio
-	left = int(float64(inner-opts.HorizontalGap) * opts.LeftRatio)
-	right = (inner - opts.HorizontalGap) - left
-
-	// Enforce minimums
-	if left < opts.MinLeft {
-		left = opts.MinLeft
-	}
-	if right < opts.MinRight {
-		right = opts.MinRight
-	}
-	// Clamp if overflow
-	if left+opts.HorizontalGap+right > inner {
-		right = inner - opts.HorizontalGap - left
-		if right < 10 {
-			right = 10
-			left = inner - opts.HorizontalGap - right
-		}
-	}
-	return
-}
-
-// RenderTwoColumnTabbedFrame composes a two-column content area under the tab row.
-// It sizes and clamps both columns so they fit inside the window frame cleanly.
-func RenderTwoColumnTabbedFrame(
-	tabs []string,
-	active int,
-	leftContent, rightContent string,
-	termWidth int,
-	opts TwoColOptions,
-) (rendered string, innerWidth, leftW, rightW int) {
-
-	opts = defaults(opts)
-	tabRow := renderTabRow(tabs, active)
-
-	innerWidth = clampInnerWidth(termWidth, lipgloss.Width(tabRow))
-	// compute column widths for this inner width
-	opts.ForceInnerWidth = innerWidth
-	_, leftW, rightW = ComputeColumnWidths(termWidth, opts)
-
-	left := lipgloss.NewStyle().
-		Width(leftW).
-		MaxWidth(leftW).
-		PaddingRight(opts.HorizontalGap).
-		Render(leftContent)
-
-	right := lipgloss.NewStyle().
-		Width(rightW).
-		MaxWidth(rightW).
-		Render(rightContent)
-
-	row := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
-	win := windowStyle.Width(innerWidth).Render(row)
-
-	var b strings.Builder
-	b.WriteString(tabRow)
-	b.WriteByte('\n')
-	b.WriteString(win)
-	return framePad.Render(b.String()), innerWidth, leftW, rightW
-}
-
-// ---------- internals ----------
+// internals
 
 func renderTabRow(tabs []string, active int) string {
 	if len(tabs) == 0 {
@@ -191,21 +119,18 @@ func renderTabRow(tabs []string, active int) string {
 // It subtracts the windowStyle’s horizontal frame so content won’t wrap awkwardly.
 func clampInnerWidth(termWidth int, tabRowWidth int) int {
 	if termWidth <= 0 {
-		termWidth = 80
+		termWidth = fallbackTermWidth
 	}
 	// Horizontal frame consumed by the window box
 	frame := windowStyle.GetHorizontalFrameSize()
 	// outer padding (framePad) adds space as well; subtract it
 	outerPad := framePad.GetHorizontalFrameSize()
 
-	maxInner := termWidth - frame - outerPad
-	if maxInner < 10 {
-		maxInner = 10
-	}
+	maxInner := max(termWidth-frame-outerPad, minContentWidth)
 	// Don’t exceed the tab row width either (nice visual alignment)
 	if tabRowWidth > 0 {
 		maxFromTabs := tabRowWidth - frame
-		if maxFromTabs > 10 && maxInner > maxFromTabs {
+		if maxFromTabs > minContentWidth && maxInner > maxFromTabs {
 			maxInner = maxFromTabs
 		}
 	}
