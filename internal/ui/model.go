@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"go.bug.st/serial"
@@ -62,10 +61,8 @@ type Model struct {
 	uploadModeField selectField
 	autoUpload      bool
 
-	statusViewport viewport.Model
-	logViewport    viewport.Model
-	statusLines    []string
-	logLines       []string
+	statusPane *messagePane
+	logPane    *messagePane
 
 	capturing bool
 	width     int
@@ -74,14 +71,18 @@ type Model struct {
 }
 
 var (
-	focusedStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true)
-	selectedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("213")).Bold(true)
-	blurredStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	labelStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Bold(true)
-	titleStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("212")).Bold(true)
-	errorStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-	helpStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("239"))
-	noStyle       = lipgloss.NewStyle()
+	focusedStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true)
+	selectedStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("213")).Bold(true)
+	blurredStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	labelStyle          = lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Bold(true)
+	titleStyle          = lipgloss.NewStyle().Foreground(lipgloss.Color("212")).Bold(true)
+	errorStyle          = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+	helpStyle           = lipgloss.NewStyle().Foreground(lipgloss.Color("239"))
+	noStyle             = lipgloss.NewStyle()
+	captureDetailsStyle = lipgloss.NewStyle().
+				Border(lipgloss.NormalBorder()).
+				BorderForeground(tabframe.Highlight).
+				Padding(1, 2)
 )
 
 func NewModel() Model {
@@ -120,8 +121,8 @@ func NewModel() Model {
 	format := selectField{label: "Output Format", options: []string{"Normalized JSONL", "Protobuf"}}
 	upload := selectField{label: "Upload Mode", options: []string{"Direct (API)", "Staged", "Offline"}}
 
-	statusVP := viewport.New(60, 3)
-	logVP := viewport.New(60, 5)
+	statusPane := newMessagePane(60, 3, 1)
+	logPane := newMessagePane(60, 5, 0)
 
 	m := Model{
 		tabs:            tabs,
@@ -134,20 +135,18 @@ func NewModel() Model {
 		formatField:     format,
 		uploadModeField: upload,
 		autoUpload:      true,
-		statusViewport:  statusVP,
-		logViewport:     logVP,
+		statusPane:      statusPane,
+		logPane:         logPane,
 	}
 
-	m.statusLines = []string{"Use ↑/↓ or j/k to move fields. Tab/Shift+Tab cycle drivers."}
+	m.statusPane.SetLines([]string{"Use ↑/↓ or j/k to move fields. Tab/Shift+Tab cycle drivers."})
 	if portErr != nil {
-		m.logLines = append(m.logLines, fmt.Sprintf("Failed to enumerate serial ports: %v", portErr))
+		m.logPane.Append(fmt.Sprintf("Failed to enumerate serial ports: %v", portErr))
 	} else if len(ports) == 0 {
-		m.logLines = append(m.logLines, "No serial ports detected; enter one manually if needed.")
+		m.logPane.Append("No serial ports detected; enter one manually if needed.")
 	} else {
-		m.logLines = append(m.logLines, fmt.Sprintf("Detected %d serial port(s).", len(ports)))
+		m.logPane.Append(fmt.Sprintf("Detected %d serial port(s).", len(ports)))
 	}
-	m.syncStatus()
-	m.syncLogs()
 	return m
 }
 
@@ -185,10 +184,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.statusViewport.Width = msg.Width
-		m.logViewport.Width = msg.Width
-		m.syncStatus()
-		m.syncLogs()
+		m.statusPane.SetWidth(msg.Width)
+		m.logPane.SetWidth(msg.Width)
+		m.statusPane.Sync()
+		m.logPane.Sync()
 		m.refreshViewportHeight()
 	case captureResultMsg:
 		m.capturing = false
@@ -315,116 +314,105 @@ func (m Model) View() string {
 	sections := []string{
 		form,
 		statusLabel,
-		m.statusViewport.View(),
+		m.statusPane.View(),
 		labelStyle.Render("Log"),
-		m.logViewport.View(),
+		m.logPane.View(),
 		helpLine,
 	}
 
 	return strings.Join(sections, "\n")
 }
 
+// TODO: refactor to main view from which other components can be composed
 func (m Model) formView() string {
 	title := titleStyle.Render("QA Agent Capture")
+	options := tabframe.TwoColOptions{LeftRatio: 0.60, MinLeft: 32, MinRight: 28, HorizontalGap: 4}
 
-	// Build left and right stacks as plain strings
-	var leftParts []string
-	var rightParts []string
-
-	leftParts = append(leftParts, labelStyle.Render(m.portLabel()))
-	if m.focused(focusPort) {
-		m.portInput.PromptStyle = focusedStyle
-		m.portInput.TextStyle = focusedStyle
-	} else {
-		m.portInput.PromptStyle = noStyle
-		m.portInput.TextStyle = noStyle
+	innerW, leftW, _ := tabframe.ComputeColumnWidths(m.width, options)
+	m.statusPane.SetWidth(innerW)
+	m.logPane.SetWidth(innerW)
+	m.portInput.Width = max(0, leftW-2)
+	m.baudInput.Width = max(10, leftW/3)
+	detailsContentWidth := innerW - captureDetailsStyle.GetHorizontalFrameSize()
+	if detailsContentWidth < 0 {
+		detailsContentWidth = 0
 	}
-	leftParts = append(leftParts, m.portInput.View())
+	m.runIDInput.Width = max(0, detailsContentWidth)
+	m.firmwareInput.Width = max(0, detailsContentWidth)
 
-	if m.tabs[m.activeTab].requiresBaud {
-		leftParts = append(leftParts, "")
-		leftParts = append(leftParts, labelStyle.Render("Baud Rate"))
-		if m.focused(focusBaud) {
-			m.baudInput.PromptStyle = focusedStyle
-			m.baudInput.TextStyle = focusedStyle
-		} else {
-			m.baudInput.PromptStyle = noStyle
-			m.baudInput.TextStyle = noStyle
-		}
-		leftParts = append(leftParts, m.baudInput.View())
-	}
+	left := m.renderLeftColumn()
+	right := m.renderRightColumn()
 
-	leftParts = append(leftParts, "")
-	leftParts = append(leftParts, labelStyle.Render("Run ID"))
-	if m.focused(focusRunID) {
-		m.runIDInput.PromptStyle = focusedStyle
-		m.runIDInput.TextStyle = focusedStyle
-	} else {
-		m.runIDInput.PromptStyle = noStyle
-		m.runIDInput.TextStyle = noStyle
-	}
-	leftParts = append(leftParts, m.runIDInput.View())
-
-	if m.focused(focusFirmware) {
-		m.firmwareInput.PromptStyle = focusedStyle
-		m.firmwareInput.TextStyle = focusedStyle
-	} else {
-		m.firmwareInput.PromptStyle = noStyle
-		m.firmwareInput.TextStyle = noStyle
-	}
-	rightParts = append(rightParts, labelStyle.Render("Firmware Hash"))
-	rightParts = append(rightParts, m.firmwareInput.View())
-	rightParts = append(rightParts, "")
-	rightParts = append(rightParts, m.formatField.view(m.focused(focusFormat)))
-	rightParts = append(rightParts, m.uploadModeField.view(m.focused(focusUploadMode)))
-	rightParts = append(rightParts, m.autoUploadView())
-
-	if m.err != nil {
-		rightParts = append(rightParts, "")
-		rightParts = append(rightParts, errorStyle.Render(fmt.Sprintf("Error: %v", m.err)))
-	}
-
-	left := strings.Join(leftParts, "\n")
-	right := strings.Join(rightParts, "\n")
-
-	// Tabs
-	tabNames := make([]string, len(m.tabs))
-	for i := range m.tabs {
-		tabNames[i] = m.tabs[i].name
-	}
-
-	// Let tabframe render + size everything
-	tabbed, innerW, leftW, rightW := tabframe.RenderTwoColumnTabbedFrame(
-		tabNames,
+	tabbed, _, _, _ := tabframe.RenderTwoColumnTabbedFrame(
+		m.tabNames(),
 		m.activeTab,
 		left,
 		right,
 		m.width,
-		tabframe.TwoColOptions{
-			LeftRatio:     0.60,
-			MinLeft:       32,
-			MinRight:      28,
-			HorizontalGap: 4,
-		},
+		options,
 	)
 
-	// Optional: use the computed widths to resize inputs so they never overflow
-
-	innerW, _, _ = tabframe.ComputeColumnWidths(m.width, tabframe.TwoColOptions{
-		LeftRatio: 0.60, MinLeft: 32, MinRight: 28, HorizontalGap: 4,
-	})
-	m.statusViewport.Width = innerW
-	m.logViewport.Width = innerW
-	_ = innerW
-	m.portInput.Width = leftW - 2
-	m.baudInput.Width = max(10, leftW/3)
-	m.runIDInput.Width = leftW - 2
-	m.firmwareInput.Width = rightW - 2
-
-	body := lipgloss.JoinVertical(lipgloss.Left, tabbed, m.submitButtonView())
+	details := captureDetailsStyle.Width(innerW).Render(m.renderCaptureDetails())
+	body := lipgloss.JoinVertical(lipgloss.Left, tabbed, details, m.submitButtonView())
 
 	sections := []string{title, body}
 	return strings.Join(sections, "\n")
+}
+
+func (m Model) renderLeftColumn() string {
+	section := newPortInputSection(
+		m.portLabel(),
+		&m.portInput,
+		m.focused(focusPort),
+		m.tabs[m.activeTab].requiresBaud,
+		&m.baudInput,
+		m.focused(focusBaud),
+	)
+
+	return section.View()
+}
+
+// TODO: remove
+func (m Model) renderRightColumn() string {
+	return ""
+}
+
+func (m Model) renderCaptureDetails() string {
+	section := newCaptureDetailsSection(
+		&m.runIDInput,
+		m.focused(focusRunID),
+		&m.firmwareInput,
+		m.focused(focusFirmware),
+		m.formatField,
+		m.focused(focusFormat),
+		m.uploadModeField,
+		m.focused(focusUploadMode),
+		m.autoUploadView(),
+		m.err,
+	)
+
+	return section.View()
+}
+
+func (m Model) tabNames() []string {
+	if len(m.tabs) == 0 {
+		return nil
+	}
+	names := make([]string, len(m.tabs))
+	for i := range m.tabs {
+		names[i] = m.tabs[i].name
+	}
+	return names
+}
+
+func applyInputFocusStyles(input *textinput.Model, focused bool) {
+	if focused {
+		input.PromptStyle = focusedStyle
+		input.TextStyle = focusedStyle
+		return
+	}
+	input.PromptStyle = noStyle
+	input.TextStyle = noStyle
 }
 
 func (m *Model) applyFocus() tea.Cmd {
@@ -540,8 +528,8 @@ func (m *Model) refreshViewportHeight() {
 		}
 	}
 	logHeight := max(space-statusHeight, 1)
-	m.statusViewport.Height = statusHeight
-	m.logViewport.Height = logHeight
+	m.statusPane.SetHeight(statusHeight)
+	m.logPane.SetHeight(logHeight)
 }
 
 func (m *Model) handleSelection(delta int) bool {
@@ -620,36 +608,13 @@ func (m *Model) buildConfig() (capture.Config, error) {
 func (m *Model) appendStatus(msg string) {
 	timestamp := time.Now().Format("15:04:05")
 	formatted := fmt.Sprintf("[%s] %s", timestamp, msg)
-	m.statusLines = append(m.statusLines, formatted)
-	if len(m.statusLines) > 1 {
-		m.statusLines = m.statusLines[len(m.statusLines)-1:]
-	}
-	m.syncStatus()
+	m.statusPane.Append(formatted)
 }
 
 func (m *Model) appendLog(msg string) {
 	timestamp := time.Now().Format("15:04:05")
 	formatted := fmt.Sprintf("[%s] %s", timestamp, msg)
-	m.logLines = append(m.logLines, formatted)
-	m.syncLogs()
-}
-
-func (m *Model) syncStatus() {
-	content := strings.Join(m.statusLines, "\n")
-	if m.statusViewport.Width > 0 {
-		content = lipgloss.NewStyle().Width(m.statusViewport.Width).Render(content)
-	}
-	m.statusViewport.SetContent(content)
-	m.statusViewport.GotoBottom()
-}
-
-func (m *Model) syncLogs() {
-	content := strings.Join(m.logLines, "\n")
-	if m.logViewport.Width > 0 {
-		content = lipgloss.NewStyle().Width(m.logViewport.Width).Render(content)
-	}
-	m.logViewport.SetContent(content)
-	m.logViewport.GotoBottom()
+	m.logPane.Append(formatted)
 }
 
 func (m *Model) portLabel() string {
