@@ -12,12 +12,18 @@ type UploadCfg struct {
     MaxRetries  int
 }
 
+type TelemetryCfg struct {
+    Enabled bool   // opt-in for anonymous metrics
+    Backend string // "expvar" (default), "prometheus", or "none"
+}
+
 type Config struct {
     APIURL       string
     ProjectID    string
     AuthToken    string
     OfflineCache string
     Upload       UploadCfg
+    Telemetry    TelemetryCfg
 }
 
 func Load() Config {
@@ -31,6 +37,10 @@ func Load() Config {
         Upload: UploadCfg{
             BatchBytes: viper.GetInt64("upload.batch_bytes"),
             MaxRetries: viper.GetInt("upload.max_retries"),
+        },
+        Telemetry: TelemetryCfg{
+            Enabled: viper.GetBool("telemetry.enabled"),
+            Backend: firstNonEmpty(viper.GetString("telemetry.backend"), "expvar"),
         },
     }
 }
