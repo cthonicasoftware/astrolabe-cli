@@ -9,9 +9,9 @@ description = "Build the qa-agent CLI"
 run = "go test ./..."
 description = "Run all tests"
 
-[tasks.run]
-run = "go run ./cmd/qa-agent --help"
-description = "Run the CLI help"
+[tasks.cli]
+run = "go run ./cmd/qa-agent"
+description = "Run the CLI"
 
 [tasks.tui]
 run = "./qa-agent tui"
