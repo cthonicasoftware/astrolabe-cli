@@ -1,16 +1,7 @@
 package main
 
-import (
-	"log"
-
-	tea "github.com/charmbracelet/bubbletea"
-
-	"qa_cli/internal/ui"
-)
+import "github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/qa-agent/root"
 
 func main() {
-	p := tea.NewProgram(ui.NewModel())
-	if _, err := p.Run(); err != nil {
-		log.Fatal(err)
-	}
+    root.Execute()
 }

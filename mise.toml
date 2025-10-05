@@ -1,0 +1,21 @@
+[tools]
+go = "1.25.1"
+
+[tasks.build]
+run = "go build ./cmd/qa-agent"
+description = "Build the qa-agent CLI"
+
+[tasks.test]
+run = "go test ./..."
+description = "Run all tests"
+
+[tasks.run]
+run = "go run ./cmd/qa-agent --help"
+description = "Run the CLI help"
+
+[tasks.tui]
+run = "./qa-agent tui"
+description = "Run the Bubble Tea TUI demo (after build)"
+
+[env]
+GOBIN = "{{config_root}}/.bin"
