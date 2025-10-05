@@ -29,7 +29,7 @@ type Metrics interface {
 type NoopMetrics struct{}
 
 func (n *NoopMetrics) RecordCapture(sourceKind string)              {}
-func (n *NoopMetrics) RecordBytes(stage string, n int64)            {}
+func (n *NoopMetrics) RecordBytes(stage string, bytes int64)        {}
 func (n *NoopMetrics) RecordUpload(success bool, durationMs int64)  {}
 func (n *NoopMetrics) RecordError(category string)                  {}
 func (n *NoopMetrics) Snapshot() map[string]interface{}             { return nil }
