@@ -8,8 +8,9 @@ import (
 // This provides the interface structure; actual prometheus client can be added later.
 //
 // To use real Prometheus metrics, replace this with:
-//   import "github.com/prometheus/client_golang/prometheus"
-//   import "github.com/prometheus/client_golang/prometheus/promauto"
+//
+//	import "github.com/prometheus/client_golang/prometheus"
+//	import "github.com/prometheus/client_golang/prometheus/promauto"
 type PrometheusMetrics struct {
 	mu sync.Mutex
 
