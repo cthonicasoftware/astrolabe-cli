@@ -20,6 +20,90 @@ func TestNewSerial(t *testing.T) {
 	}
 }
 
+func TestDefaultConfig(t *testing.T) {
+	cfg := DefaultConfig()
+
+	if cfg.Baud != 115200 {
+		t.Errorf("Baud = %d, want 115200", cfg.Baud)
+	}
+	if cfg.Parity != "N" {
+		t.Errorf("Parity = %s, want N", cfg.Parity)
+	}
+	if cfg.DataBits != 8 {
+		t.Errorf("DataBits = %d, want 8", cfg.DataBits)
+	}
+	if cfg.StopBits != "1" {
+		t.Errorf("StopBits = %s, want 1", cfg.StopBits)
+	}
+	if cfg.FlowControl != "none" {
+		t.Errorf("FlowControl = %s, want none", cfg.FlowControl)
+	}
+}
+
+func TestNewSerialWithConfigAppliesDefaults(t *testing.T) {
+	cfg := Config{
+		Port: "/dev/ttyUSB1",
+		Baud: 0,
+		// leave rest empty to force defaults
+	}
+
+	s := NewSerialWithConfig(cfg)
+
+	if s.Port != "/dev/ttyUSB1" {
+		t.Errorf("Port = %s, want /dev/ttyUSB1", s.Port)
+	}
+	if s.Baud != DefaultConfig().Baud {
+		t.Errorf("Baud = %d, want %d", s.Baud, DefaultConfig().Baud)
+	}
+	if s.Parity != DefaultConfig().Parity {
+		t.Errorf("Parity = %s, want %s", s.Parity, DefaultConfig().Parity)
+	}
+	if s.DataBits != DefaultConfig().DataBits {
+		t.Errorf("DataBits = %d, want %d", s.DataBits, DefaultConfig().DataBits)
+	}
+	if s.StopBits != DefaultConfig().StopBits {
+		t.Errorf("StopBits = %s, want %s", s.StopBits, DefaultConfig().StopBits)
+	}
+	if s.FlowControl != DefaultConfig().FlowControl {
+		t.Errorf("FlowControl = %s, want %s", s.FlowControl, DefaultConfig().FlowControl)
+	}
+	if s.ch == nil {
+		t.Error("channel should be initialized")
+	}
+}
+
+func TestNewSerialWithConfigPreservesValues(t *testing.T) {
+	cfg := Config{
+		Port:        "/dev/ttyACM1",
+		Baud:        57600,
+		Parity:      "E",
+		DataBits:    7,
+		StopBits:    "2",
+		FlowControl: "hardware",
+	}
+
+	s := NewSerialWithConfig(cfg)
+
+	if s.Port != cfg.Port {
+		t.Errorf("Port = %s, want %s", s.Port, cfg.Port)
+	}
+	if s.Baud != cfg.Baud {
+		t.Errorf("Baud = %d, want %d", s.Baud, cfg.Baud)
+	}
+	if s.Parity != cfg.Parity {
+		t.Errorf("Parity = %s, want %s", s.Parity, cfg.Parity)
+	}
+	if s.DataBits != cfg.DataBits {
+		t.Errorf("DataBits = %d, want %d", s.DataBits, cfg.DataBits)
+	}
+	if s.StopBits != cfg.StopBits {
+		t.Errorf("StopBits = %s, want %s", s.StopBits, cfg.StopBits)
+	}
+	if s.FlowControl != cfg.FlowControl {
+		t.Errorf("FlowControl = %s, want %s", s.FlowControl, cfg.FlowControl)
+	}
+}
+
 func TestSerial_Meta(t *testing.T) {
 	s := NewSerial("/dev/ttyACM0", 9600)
 	meta := s.Meta()
