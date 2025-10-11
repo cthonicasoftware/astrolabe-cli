@@ -31,19 +31,15 @@ var tuiCmd = &cobra.Command{
 			switch action {
 			case "capture":
 				// Run the serial capture prompt
-				config, err := tui.RunSerialPrompt()
+				config, launchTUI, err := tui.RunSerialPrompt()
 				if err != nil {
 					return err
 				}
 
 				// If user selected TUI mode, launch the live capture
-				if config.TUI {
+				if launchTUI {
 					// Create serial source with advanced settings
-					serial := sources.NewSerial(config.Port, config.Baud)
-					serial.Parity = config.Parity
-					serial.DataBits = config.DataBits
-					serial.StopBits = config.StopBits
-					serial.FlowControl = config.FlowControl
+					serial := sources.NewSerialWithConfig(*config)
 
 					// Open the serial port
 					ctx, cancel := context.WithCancel(context.Background())

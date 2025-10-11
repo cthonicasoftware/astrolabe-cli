@@ -8,42 +8,31 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"go.bug.st/serial"
-)
 
-// SerialConfig holds the user's serial port configuration choices
-type SerialConfig struct {
-	Port        string
-	Baud        int
-	Parity      string // "N", "O", "E", "M", "S"
-	DataBits    int    // 5, 6, 7, 8
-	StopBits    string // "1", "1.5", "2"
-	FlowControl string // "none", "hardware", "software"
-	TUI         bool
-}
+	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/sources"
+)
 
 type serialPromptModel struct {
 	step               int // 0=port, 1=baud, 2=advanced?, 3=advanced settings, 4=tui
 	ports              []string
 	cursor             int
-	selected           SerialConfig
+	selected           sources.Config
+	launchTUI          bool
 	err                error
 	baudRates          []int
-	yesNoChoice        int // 0=yes, 1=no
 	width              int
 	height             int
 	skipAdvanced       bool // if true, skip step 3
 	advancedFocused    int  // which advanced setting is focused (0-3)
-	parityOptions      []string
+	parityOptions      []sources.SerialOption
 	dataBitsOptions    []int
-	stopBitsOptions    []string
-	flowControlOptions []string
+	stopBitsOptions    []sources.SerialOption
+	flowControlOptions []sources.SerialOption
 	parityIndex        int
 	dataBitsIndex      int
 	stopBitsIndex      int
 	flowControlIndex   int
 }
-
-var commonBaudRates = []int{9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600}
 
 func NewSerialPrompt() tea.Model {
 	ports, err := serial.GetPortsList()
@@ -53,27 +42,70 @@ func NewSerialPrompt() tea.Model {
 
 	sort.Strings(ports)
 
+	cfg := sources.DefaultConfig()
+	baudRates := append([]int(nil), sources.CommonBaudRates...)
+	parityOptions := append([]sources.SerialOption(nil), sources.ParityOptions...)
+	dataBitsOptions := append([]int(nil), sources.DataBitsOptions...)
+	stopBitsOptions := append([]sources.SerialOption(nil), sources.StopBitsOptions...)
+	flowControlOptions := append([]sources.SerialOption(nil), sources.FlowControlOptions...)
+
+	parityIndex := optionIndex(parityOptions, cfg.Parity)
+	if parityIndex < 0 {
+		parityIndex = 0
+	}
+	dataBitsIndex := intIndex(dataBitsOptions, cfg.DataBits)
+	if dataBitsIndex < 0 {
+		dataBitsIndex = 0
+	}
+	stopBitsIndex := optionIndex(stopBitsOptions, cfg.StopBits)
+	if stopBitsIndex < 0 {
+		stopBitsIndex = 0
+	}
+	flowControlIndex := optionIndex(flowControlOptions, cfg.FlowControl)
+	if flowControlIndex < 0 {
+		flowControlIndex = 0
+	}
+
 	return &serialPromptModel{
 		step:               0,
 		ports:              ports,
-		baudRates:          commonBaudRates,
-		parityOptions:      []string{"None", "Odd", "Even", "Mark", "Space"},
-		dataBitsOptions:    []int{5, 6, 7, 8},
-		stopBitsOptions:    []string{"1", "1.5", "2"},
-		flowControlOptions: []string{"None", "Hardware (RTS/CTS)", "Software (XON/XOFF)"},
-		parityIndex:        0, // None
-		dataBitsIndex:      3, // 8
-		stopBitsIndex:      0, // 1
-		flowControlIndex:   0, // None
-		selected: SerialConfig{
-			Baud:        115200,
-			Parity:      "N",
-			DataBits:    8,
-			StopBits:    "1",
-			FlowControl: "none",
-			TUI:         true,
-		},
+		baudRates:          baudRates,
+		parityOptions:      parityOptions,
+		dataBitsOptions:    dataBitsOptions,
+		stopBitsOptions:    stopBitsOptions,
+		flowControlOptions: flowControlOptions,
+		launchTUI:          true,
+		parityIndex:        parityIndex,
+		dataBitsIndex:      dataBitsIndex,
+		stopBitsIndex:      stopBitsIndex,
+		flowControlIndex:   flowControlIndex,
+		selected:           cfg,
 	}
+}
+
+func optionIndex(options []sources.SerialOption, code string) int {
+	for i, opt := range options {
+		if opt.Code == code {
+			return i
+		}
+	}
+	return -1
+}
+
+func intIndex(options []int, value int) int {
+	for i, opt := range options {
+		if opt == value {
+			return i
+		}
+	}
+	return -1
+}
+
+func boolIndex(value bool) int {
+	if value {
+		return 0
+	}
+	return 1
 }
 
 func (m *serialPromptModel) Init() tea.Cmd {
@@ -239,35 +271,24 @@ func (m *serialPromptModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else { // no - skip to TUI choice
 					m.skipAdvanced = true
 					m.step = 4
-					m.cursor = 0 // yes for TUI
+					m.cursor = boolIndex(m.launchTUI)
 				}
 			case 3: // advanced settings - save and continue
 				// Update selected config from indices
-				m.selected.Parity = m.parityToCode(m.parityIndex)
+				m.selected.Parity = m.parityOptions[m.parityIndex].Code
 				m.selected.DataBits = m.dataBitsOptions[m.dataBitsIndex]
-				m.selected.StopBits = m.stopBitsOptions[m.stopBitsIndex]
-				m.selected.FlowControl = m.flowControlToCode(m.flowControlIndex)
+				m.selected.StopBits = m.stopBitsOptions[m.stopBitsIndex].Code
+				m.selected.FlowControl = m.flowControlOptions[m.flowControlIndex].Code
 				m.step = 4
-				m.cursor = 0 // yes for TUI
+				m.cursor = boolIndex(m.launchTUI)
 			case 4: // tui choice selected
-				m.selected.TUI = (m.cursor == 0)
+				m.launchTUI = (m.cursor == 0)
 				return m, tea.Quit
 			}
 		}
 	}
 
 	return m, nil
-}
-
-// Helper methods to convert display options to config codes
-func (m *serialPromptModel) parityToCode(index int) string {
-	codes := []string{"N", "O", "E", "M", "S"}
-	return codes[index]
-}
-
-func (m *serialPromptModel) flowControlToCode(index int) string {
-	codes := []string{"none", "hardware", "software"}
-	return codes[index]
 }
 
 func (m *serialPromptModel) View() string {
@@ -361,10 +382,10 @@ func (m *serialPromptModel) View() string {
 			label string
 			value string
 		}{
-			{"Parity:", m.parityOptions[m.parityIndex]},
+			{"Parity:", m.parityOptions[m.parityIndex].Label},
 			{"Data Bits:", fmt.Sprintf("%d", m.dataBitsOptions[m.dataBitsIndex])},
-			{"Stop Bits:", m.stopBitsOptions[m.stopBitsIndex]},
-			{"Flow Control:", m.flowControlOptions[m.flowControlIndex]},
+			{"Stop Bits:", m.stopBitsOptions[m.stopBitsIndex].Label},
+			{"Flow Control:", m.flowControlOptions[m.flowControlIndex].Label},
 		}
 
 		// Create label styles without width constraints
@@ -402,13 +423,13 @@ func (m *serialPromptModel) View() string {
 		boxContent.WriteString(StyleKey.Render("Baud:") + " " + StyleValue.Render(fmt.Sprintf("%d", m.selected.Baud)))
 		boxContent.WriteString("\n")
 		if !m.skipAdvanced {
-			boxContent.WriteString(StyleKey.Render("Parity:") + " " + StyleValue.Render(m.parityOptions[m.parityIndex]))
+			boxContent.WriteString(StyleKey.Render("Parity:") + " " + StyleValue.Render(m.parityOptions[m.parityIndex].Label))
 			boxContent.WriteString("\n")
 			boxContent.WriteString(StyleKey.Render("Data Bits:") + " " + StyleValue.Render(fmt.Sprintf("%d", m.dataBitsOptions[m.dataBitsIndex])))
 			boxContent.WriteString("\n")
-			boxContent.WriteString(StyleKey.Render("Stop Bits:") + " " + StyleValue.Render(m.stopBitsOptions[m.stopBitsIndex]))
+			boxContent.WriteString(StyleKey.Render("Stop Bits:") + " " + StyleValue.Render(m.stopBitsOptions[m.stopBitsIndex].Label))
 			boxContent.WriteString("\n")
-			boxContent.WriteString(StyleKey.Render("Flow Control:") + " " + StyleValue.Render(m.flowControlOptions[m.flowControlIndex]))
+			boxContent.WriteString(StyleKey.Render("Flow Control:") + " " + StyleValue.Render(m.flowControlOptions[m.flowControlIndex].Label))
 			boxContent.WriteString("\n")
 		}
 		boxContent.WriteString("\n")
@@ -460,27 +481,32 @@ func (m *serialPromptModel) View() string {
 }
 
 // GetSerialConfig returns the selected configuration
-func (m *serialPromptModel) GetSerialConfig() SerialConfig {
+func (m *serialPromptModel) GetSerialConfig() sources.Config {
 	return m.selected
 }
 
-// RunSerialPrompt runs the interactive prompt and returns the configuration
-func RunSerialPrompt() (*SerialConfig, error) {
+// ShouldLaunchTUI indicates whether the run view should be launched after configuration.
+func (m *serialPromptModel) ShouldLaunchTUI() bool {
+	return m.launchTUI
+}
+
+// RunSerialPrompt runs the interactive prompt and returns the configuration and launch preference.
+func RunSerialPrompt() (*sources.Config, bool, error) {
 	p := tea.NewProgram(NewSerialPrompt(), tea.WithAltScreen())
 	finalModel, err := p.Run()
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	model, ok := finalModel.(*serialPromptModel)
 	if !ok {
-		return nil, fmt.Errorf("unexpected model type")
+		return nil, false, fmt.Errorf("unexpected model type")
 	}
 
 	if model.err != nil {
-		return nil, model.err
+		return nil, false, model.err
 	}
 
 	config := model.GetSerialConfig()
-	return &config, nil
+	return &config, model.ShouldLaunchTUI(), nil
 }

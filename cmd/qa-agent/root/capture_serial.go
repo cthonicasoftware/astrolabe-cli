@@ -32,11 +32,14 @@ var captureSerialCmd = &cobra.Command{
 		portFlagSet := cmd.Flags().Changed("port")
 		isInteractive := term.IsTerminal(int(os.Stdin.Fd())) && !portFlagSet
 
-		var config *tui.SerialConfig
+		var (
+			config    *sources.Config
+			launchTUI bool = serialTUI
+		)
 		if isInteractive {
 			// Run interactive prompt
 			var err error
-			config, err = tui.RunSerialPrompt()
+			config, launchTUI, err = tui.RunSerialPrompt()
 			if err != nil {
 				return fmt.Errorf("interactive prompt failed: %w", err)
 			}
@@ -44,30 +47,21 @@ var captureSerialCmd = &cobra.Command{
 			// Use values from interactive prompt
 			serialPort = config.Port
 			serialBaud = config.Baud
-			serialTUI = config.TUI
+			serialTUI = launchTUI
 		} else {
 			// Use command-line flags with defaults
-			config = &tui.SerialConfig{
-				Port:        serialPort,
-				Baud:        serialBaud,
-				Parity:      "N",
-				DataBits:    8,
-				StopBits:    "1",
-				FlowControl: "none",
-				TUI:         serialTUI,
-			}
+			defaults := sources.DefaultConfig()
+			defaults.Port = serialPort
+			defaults.Baud = serialBaud
+			config = &defaults
 		}
 
 		fmt.Printf("Starting serial capture: port=%s baud=%d parity=%s data=%d stop=%s flow=%s name=%s tui=%v\n",
-			config.Port, config.Baud, config.Parity, config.DataBits, config.StopBits, config.FlowControl, serialName, config.TUI)
+			config.Port, config.Baud, config.Parity, config.DataBits, config.StopBits, config.FlowControl, serialName, launchTUI)
 
-		if config.TUI {
+		if launchTUI {
 			// Create serial source with advanced settings
-			serial := sources.NewSerial(config.Port, config.Baud)
-			serial.Parity = config.Parity
-			serial.DataBits = config.DataBits
-			serial.StopBits = config.StopBits
-			serial.FlowControl = config.FlowControl
+			serial := sources.NewSerialWithConfig(*config)
 
 			// Open the serial port
 			ctx, cancel := context.WithCancel(context.Background())
