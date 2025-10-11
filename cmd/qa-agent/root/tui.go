@@ -1,7 +1,12 @@
 package root
 
 import (
+	"context"
+	"fmt"
+
+	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/sources"
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/tui"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 )
 
@@ -25,12 +30,55 @@ var tuiCmd = &cobra.Command{
 			switch action {
 			case "capture":
 				// Run the serial capture prompt
-				config, err := tui.RunSerialPrompt()
+				config, launchTUI, err := tui.RunSerialPrompt()
 				if err != nil {
 					return err
 				}
-				// TODO: Execute capture with config
-				_ = config
+
+				// If user selected TUI mode, launch the live capture
+				if launchTUI {
+					// Create serial source with advanced settings
+					serial := sources.NewSerialWithConfig(*config)
+
+					// Open the serial port
+					ctx, cancel := context.WithCancel(context.Background())
+					defer cancel()
+
+					if err := serial.Open(ctx); err != nil {
+						return fmt.Errorf("failed to open serial port: %w", err)
+					}
+					defer serial.Close()
+
+					// Create a string channel for the TUI
+					stringCh := make(chan string, 16)
+
+					// Convert byte frames to strings
+					go func() {
+						defer close(stringCh)
+						for frame := range serial.Frames() {
+							// Send the entire frame (including newlines) to the TUI
+							// The TUI will handle splitting on newlines and buffering partial lines
+							if len(frame) > 0 {
+								select {
+								case stringCh <- string(frame):
+								case <-ctx.Done():
+									return
+								}
+							}
+						}
+					}()
+
+					// Launch the TUI
+					title := fmt.Sprintf("Serial Capture - %s @ %d", config.Port, config.Baud)
+					m := tui.NewApp(title, stringCh)
+					p := tea.NewProgram(m, tea.WithAltScreen())
+					if _, err := p.Run(); err != nil {
+						return err
+					}
+
+					// Cancel context to stop serial reading
+					cancel()
+				}
 				// Return to welcome screen (continue loop)
 
 			case "list-ports":
