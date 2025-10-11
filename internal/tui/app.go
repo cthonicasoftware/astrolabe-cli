@@ -12,6 +12,17 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// Layout constants for viewport sizing
+const (
+	headerFooterHeight = 8
+	marginWidth        = 8
+	minViewportWidth   = 40
+	minViewportHeight  = 10
+	maxBufferedLines   = 1000
+	tickInterval       = 250 * time.Millisecond
+)
+
+// keymap defines the key bindings for the application
 type keymap struct {
 	Quit  key.Binding
 	Help  key.Binding
@@ -33,33 +44,169 @@ var keys = keymap{
 	Clear: key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "clear buffer")),
 }
 
+// LineBuffer manages buffering and processing of incoming text data
+type LineBuffer struct {
+	buffer *strings.Builder
+	lines  []string
+}
+
+// NewLineBuffer creates a new line buffer
+func NewLineBuffer() *LineBuffer {
+	return &LineBuffer{
+		buffer: &strings.Builder{},
+		lines:  []string{},
+	}
+}
+
+// AddData adds raw data to the buffer, processing complete lines
+func (lb *LineBuffer) AddData(data string) {
+	// Strip carriage returns to prevent cursor positioning issues
+	cleaned := strings.ReplaceAll(data, "\r", "")
+	lb.buffer.WriteString(cleaned)
+
+	// Process complete lines (those ending with \n)
+	bufferContent := lb.buffer.String()
+	if !strings.Contains(bufferContent, "\n") {
+		return
+	}
+
+	parts := strings.Split(bufferContent, "\n")
+
+	// All parts except the last are complete lines
+	for i := 0; i < len(parts)-1; i++ {
+		if parts[i] != "" || i > 0 {
+			lb.lines = append(lb.lines, parts[i])
+		}
+	}
+
+	// The last part is either empty (if ended with \n) or a partial line
+	lb.buffer.Reset()
+	if parts[len(parts)-1] != "" {
+		lb.buffer.WriteString(parts[len(parts)-1])
+	}
+
+	// Trim to max buffer size
+	if len(lb.lines) > maxBufferedLines {
+		lb.lines = lb.lines[len(lb.lines)-maxBufferedLines:]
+	}
+}
+
+// GetDisplayLines returns all complete lines plus any partial line
+func (lb *LineBuffer) GetDisplayLines() []string {
+	displayLines := make([]string, len(lb.lines))
+	copy(displayLines, lb.lines)
+
+	// Add partial line if there is one
+	if lb.buffer.Len() > 0 {
+		displayLines = append(displayLines, lb.buffer.String())
+	}
+
+	return displayLines
+}
+
+// Clear resets the buffer
+func (lb *LineBuffer) Clear() {
+	lb.buffer.Reset()
+	lb.lines = nil
+}
+
+// LineCount returns the number of complete lines
+func (lb *LineBuffer) LineCount() int {
+	return len(lb.lines)
+}
+
+// LineWrapper handles text wrapping logic
+type LineWrapper struct {
+	width int
+}
+
+// NewLineWrapper creates a new line wrapper with the given width
+func NewLineWrapper(width int) *LineWrapper {
+	return &LineWrapper{
+		width: width,
+	}
+}
+
+// Wrap wraps lines to fit within the configured width
+func (lw *LineWrapper) Wrap(lines []string) string {
+	if lw.width <= 0 {
+		return strings.Join(lines, "\n")
+	}
+
+	// Use width - 1 to prevent viewport rendering artifacts at the edge
+	wrapWidth := lw.width - 1
+	if wrapWidth < 1 {
+		wrapWidth = 1
+	}
+
+	var wrapped strings.Builder
+	for i, line := range lines {
+		if i > 0 {
+			wrapped.WriteString("\n")
+		}
+
+		if len(line) <= wrapWidth {
+			wrapped.WriteString(line)
+		} else {
+			lw.wrapLineSimple(&wrapped, line, wrapWidth)
+		}
+	}
+
+	return wrapped.String()
+}
+
+// wrapLineSimple wraps a single line
+func (lw *LineWrapper) wrapLineSimple(builder *strings.Builder, line string, wrapWidth int) {
+	remaining := line
+
+	for len(remaining) > 0 {
+		if len(remaining) <= wrapWidth {
+			builder.WriteString(remaining)
+			break
+		}
+
+		// Try to break at a space
+		breakPoint := wrapWidth
+		lastSpace := strings.LastIndex(remaining[:wrapWidth], " ")
+		if lastSpace > 0 && lastSpace > wrapWidth/2 {
+			breakPoint = lastSpace
+		}
+
+		builder.WriteString(remaining[:breakPoint])
+		builder.WriteString("\n")
+
+		// Skip the space if we broke at one
+		if breakPoint < len(remaining) && remaining[breakPoint] == ' ' {
+			remaining = remaining[breakPoint+1:]
+		} else {
+			remaining = remaining[breakPoint:]
+		}
+	}
+}
+
+// App represents the live capture TUI application
 type App struct {
 	title      string
 	vp         viewport.Model
 	help       help.Model
 	paused     bool
 	feed       <-chan string
-	lines      []string
-	lineBuffer *strings.Builder // Buffer for partial lines (pointer to avoid copy issues)
+	lineBuffer *LineBuffer
 	lastTick   time.Time
 	width      int
 	height     int
 	boxStyle   lipgloss.Style
 }
 
+// NewApp creates a new App instance
 func NewApp(title string, feed <-chan string) App {
 	vp := viewport.New(0, 0)
 	vp.SetContent("")
 	vp.MouseWheelEnabled = true
 	vp.MouseWheelDelta = 3
-
-	// Disable high performance rendering to prevent border artifacts
 	vp.HighPerformanceRendering = false
-
-	// Apply a style to the viewport to ensure clean rendering
 	vp.Style = lipgloss.NewStyle()
 
-	// Create box style once
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(ColorPrimary).
@@ -71,21 +218,150 @@ func NewApp(title string, feed <-chan string) App {
 		help:       help.New(),
 		feed:       feed,
 		boxStyle:   boxStyle,
-		lineBuffer: &strings.Builder{},
+		lineBuffer: NewLineBuffer(),
 	}
 }
 
+// Message types
 type tickMsg time.Time
 type lineMsg string
 
-func tickCmd() tea.Cmd {
-	return tea.Tick(250*time.Millisecond, func(t time.Time) tea.Msg { return tickMsg(t) })
-}
-
+// Init initializes the app
 func (a App) Init() tea.Cmd {
-	return tea.Batch(tickCmd(), a.pullLine())
+	return tea.Batch(a.tickCmd(), a.pullLine())
 }
 
+// Update handles messages and updates the model
+func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch m := msg.(type) {
+	case tea.WindowSizeMsg:
+		return a.handleWindowResize(m)
+	case tickMsg:
+		return a.handleTick(m)
+	case lineMsg:
+		return a.handleLineData(m)
+	case tea.KeyMsg:
+		return a.handleKeyPress(m)
+	}
+
+	// Pass other messages to viewport (like mouse events)
+	var cmd tea.Cmd
+	a.vp, cmd = a.vp.Update(msg)
+	return a, cmd
+}
+
+// handleWindowResize handles terminal window resize events
+func (a App) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
+	a.width = msg.Width
+	a.height = msg.Height
+
+	// Calculate viewport dimensions
+	frameWidth := a.boxStyle.GetHorizontalFrameSize()
+	frameHeight := a.boxStyle.GetVerticalFrameSize()
+
+	a.vp.Width = msg.Width - marginWidth - frameWidth - 1
+	a.vp.Height = msg.Height - headerFooterHeight - frameHeight
+
+	// Apply minimum dimensions
+	if a.vp.Width < minViewportWidth {
+		a.vp.Width = minViewportWidth
+	}
+	if a.vp.Height < minViewportHeight {
+		a.vp.Height = minViewportHeight
+	}
+
+	// Reset position and re-wrap content
+	a.vp.YPosition = 0
+	a.updateViewportContent()
+	a.vp.GotoBottom()
+
+	return a, nil
+}
+
+// handleTick handles periodic tick events
+func (a App) handleTick(msg tickMsg) (tea.Model, tea.Cmd) {
+	a.lastTick = time.Time(msg)
+
+	if !a.paused {
+		return a, tea.Batch(a.tickCmd(), a.pullLine())
+	}
+	return a, a.tickCmd()
+}
+
+// handleLineData handles incoming line data
+func (a App) handleLineData(msg lineMsg) (tea.Model, tea.Cmd) {
+	if a.paused {
+		return a, nil
+	}
+
+	// Check if user is at the bottom before adding new data
+	wasAtBottom := a.vp.AtBottom()
+
+	// Process incoming data
+	a.lineBuffer.AddData(string(msg))
+
+	// Update viewport with current state
+	a.updateViewportContent()
+
+	// Only auto-scroll to bottom if user was already at bottom
+	if wasAtBottom {
+		a.vp.GotoBottom()
+	}
+
+	return a, a.pullLine()
+}
+
+// handleKeyPress handles keyboard input
+func (a App) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, keys.Quit):
+		return a, tea.Quit
+	case key.Matches(msg, keys.Help):
+		a.help.ShowAll = !a.help.ShowAll
+		return a, nil
+	case key.Matches(msg, keys.Pause):
+		return a.togglePause()
+	case key.Matches(msg, keys.Clear):
+		return a.clearBuffer()
+	}
+
+	// Pass unhandled keys to viewport for scrolling
+	var cmd tea.Cmd
+	a.vp, cmd = a.vp.Update(msg)
+	return a, cmd
+}
+
+// togglePause toggles the pause state
+func (a App) togglePause() (tea.Model, tea.Cmd) {
+	a.paused = !a.paused
+	if !a.paused {
+		return a, a.pullLine()
+	}
+	return a, nil
+}
+
+// clearBuffer clears the line buffer and viewport
+func (a App) clearBuffer() (tea.Model, tea.Cmd) {
+	a.lineBuffer.Clear()
+	a.vp.SetContent("")
+	return a, nil
+}
+
+// updateViewportContent updates the viewport with wrapped content
+func (a *App) updateViewportContent() {
+	wrapper := NewLineWrapper(a.vp.Width)
+	wrappedContent := wrapper.Wrap(a.lineBuffer.GetDisplayLines())
+	a.vp.SetContent(wrappedContent)
+}
+
+// tickCmd returns a command that sends a tick message
+func (a App) tickCmd() tea.Cmd {
+	return tea.Tick(tickInterval, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
+}
+
+// pullLine pulls the next line from the feed channel
 func (a *App) pullLine() tea.Cmd {
 	return func() tea.Msg {
 		if a.feed == nil {
@@ -99,224 +375,113 @@ func (a *App) pullLine() tea.Cmd {
 	}
 }
 
-func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch m := msg.(type) {
-	case tea.WindowSizeMsg:
-		a.width = m.Width
-		a.height = m.Height
-
-		// Calculate viewport size to fill the available space
-		// Account for:
-		// - Box frame (border + padding)
-		// - Title (2 lines)
-		// - Status (2 lines)
-		// - Help text (2 lines)
-		// - Some margin for centering
-		const headerFooterHeight = 8
-		const marginWidth = 8
-
-		// Get the exact frame size from the box style
-		frameWidth := a.boxStyle.GetHorizontalFrameSize()
-		frameHeight := a.boxStyle.GetVerticalFrameSize()
-
-		a.vp.Width = m.Width - marginWidth - frameWidth - 1
-		a.vp.Height = m.Height - headerFooterHeight - frameHeight
-
-		// Set minimums
-		if a.vp.Width < 40 {
-			a.vp.Width = 40
-		}
-		if a.vp.Height < 10 {
-			a.vp.Height = 10
-		}
-
-		// Reset YPosition to prevent viewport from rendering outside bounds
-		a.vp.YPosition = 0
-
-		// Re-wrap content when window size changes
-		if len(a.lines) > 0 {
-			wrappedContent := a.wrapLines(a.lines, a.vp.Width)
-			a.vp.SetContent(wrappedContent)
-			a.vp.GotoBottom()
-		}
-
-		return a, nil
-
-	case tickMsg:
-		a.lastTick = time.Time(m)
-		if !a.paused {
-			return a, tea.Batch(tickCmd(), a.pullLine())
-		}
-		return a, tickCmd()
-
-	case lineMsg:
-
-		if a.paused {
-			return a, nil
-		}
-		// Add incoming data to buffer, stripping carriage returns to prevent cursor positioning issues
-		cleaned := strings.ReplaceAll(string(m), "\r", "")
-		a.lineBuffer.WriteString(cleaned)
-
-		// Process complete lines (those ending with \n)
-		bufferContent := a.lineBuffer.String()
-		if strings.Contains(bufferContent, "\n") {
-			// Split on newlines
-			parts := strings.Split(bufferContent, "\n")
-
-			// All parts except the last are complete lines
-			for i := 0; i < len(parts)-1; i++ {
-				if parts[i] != "" || i > 0 { // Keep empty lines except the very first
-					a.lines = append(a.lines, parts[i])
-				}
-			}
-
-			// The last part is either empty (if ended with \n) or a partial line
-			a.lineBuffer.Reset()
-			if parts[len(parts)-1] != "" {
-				a.lineBuffer.WriteString(parts[len(parts)-1])
-			}
-
-			// Trim to max 1000 lines
-			if len(a.lines) > 1000 {
-				a.lines = a.lines[len(a.lines)-1000:]
-			}
-		}
-
-		// Always update viewport to show current state (including partial line)
-		displayLines := make([]string, len(a.lines))
-		copy(displayLines, a.lines)
-
-		// Add partial line if there is one
-		if a.lineBuffer.Len() > 0 {
-			displayLines = append(displayLines, a.lineBuffer.String())
-		}
-
-		wrappedContent := a.wrapLines(displayLines, a.vp.Width)
-		a.vp.SetContent(wrappedContent)
-		a.vp.GotoBottom()
-
-		// Only pull next line if not paused
-		return a, a.pullLine()
-
-	case tea.KeyMsg:
-		switch {
-		case key.Matches(m, keys.Quit):
-			return a, tea.Quit
-		case key.Matches(m, keys.Help):
-			a.help.ShowAll = !a.help.ShowAll
-			return a, nil
-		case key.Matches(m, keys.Pause):
-			a.paused = !a.paused
-			// If resuming from pause, restart pulling lines
-			if !a.paused {
-				return a, a.pullLine()
-			}
-			return a, nil
-		case key.Matches(m, keys.Clear):
-			a.lines = nil
-			a.lineBuffer.Reset()
-			a.vp.SetContent("")
-			return a, nil
-		}
-	}
-	var cmd tea.Cmd
-	a.vp, cmd = a.vp.Update(msg)
-	return a, cmd
-}
-
-// wrapLines wraps long lines to fit within the given width
-func (a App) wrapLines(lines []string, width int) string {
-	if width <= 0 {
-		return strings.Join(lines, "\n")
-	}
-
-	// Use width - 1 to prevent viewport rendering artifacts at the edge
-	wrapWidth := width - 1
-	if wrapWidth < 1 {
-		wrapWidth = 1
-	}
-
-	var wrapped strings.Builder
-	for i, line := range lines {
-		if i > 0 {
-			wrapped.WriteString("\n")
-		}
-
-		// If line fits, add it as-is
-		if len(line) <= wrapWidth {
-			wrapped.WriteString(line)
-			continue
-		}
-
-		// Wrap long lines
-		remaining := line
-		for len(remaining) > 0 {
-			if len(remaining) <= wrapWidth {
-				wrapped.WriteString(remaining)
-				break
-			}
-
-			// Try to break at a space
-			breakPoint := wrapWidth
-			lastSpace := strings.LastIndex(remaining[:wrapWidth], " ")
-			if lastSpace > 0 && lastSpace > wrapWidth/2 { // Don't break too early
-				breakPoint = lastSpace
-			}
-
-			wrapped.WriteString(remaining[:breakPoint])
-			wrapped.WriteString("\n")
-
-			// Skip the space if we broke at one
-			if breakPoint < len(remaining) && remaining[breakPoint] == ' ' {
-				remaining = remaining[breakPoint+1:]
-			} else {
-				remaining = remaining[breakPoint:]
-			}
-		}
-	}
-
-	return wrapped.String()
-}
-
+// View renders the application UI
 func (a App) View() string {
 	var s strings.Builder
 
-	// Title section
+	// Title
 	s.WriteString(StyleTitle.Render(a.title))
 	s.WriteString("\n\n")
 
-	// Status line with metadata
-	statusText := fmt.Sprintf("Lines: %d", len(a.lines))
+	// Status line
+	s.WriteString(a.renderStatus())
+	s.WriteString("\n\n")
+
+	// Viewport in bordered box
+	s.WriteString(a.renderViewport())
+	s.WriteString("\n\n")
+
+	// Help text
+	s.WriteString(a.renderHelp())
+
+	// Center content
+	content := s.String()
+	return lipgloss.PlaceVertical(a.height, lipgloss.Top,
+		lipgloss.PlaceHorizontal(a.width, lipgloss.Center, content))
+}
+
+// renderStatus renders the status line with metadata
+func (a App) renderStatus() string {
+	statusText := fmt.Sprintf("Lines: %d", a.lineBuffer.LineCount())
+
 	if a.paused {
 		statusText = StyleWarning.Render("⏸ PAUSED") + " • " + statusText
 	} else {
 		statusText = StyleSuccess.Render("● LIVE") + " • " + statusText
 	}
+
 	if !a.lastTick.IsZero() {
 		statusText += " • " + StyleMuted.Render(a.lastTick.Format("15:04:05"))
 	}
-	s.WriteString(statusText)
-	s.WriteString("\n\n")
 
-	// Render viewport in bordered box with explicit size constraints
+	return statusText
+}
+
+// renderViewport renders the viewport in a bordered box with fade effect
+func (a App) renderViewport() string {
+	// Get the visible content from viewport
+	visibleContent := a.vp.View()
+
+	// Apply fade effect to visible lines
+	fadedContent := a.applyFadeEffect(visibleContent)
+
 	vpContent := lipgloss.NewStyle().
 		Width(a.vp.Width).
 		Height(a.vp.Height).
-		Render(a.vp.View())
-	box := a.boxStyle.Render(vpContent)
-	s.WriteString(box)
-	s.WriteString("\n\n")
+		Render(fadedContent)
+	return a.boxStyle.Render(vpContent)
+}
 
-	// Help text
-	if a.help.ShowAll {
-		s.WriteString(StyleHelp.Render(a.help.View(keys)))
-	} else {
-		helpText := "space: pause/resume • ↑/↓/pgup/pgdn: scroll • ctrl+l: clear • ?: help • q: quit"
-		s.WriteString(StyleHelp.Render(helpText))
+// applyFadeEffect applies a gradient fade to the visible content
+func (a App) applyFadeEffect(content string) string {
+	lines := strings.Split(content, "\n")
+	if len(lines) == 0 {
+		return content
 	}
 
-	content := s.String()
-	return lipgloss.PlaceVertical(a.height, lipgloss.Top,
-		lipgloss.PlaceHorizontal(a.width, lipgloss.Center, content))
+	// Fade the top 30% of visible lines
+	fadeZone := int(float64(len(lines)) * 0.3)
+	if fadeZone < 1 {
+		fadeZone = 1
+	}
+
+	var result strings.Builder
+	for i, line := range lines {
+		if i > 0 {
+			result.WriteString("\n")
+		}
+
+		// Apply fade to lines in the fade zone
+		if i < fadeZone {
+			opacity := float64(i) / float64(fadeZone)
+			// Map opacity to color intensity (30% to 100%)
+			intensity := 0.3 + (opacity * 0.7)
+			result.WriteString(a.applyColorIntensity(line, intensity))
+		} else {
+			result.WriteString(line)
+		}
+	}
+
+	return result.String()
+}
+
+// applyColorIntensity applies color intensity to a line using ANSI color codes
+func (a App) applyColorIntensity(line string, intensity float64) string {
+	// Map intensity to grayscale ANSI colors (232-255 are grayscale)
+	// 232 = darkest, 255 = brightest (white)
+	colorCode := 232 + int(intensity*23)
+	if colorCode > 255 {
+		colorCode = 255
+	}
+
+	return fmt.Sprintf("\x1b[38;5;%dm%s\x1b[0m", colorCode, line)
+}
+
+// renderHelp renders the help text
+func (a App) renderHelp() string {
+	if a.help.ShowAll {
+		return StyleHelp.Render(a.help.View(keys))
+	}
+	helpText := "space: pause/resume • ↑/↓/pgup/pgdn: scroll • ctrl+l: clear • ?: help • q: quit"
+	return StyleHelp.Render(helpText)
 }
