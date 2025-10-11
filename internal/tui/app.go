@@ -29,8 +29,8 @@ func (k keymap) FullHelp() [][]key.Binding {
 var keys = keymap{
 	Quit:  key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q/ctrl+c", "quit")),
 	Help:  key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "toggle help")),
-	Pause: key.NewBinding(key.WithKeys("space"), key.WithHelp("space", "pause/resume")),
-	Clear: key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "clear log")),
+	Pause: key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "pause/resume capture")),
+	Clear: key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "clear buffer")),
 }
 
 type App struct {
@@ -41,6 +41,8 @@ type App struct {
 	feed     <-chan string
 	lines    []string
 	lastTick time.Time
+	width    int
+	height   int
 }
 
 func NewApp(title string, feed <-chan string) App {
@@ -81,8 +83,21 @@ func (a *App) pullLine() tea.Cmd {
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case tea.WindowSizeMsg:
-		a.vp.Width = m.Width - 4
-		a.vp.Height = m.Height - 6
+		a.width = m.Width
+		a.height = m.Height
+
+		// Calculate viewport size accounting for:
+		// - Border (2 chars horizontal, 2 vertical)
+		// - Padding (4 chars horizontal, 2 vertical)
+		// - Header/footer space
+		a.vp.Width = m.Width - 10
+		a.vp.Height = m.Height - 10
+		if a.vp.Width < 40 {
+			a.vp.Width = 40
+		}
+		if a.vp.Height < 10 {
+			a.vp.Height = 10
+		}
 		return a, nil
 
 	case tickMsg:
@@ -100,8 +115,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			a.vp.SetContent(strings.Join(a.lines, "\n"))
 			a.vp.GotoBottom()
+			// Only pull next line if not paused
+			return a, a.pullLine()
 		}
-		return a, a.pullLine()
+		// If paused, don't pull more lines
+		return a, nil
 
 	case tea.KeyMsg:
 		switch {
@@ -109,11 +127,18 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, tea.Quit
 		case key.Matches(m, keys.Help):
 			a.help.ShowAll = !a.help.ShowAll
+			return a, nil
 		case key.Matches(m, keys.Pause):
 			a.paused = !a.paused
+			// If resuming from pause, restart pulling lines
+			if !a.paused {
+				return a, a.pullLine()
+			}
+			return a, nil
 		case key.Matches(m, keys.Clear):
 			a.lines = nil
 			a.vp.SetContent("")
+			return a, nil
 		}
 	}
 	var cmd tea.Cmd
@@ -122,8 +147,44 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (a App) View() string {
-	header := StyleTitle.Render(a.title) + "  " + StyleDim.Render(fmt.Sprintf("tick: %s  paused: %v  lines: %d", a.lastTick.Format("15:04:05"), a.paused, len(a.lines)))
-	box := StyleBorder.Render(a.vp.View())
-	footer := a.help.View(keys)
-	return lipgloss.JoinVertical(lipgloss.Left, header, box, footer)
+	var s strings.Builder
+
+	// Title section
+	s.WriteString(StyleTitle.Render(a.title))
+	s.WriteString("\n\n")
+
+	// Status line with metadata
+	statusText := fmt.Sprintf("Lines: %d", len(a.lines))
+	if a.paused {
+		statusText = StyleWarning.Render("⏸ PAUSED") + " • " + statusText
+	} else {
+		statusText = StyleSuccess.Render("● LIVE") + " • " + statusText
+	}
+	if !a.lastTick.IsZero() {
+		statusText += " • " + StyleMuted.Render(a.lastTick.Format("15:04:05"))
+	}
+	s.WriteString(statusText)
+	s.WriteString("\n\n")
+
+	// Create bordered box for viewport
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(ColorPrimary).
+		Padding(1, 2)
+
+	box := boxStyle.Render(a.vp.View())
+	s.WriteString(box)
+	s.WriteString("\n\n")
+
+	// Help text
+	if a.help.ShowAll {
+		s.WriteString(StyleHelp.Render(a.help.View(keys)))
+	} else {
+		helpText := "space: pause/resume • ↑/↓/pgup/pgdn: scroll • ctrl+l: clear • ?: help • q: quit"
+		s.WriteString(StyleHelp.Render(helpText))
+	}
+
+	content := s.String()
+	return lipgloss.PlaceVertical(a.height, lipgloss.Top,
+		lipgloss.PlaceHorizontal(a.width, lipgloss.Center, content))
 }
