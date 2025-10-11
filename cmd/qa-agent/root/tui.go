@@ -3,7 +3,6 @@ package root
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/sources"
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/tui"
@@ -57,15 +56,13 @@ var tuiCmd = &cobra.Command{
 					go func() {
 						defer close(stringCh)
 						for frame := range serial.Frames() {
-							// Split on newlines and send each line
-							lines := strings.Split(string(frame), "\n")
-							for _, line := range lines {
-								if line != "" {
-									select {
-									case stringCh <- line:
-									case <-ctx.Done():
-										return
-									}
+							// Send the entire frame (including newlines) to the TUI
+							// The TUI will handle splitting on newlines and buffering partial lines
+							if len(frame) > 0 {
+								select {
+								case stringCh <- string(frame):
+								case <-ctx.Done():
+									return
 								}
 							}
 						}

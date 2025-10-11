@@ -34,25 +34,36 @@ var keys = keymap{
 }
 
 type App struct {
-	title    string
-	vp       viewport.Model
-	help     help.Model
-	paused   bool
-	feed     <-chan string
-	lines    []string
-	lastTick time.Time
-	width    int
-	height   int
+	title      string
+	vp         viewport.Model
+	help       help.Model
+	paused     bool
+	feed       <-chan string
+	lines      []string
+	lineBuffer *strings.Builder // Buffer for partial lines (pointer to avoid copy issues)
+	lastTick   time.Time
+	width      int
+	height     int
+	boxStyle   lipgloss.Style
 }
 
 func NewApp(title string, feed <-chan string) App {
 	vp := viewport.New(0, 0)
 	vp.SetContent("")
+
+	// Create box style once
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(ColorPrimary).
+		Padding(1, 2)
+
 	return App{
-		title: title,
-		vp:    vp,
-		help:  help.New(),
-		feed:  feed,
+		title:      title,
+		vp:         vp,
+		help:       help.New(),
+		feed:       feed,
+		boxStyle:   boxStyle,
+		lineBuffer: &strings.Builder{},
 	}
 }
 
@@ -86,18 +97,37 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.width = m.Width
 		a.height = m.Height
 
-		// Calculate viewport size accounting for:
-		// - Border (2 chars horizontal, 2 vertical)
-		// - Padding (4 chars horizontal, 2 vertical)
-		// - Header/footer space
-		a.vp.Width = m.Width - 10
-		a.vp.Height = m.Height - 10
+		// Calculate viewport size to fill the available space
+		// Account for:
+		// - Box frame (border + padding)
+		// - Title (2 lines)
+		// - Status (2 lines)
+		// - Help text (2 lines)
+		// - Some margin for centering
+		const headerFooterHeight = 8
+		const marginWidth = 8
+
+		// Get the exact frame size from the box style
+		frameWidth := a.boxStyle.GetHorizontalFrameSize()
+		frameHeight := a.boxStyle.GetVerticalFrameSize()
+
+		a.vp.Width = m.Width - marginWidth - frameWidth
+		a.vp.Height = m.Height - headerFooterHeight - frameHeight
+
+		// Set minimums
 		if a.vp.Width < 40 {
 			a.vp.Width = 40
 		}
 		if a.vp.Height < 10 {
 			a.vp.Height = 10
 		}
+
+		// Re-wrap content when window size changes
+		if len(a.lines) > 0 {
+			wrappedContent := a.wrapLines(a.lines, a.vp.Width)
+			a.vp.SetContent(wrappedContent)
+		}
+
 		return a, nil
 
 	case tickMsg:
@@ -108,18 +138,53 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, tickCmd()
 
 	case lineMsg:
-		if !a.paused {
-			a.lines = append(a.lines, string(m))
+
+		if a.paused {
+			return a, nil
+		}
+		// Add incoming data to buffer
+		a.lineBuffer.WriteString(string(m))
+
+		// Process complete lines (those ending with \n)
+		bufferContent := a.lineBuffer.String()
+		if strings.Contains(bufferContent, "\n") {
+			// Split on newlines
+			parts := strings.Split(bufferContent, "\n")
+
+			// All parts except the last are complete lines
+			for i := 0; i < len(parts)-1; i++ {
+				if parts[i] != "" || i > 0 { // Keep empty lines except the very first
+					a.lines = append(a.lines, parts[i])
+				}
+			}
+
+			// The last part is either empty (if ended with \n) or a partial line
+			a.lineBuffer.Reset()
+			if parts[len(parts)-1] != "" {
+				a.lineBuffer.WriteString(parts[len(parts)-1])
+			}
+
+			// Trim to max 1000 lines
 			if len(a.lines) > 1000 {
 				a.lines = a.lines[len(a.lines)-1000:]
 			}
-			a.vp.SetContent(strings.Join(a.lines, "\n"))
-			a.vp.GotoBottom()
-			// Only pull next line if not paused
-			return a, a.pullLine()
 		}
-		// If paused, don't pull more lines
-		return a, nil
+
+		// Always update viewport to show current state (including partial line)
+		displayLines := make([]string, len(a.lines))
+		copy(displayLines, a.lines)
+
+		// Add partial line if there is one
+		if a.lineBuffer.Len() > 0 {
+			displayLines = append(displayLines, a.lineBuffer.String())
+		}
+
+		wrappedContent := a.wrapLines(displayLines, a.vp.Width)
+		a.vp.SetContent(wrappedContent)
+		a.vp.GotoBottom()
+
+		// Only pull next line if not paused
+		return a, a.pullLine()
 
 	case tea.KeyMsg:
 		switch {
@@ -137,6 +202,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		case key.Matches(m, keys.Clear):
 			a.lines = nil
+			a.lineBuffer.Reset()
 			a.vp.SetContent("")
 			return a, nil
 		}
@@ -144,6 +210,54 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	a.vp, cmd = a.vp.Update(msg)
 	return a, cmd
+}
+
+// wrapLines wraps long lines to fit within the given width
+func (a App) wrapLines(lines []string, width int) string {
+	if width <= 0 {
+		return strings.Join(lines, "\n")
+	}
+
+	var wrapped strings.Builder
+	for i, line := range lines {
+		if i > 0 {
+			wrapped.WriteString("\n")
+		}
+
+		// If line fits, add it as-is
+		if len(line) <= width {
+			wrapped.WriteString(line)
+			continue
+		}
+
+		// Wrap long lines
+		remaining := line
+		for len(remaining) > 0 {
+			if len(remaining) <= width {
+				wrapped.WriteString(remaining)
+				break
+			}
+
+			// Try to break at a space
+			breakPoint := width
+			lastSpace := strings.LastIndex(remaining[:width], " ")
+			if lastSpace > 0 && lastSpace > width/2 { // Don't break too early
+				breakPoint = lastSpace
+			}
+
+			wrapped.WriteString(remaining[:breakPoint])
+			wrapped.WriteString("\n")
+
+			// Skip the space if we broke at one
+			if breakPoint < len(remaining) && remaining[breakPoint] == ' ' {
+				remaining = remaining[breakPoint+1:]
+			} else {
+				remaining = remaining[breakPoint:]
+			}
+		}
+	}
+
+	return wrapped.String()
 }
 
 func (a App) View() string {
@@ -166,13 +280,8 @@ func (a App) View() string {
 	s.WriteString(statusText)
 	s.WriteString("\n\n")
 
-	// Create bordered box for viewport
-	boxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(ColorPrimary).
-		Padding(1, 2)
-
-	box := boxStyle.Render(a.vp.View())
+	// Render viewport in bordered box
+	box := a.boxStyle.Render(a.vp.View())
 	s.WriteString(box)
 	s.WriteString("\n\n")
 
