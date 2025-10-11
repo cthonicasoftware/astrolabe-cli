@@ -37,7 +37,7 @@ var (
 )
 
 const logo = `
- ██████╗  █████╗        █████╗  ██████╗ ███████╗███╗   ██╗████████╗
+  ██████╗   █████╗        █████╗  ██████╗ ███████╗███╗   ██╗████████╗
 ██╔═══██╗██╔══██╗      ██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝
 ██║   ██║███████║█████╗███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║
 ██║▄▄ ██║██╔══██║╚════╝██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║
@@ -115,14 +115,11 @@ func (m *welcomeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *welcomeModel) View() string {
 	var s strings.Builder
 
-	// Center the logo
-	logoLines := strings.Split(strings.TrimSpace(logo), "\n")
+	// Center the logo as a single block
 	s.WriteString("\n\n")
-	for _, line := range logoLines {
-		centered := lipgloss.PlaceHorizontal(m.width, lipgloss.Center, welcomeLogoStyle.Render(line))
-		s.WriteString(centered)
-		s.WriteString("\n")
-	}
+	styledLogo := welcomeLogoStyle.Render(strings.TrimSpace(logo))
+	centeredLogo := lipgloss.PlaceHorizontal(m.width, lipgloss.Center, styledLogo)
+	s.WriteString(centeredLogo)
 
 	s.WriteString("\n\n")
 
