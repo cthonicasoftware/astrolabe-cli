@@ -14,7 +14,7 @@ run = "go run ./cmd/qa-agent"
 description = "Run the CLI"
 
 [tasks.tui]
-run = "./qa-agent tui"
+run = "go run ./cmd/qa-agent tui"
 description = "Run the Bubble Tea TUI demo (after build)"
 
 [env]
