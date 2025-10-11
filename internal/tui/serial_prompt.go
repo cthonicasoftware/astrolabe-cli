@@ -128,8 +128,6 @@ func (m *serialPromptModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *serialPromptModel) View() string {
-	var s strings.Builder
-
 	if m.err != nil {
 		content := "\n" + StyleError.Render("✗ Error: "+m.err.Error()) + "\n\n" +
 			StyleHelp.Render("Press q to quit.") + "\n"
@@ -137,19 +135,22 @@ func (m *serialPromptModel) View() string {
 			lipgloss.PlaceHorizontal(m.width, lipgloss.Center, content))
 	}
 
+	// Build the box content
+	var boxContent strings.Builder
+
 	// Title
-	s.WriteString(StyleTitle.Render("⚡ Serial Port Configuration"))
-	s.WriteString("\n\n")
+	boxContent.WriteString(StyleTitle.Render("⚡ Serial Port Configuration"))
+	boxContent.WriteString("\n\n")
 
 	switch m.step {
 	case 0: // Port selection
-		s.WriteString(StyleHeader.Render("Select a serial port:"))
-		s.WriteString("\n\n")
+		boxContent.WriteString(StyleHeader.Render("Select a serial port:"))
+		boxContent.WriteString("\n\n")
 
 		if len(m.ports) == 0 {
-			s.WriteString(StyleError.Render("  No serial ports found!"))
-			s.WriteString("\n")
-			s.WriteString(StyleHelp.Render("  Press q to quit."))
+			boxContent.WriteString(StyleError.Render("  No serial ports found!"))
+			boxContent.WriteString("\n")
+			boxContent.WriteString(StyleHelp.Render("  Press q to quit."))
 		} else {
 			for i, port := range m.ports {
 				cursor := "  "
@@ -158,20 +159,18 @@ func (m *serialPromptModel) View() string {
 					cursor = StyleCursor.Render("❯ ")
 					style = StyleSelected
 				}
-				s.WriteString(cursor + style.Render(port))
-				s.WriteString("\n")
+				boxContent.WriteString(cursor + style.Render(port))
+				boxContent.WriteString("\n")
 			}
-			s.WriteString("\n")
-			s.WriteString(StyleHelp.Render("  ↑/↓: navigate • enter: select • q: quit"))
 		}
 
 	case 1: // Baud rate selection
 		// Show selected port
-		s.WriteString(StyleKey.Render("Port:") + " " + StyleValue.Render(m.selected.Port))
-		s.WriteString("\n\n")
+		boxContent.WriteString(StyleKey.Render("Port:") + " " + StyleValue.Render(m.selected.Port))
+		boxContent.WriteString("\n\n")
 
-		s.WriteString(StyleHeader.Render("Select baud rate:"))
-		s.WriteString("\n\n")
+		boxContent.WriteString(StyleHeader.Render("Select baud rate:"))
+		boxContent.WriteString("\n\n")
 
 		for i, baud := range m.baudRates {
 			cursor := "  "
@@ -180,21 +179,19 @@ func (m *serialPromptModel) View() string {
 				cursor = StyleCursor.Render("❯ ")
 				style = StyleSelected
 			}
-			s.WriteString(cursor + style.Render(fmt.Sprintf("%d", baud)))
-			s.WriteString("\n")
+			boxContent.WriteString(cursor + style.Render(fmt.Sprintf("%d", baud)))
+			boxContent.WriteString("\n")
 		}
-		s.WriteString("\n")
-		s.WriteString(StyleHelp.Render("  ↑/↓: navigate • enter: select • q: quit"))
 
 	case 2: // TUI choice
 		// Show summary
-		s.WriteString(StyleKey.Render("Port:") + " " + StyleValue.Render(m.selected.Port))
-		s.WriteString("\n")
-		s.WriteString(StyleKey.Render("Baud:") + " " + StyleValue.Render(fmt.Sprintf("%d", m.selected.Baud)))
-		s.WriteString("\n\n")
+		boxContent.WriteString(StyleKey.Render("Port:") + " " + StyleValue.Render(m.selected.Port))
+		boxContent.WriteString("\n")
+		boxContent.WriteString(StyleKey.Render("Baud:") + " " + StyleValue.Render(fmt.Sprintf("%d", m.selected.Baud)))
+		boxContent.WriteString("\n\n")
 
-		s.WriteString(StyleHeader.Render("Launch live TUI?"))
-		s.WriteString("\n\n")
+		boxContent.WriteString(StyleHeader.Render("Launch live TUI?"))
+		boxContent.WriteString("\n\n")
 
 		choices := []string{"Yes", "No"}
 		for i, choice := range choices {
@@ -204,15 +201,28 @@ func (m *serialPromptModel) View() string {
 				cursor = StyleCursor.Render("❯ ")
 				style = StyleSelected
 			}
-			s.WriteString(cursor + style.Render(choice))
-			s.WriteString("\n")
+			boxContent.WriteString(cursor + style.Render(choice))
+			boxContent.WriteString("\n")
 		}
-		s.WriteString("\n")
-		s.WriteString(StyleHelp.Render("  ↑/↓: navigate • enter: select • q: quit"))
 	}
 
+	// Create bordered box
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(ColorPrimary).
+		Padding(1, 2)
+
+	box := boxStyle.Render(boxContent.String())
+
+	// Build final content with help text
+	var s strings.Builder
+	s.WriteString(box)
+	s.WriteString("\n\n")
+	s.WriteString(StyleHelp.Render("↑/↓: navigate • enter: select • q: quit"))
+
 	content := s.String()
-	return lipgloss.PlaceVertical(m.height, lipgloss.Center, content)
+	return lipgloss.PlaceVertical(m.height, lipgloss.Center,
+		lipgloss.PlaceHorizontal(m.width, lipgloss.Center, content))
 }
 
 // GetSerialConfig returns the selected configuration
