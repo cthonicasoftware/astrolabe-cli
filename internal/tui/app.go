@@ -50,6 +50,14 @@ type App struct {
 func NewApp(title string, feed <-chan string) App {
 	vp := viewport.New(0, 0)
 	vp.SetContent("")
+	vp.MouseWheelEnabled = true
+	vp.MouseWheelDelta = 3
+
+	// Disable high performance rendering to prevent border artifacts
+	vp.HighPerformanceRendering = false
+
+	// Apply a style to the viewport to ensure clean rendering
+	vp.Style = lipgloss.NewStyle()
 
 	// Create box style once
 	boxStyle := lipgloss.NewStyle().
@@ -111,7 +119,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		frameWidth := a.boxStyle.GetHorizontalFrameSize()
 		frameHeight := a.boxStyle.GetVerticalFrameSize()
 
-		a.vp.Width = m.Width - marginWidth - frameWidth
+		a.vp.Width = m.Width - marginWidth - frameWidth - 1
 		a.vp.Height = m.Height - headerFooterHeight - frameHeight
 
 		// Set minimums
@@ -122,10 +130,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.vp.Height = 10
 		}
 
+		// Reset YPosition to prevent viewport from rendering outside bounds
+		a.vp.YPosition = 0
+
 		// Re-wrap content when window size changes
 		if len(a.lines) > 0 {
 			wrappedContent := a.wrapLines(a.lines, a.vp.Width)
 			a.vp.SetContent(wrappedContent)
+			a.vp.GotoBottom()
 		}
 
 		return a, nil
@@ -142,8 +154,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.paused {
 			return a, nil
 		}
-		// Add incoming data to buffer
-		a.lineBuffer.WriteString(string(m))
+		// Add incoming data to buffer, stripping carriage returns to prevent cursor positioning issues
+		cleaned := strings.ReplaceAll(string(m), "\r", "")
+		a.lineBuffer.WriteString(cleaned)
 
 		// Process complete lines (those ending with \n)
 		bufferContent := a.lineBuffer.String()
@@ -218,6 +231,12 @@ func (a App) wrapLines(lines []string, width int) string {
 		return strings.Join(lines, "\n")
 	}
 
+	// Use width - 1 to prevent viewport rendering artifacts at the edge
+	wrapWidth := width - 1
+	if wrapWidth < 1 {
+		wrapWidth = 1
+	}
+
 	var wrapped strings.Builder
 	for i, line := range lines {
 		if i > 0 {
@@ -225,7 +244,7 @@ func (a App) wrapLines(lines []string, width int) string {
 		}
 
 		// If line fits, add it as-is
-		if len(line) <= width {
+		if len(line) <= wrapWidth {
 			wrapped.WriteString(line)
 			continue
 		}
@@ -233,15 +252,15 @@ func (a App) wrapLines(lines []string, width int) string {
 		// Wrap long lines
 		remaining := line
 		for len(remaining) > 0 {
-			if len(remaining) <= width {
+			if len(remaining) <= wrapWidth {
 				wrapped.WriteString(remaining)
 				break
 			}
 
 			// Try to break at a space
-			breakPoint := width
-			lastSpace := strings.LastIndex(remaining[:width], " ")
-			if lastSpace > 0 && lastSpace > width/2 { // Don't break too early
+			breakPoint := wrapWidth
+			lastSpace := strings.LastIndex(remaining[:wrapWidth], " ")
+			if lastSpace > 0 && lastSpace > wrapWidth/2 { // Don't break too early
 				breakPoint = lastSpace
 			}
 
@@ -280,8 +299,12 @@ func (a App) View() string {
 	s.WriteString(statusText)
 	s.WriteString("\n\n")
 
-	// Render viewport in bordered box
-	box := a.boxStyle.Render(a.vp.View())
+	// Render viewport in bordered box with explicit size constraints
+	vpContent := lipgloss.NewStyle().
+		Width(a.vp.Width).
+		Height(a.vp.Height).
+		Render(a.vp.View())
+	box := a.boxStyle.Render(vpContent)
 	s.WriteString(box)
 	s.WriteString("\n\n")
 
