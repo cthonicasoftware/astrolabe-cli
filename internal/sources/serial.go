@@ -12,8 +12,12 @@ import (
 )
 
 type Serial struct {
-	Port string
-	Baud int
+	Port        string
+	Baud        int
+	Parity      string // "N", "O", "E", "M", "S"
+	DataBits    int    // 5, 6, 7, 8
+	StopBits    string // "1", "1.5", "2"
+	FlowControl string // "none", "hardware", "software"
 
 	mu     sync.Mutex
 	port   serial.Port
@@ -23,23 +27,67 @@ type Serial struct {
 
 func NewSerial(port string, baud int) *Serial {
 	return &Serial{
-		Port: port,
-		Baud: baud,
-		ch:   make(chan []byte, 16),
+		Port:        port,
+		Baud:        baud,
+		Parity:      "N",
+		DataBits:    8,
+		StopBits:    "1",
+		FlowControl: "none",
+		ch:          make(chan []byte, 16),
+	}
+}
+
+func (s *Serial) parseParity() serial.Parity {
+	switch s.Parity {
+	case "O":
+		return serial.OddParity
+	case "E":
+		return serial.EvenParity
+	case "M":
+		return serial.MarkParity
+	case "S":
+		return serial.SpaceParity
+	default:
+		return serial.NoParity
+	}
+}
+
+func (s *Serial) parseStopBits() serial.StopBits {
+	switch s.StopBits {
+	case "1.5":
+		return serial.OnePointFiveStopBits
+	case "2":
+		return serial.TwoStopBits
+	default:
+		return serial.OneStopBit
 	}
 }
 
 func (s *Serial) Open(ctx context.Context) error {
 	mode := &serial.Mode{
 		BaudRate: s.Baud,
-		DataBits: 8,
-		Parity:   serial.NoParity,
-		StopBits: serial.OneStopBit,
+		DataBits: s.DataBits,
+		Parity:   s.parseParity(),
+		StopBits: s.parseStopBits(),
 	}
 
 	port, err := serial.Open(s.Port, mode)
 	if err != nil {
 		return fmt.Errorf("failed to open serial port %s: %w", s.Port, err)
+	}
+
+	// Set flow control if hardware flow control is requested
+	if s.FlowControl == "hardware" {
+		err = port.SetRTS(true)
+		if err != nil {
+			port.Close()
+			return fmt.Errorf("failed to set RTS: %w", err)
+		}
+		err = port.SetDTR(true)
+		if err != nil {
+			port.Close()
+			return fmt.Errorf("failed to set DTR: %w", err)
+		}
 	}
 
 	s.mu.Lock()
