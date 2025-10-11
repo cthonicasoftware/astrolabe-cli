@@ -19,3 +19,4 @@ description = "Run the Bubble Tea TUI demo (after build)"
 
 [env]
 GOBIN = "{{config_root}}/.bin"
+GOCACHE = "{{config_root}}/.gocache"
