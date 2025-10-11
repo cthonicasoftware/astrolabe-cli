@@ -440,10 +440,20 @@ func (a App) applyFadeEffect(content string) string {
 	}
 
 	// Fade the top 30% of visible lines
-	fadeZone := int(float64(len(lines)) * 0.3)
-	if fadeZone < 1 {
-		fadeZone = 1
+	topFadeZone := int(float64(len(lines)) * 0.3)
+	if topFadeZone < 1 {
+		topFadeZone = 1
 	}
+
+	// Check if user is at the bottom (watching live data)
+	atBottom := a.vp.AtBottom()
+
+	// Fade the bottom 30% only when scrolling through old data
+	bottomFadeZone := int(float64(len(lines)) * 0.3)
+	if bottomFadeZone < 1 {
+		bottomFadeZone = 1
+	}
+	bottomFadeStart := len(lines) - bottomFadeZone
 
 	var result strings.Builder
 	for i, line := range lines {
@@ -451,13 +461,22 @@ func (a App) applyFadeEffect(content string) string {
 			result.WriteString("\n")
 		}
 
-		// Apply fade to lines in the fade zone
-		if i < fadeZone {
-			opacity := float64(i) / float64(fadeZone)
+		// Apply top fade
+		if i < topFadeZone {
+			opacity := float64(i) / float64(topFadeZone)
+			// Map opacity to color intensity (30% to 100%)
+			intensity := 0.3 + (opacity * 0.7)
+			result.WriteString(a.applyColorIntensity(line, intensity))
+		} else if !atBottom && i >= bottomFadeStart {
+			// Apply bottom fade only when not at bottom (scrolling through old data)
+			// Reverse the fade: brightest at top of fade zone, dimmest at bottom
+			distanceFromBottom := len(lines) - 1 - i
+			opacity := float64(distanceFromBottom) / float64(bottomFadeZone)
 			// Map opacity to color intensity (30% to 100%)
 			intensity := 0.3 + (opacity * 0.7)
 			result.WriteString(a.applyColorIntensity(line, intensity))
 		} else {
+			// Full brightness
 			result.WriteString(line)
 		}
 	}
