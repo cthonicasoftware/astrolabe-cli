@@ -33,12 +33,13 @@ type keymap struct {
 	Help  key.Binding
 	Pause key.Binding
 	Clear key.Binding
+	Spot  key.Binding
 }
 
-func (k keymap) ShortHelp() []key.Binding { return []key.Binding{k.Quit, k.Pause, k.Help} }
+func (k keymap) ShortHelp() []key.Binding { return []key.Binding{k.Quit, k.Pause, k.Spot, k.Help} }
 func (k keymap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Quit, k.Pause, k.Clear, k.Help},
+		{k.Quit, k.Pause, k.Spot, k.Clear, k.Help},
 	}
 }
 
@@ -47,6 +48,7 @@ var keys = keymap{
 	Help:  key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "toggle help")),
 	Pause: key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "pause/resume capture")),
 	Clear: key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "clear buffer")),
+	Spot:  key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "toggle spotlight")),
 }
 
 var faintLineStyle = lipgloss.NewStyle().Faint(true)
@@ -190,16 +192,17 @@ func (lw *LineWrapper) wrapLineSimple(builder *strings.Builder, line string, wra
 
 // App represents the live capture TUI application
 type App struct {
-	title      string
-	vp         viewport.Model
-	help       help.Model
-	paused     bool
-	feed       <-chan string
-	lineBuffer *LineBuffer
-	lastTick   time.Time
-	width      int
-	height     int
-	boxStyle   lipgloss.Style
+	title            string
+	vp               viewport.Model
+	help             help.Model
+	paused           bool
+	feed             <-chan string
+	lineBuffer       *LineBuffer
+	lastTick         time.Time
+	width            int
+	height           int
+	boxStyle         lipgloss.Style
+	spotlightEnabled bool
 }
 
 // NewApp creates a new App instance
@@ -217,12 +220,13 @@ func NewApp(title string, feed <-chan string) App {
 		Padding(1, 2)
 
 	return App{
-		title:      title,
-		vp:         vp,
-		help:       help.New(),
-		feed:       feed,
-		boxStyle:   boxStyle,
-		lineBuffer: NewLineBuffer(),
+		title:            title,
+		vp:               vp,
+		help:             help.New(),
+		feed:             feed,
+		boxStyle:         boxStyle,
+		lineBuffer:       NewLineBuffer(),
+		spotlightEnabled: false,
 	}
 }
 
@@ -327,6 +331,8 @@ func (a App) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.togglePause()
 	case key.Matches(msg, keys.Clear):
 		return a.clearBuffer()
+	case key.Matches(msg, keys.Spot):
+		return a.toggleSpotlight()
 	}
 
 	// Pass unhandled keys to viewport for scrolling
@@ -418,6 +424,12 @@ func (a App) renderStatus() string {
 		statusText += " • " + StyleMuted.Render(a.lastTick.Format("15:04:05"))
 	}
 
+	if a.spotlightEnabled {
+		statusText += " • " + StyleMuted.Render("Spotlight on")
+	} else {
+		statusText += " • " + StyleMuted.Render("Spotlight off")
+	}
+
 	return statusText
 }
 
@@ -426,8 +438,11 @@ func (a App) renderViewport() string {
 	// Get the visible content from viewport
 	visibleContent := a.vp.View()
 
-	// Apply fade effect to visible lines
-	fadedContent := a.applyFadeEffect(visibleContent)
+	// Apply fade effect to visible lines when enabled
+	fadedContent := visibleContent
+	if a.spotlightEnabled {
+		fadedContent = a.applyFadeEffect(visibleContent)
+	}
 
 	vpContent := lipgloss.NewStyle().
 		Width(a.vp.Width).
@@ -519,6 +534,12 @@ func (a App) renderHelp() string {
 	if a.help.ShowAll {
 		return StyleHelp.Render(a.help.View(keys))
 	}
-	helpText := "space: pause/resume • ↑/↓/pgup/pgdn: scroll • ctrl+l: clear • ?: help • q: quit"
+	helpText := "space: pause/resume • s: toggle spotlight • ↑/↓/pgup/pgdn: scroll • ctrl+l: clear • ?: help • q: quit"
 	return StyleHelp.Render(helpText)
+}
+
+// toggleSpotlight toggles the spotlight fade effect
+func (a App) toggleSpotlight() (tea.Model, tea.Cmd) {
+	a.spotlightEnabled = !a.spotlightEnabled
+	return a, nil
 }
