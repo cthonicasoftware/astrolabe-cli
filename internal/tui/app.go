@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -14,13 +15,16 @@ import (
 
 // Layout constants for viewport sizing
 const (
-	headerFooterHeight = 8
-	marginWidth        = 8
-	minViewportWidth   = 40
-	minViewportHeight  = 10
-	maxBufferedLines   = 1000
-	tickInterval       = 250 * time.Millisecond
+	headerFooterHeight    = 8
+	marginWidth           = 8
+	minViewportWidth      = 40
+	minViewportHeight     = 10
+	maxBufferedLines      = 1000
+	tickInterval          = 250 * time.Millisecond
+	spotlightMinIntensity = 0.20
 )
+
+const ansiEscapePrefix = "\x1b["
 
 // keymap defines the key bindings for the application
 type keymap struct {
@@ -43,6 +47,8 @@ var keys = keymap{
 	Pause: key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "pause/resume capture")),
 	Clear: key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "clear buffer")),
 }
+
+var faintLineStyle = lipgloss.NewStyle().Faint(true)
 
 // LineBuffer manages buffering and processing of incoming text data
 type LineBuffer struct {
@@ -134,10 +140,7 @@ func (lw *LineWrapper) Wrap(lines []string) string {
 	}
 
 	// Use width - 1 to prevent viewport rendering artifacts at the edge
-	wrapWidth := lw.width - 1
-	if wrapWidth < 1 {
-		wrapWidth = 1
-	}
+	wrapWidth := max(lw.width-1, 1)
 
 	var wrapped strings.Builder
 	for i, line := range lines {
@@ -439,21 +442,15 @@ func (a App) applyFadeEffect(content string) string {
 		return content
 	}
 
-	// Fade the top 30% of visible lines
-	topFadeZone := int(float64(len(lines)) * 0.3)
-	if topFadeZone < 1 {
-		topFadeZone = 1
+	maxIndex := math.Max(float64(len(lines)-1), 1)
+	scrollPercent := a.vp.ScrollPercent()
+	if a.vp.AtTop() && !a.vp.AtBottom() {
+		scrollPercent = 0
+	} else if a.vp.AtBottom() && !a.vp.AtTop() {
+		scrollPercent = 1
+	} else {
+		scrollPercent = clampFloat(scrollPercent, 0, 1)
 	}
-
-	// Check if user is at the bottom (watching live data)
-	atBottom := a.vp.AtBottom()
-
-	// Fade the bottom 30% only when scrolling through old data
-	bottomFadeZone := int(float64(len(lines)) * 0.3)
-	if bottomFadeZone < 1 {
-		bottomFadeZone = 1
-	}
-	bottomFadeStart := len(lines) - bottomFadeZone
 
 	var result strings.Builder
 	for i, line := range lines {
@@ -461,24 +458,17 @@ func (a App) applyFadeEffect(content string) string {
 			result.WriteString("\n")
 		}
 
-		// Apply top fade
-		if i < topFadeZone {
-			opacity := float64(i) / float64(topFadeZone)
-			// Map opacity to color intensity (30% to 100%)
-			intensity := 0.3 + (opacity * 0.7)
-			result.WriteString(a.applyColorIntensity(line, intensity))
-		} else if !atBottom && i >= bottomFadeStart {
-			// Apply bottom fade only when not at bottom (scrolling through old data)
-			// Reverse the fade: brightest at top of fade zone, dimmest at bottom
-			distanceFromBottom := len(lines) - 1 - i
-			opacity := float64(distanceFromBottom) / float64(bottomFadeZone)
-			// Map opacity to color intensity (30% to 100%)
-			intensity := 0.3 + (opacity * 0.7)
-			result.WriteString(a.applyColorIntensity(line, intensity))
-		} else {
-			// Full brightness
-			result.WriteString(line)
-		}
+		linePosition := clampFloat(float64(i)/maxIndex, 0, 1)
+		bottomProgress := linePosition
+		topProgress := 1 - linePosition
+
+		bottomIntensity := spotlightMinIntensity + (1-spotlightMinIntensity)*easeOutCubic(bottomProgress)
+		topIntensity := spotlightMinIntensity + (1-spotlightMinIntensity)*easeOutCubic(topProgress)
+
+		intensity := bottomIntensity*scrollPercent + topIntensity*(1-scrollPercent)
+		intensity = clampFloat(intensity, spotlightMinIntensity, 1)
+
+		result.WriteString(a.applyColorIntensity(line, intensity))
 	}
 
 	return result.String()
@@ -486,14 +476,38 @@ func (a App) applyFadeEffect(content string) string {
 
 // applyColorIntensity applies color intensity to a line using ANSI color codes
 func (a App) applyColorIntensity(line string, intensity float64) string {
-	// Map intensity to grayscale ANSI colors (232-255 are grayscale)
-	// 232 = darkest, 255 = brightest (white)
-	colorCode := 232 + int(intensity*23)
-	if colorCode > 255 {
-		colorCode = 255
+	if intensity >= 0.99 {
+		return line
 	}
 
+	// Preserve pre-existing colored output by falling back to a faint style
+	if strings.Contains(line, ansiEscapePrefix) {
+		if intensity > 0.7 {
+			return line
+		}
+		return faintLineStyle.Render(line)
+	}
+
+	// Map intensity to grayscale ANSI colors (232-255 are grayscale)
+	// 232 = darkest, 255 = brightest (white)
+	colorCode := max(min(232+int(math.Round(intensity*23)), 255), 232)
+
 	return fmt.Sprintf("\x1b[38;5;%dm%s\x1b[0m", colorCode, line)
+}
+
+func easeOutCubic(t float64) float64 {
+	inv := 1 - t
+	return 1 - (inv * inv * inv)
+}
+
+func clampFloat(value, min, max float64) float64 {
+	if value < min {
+		return min
+	}
+	if value > max {
+		return max
+	}
+	return value
 }
 
 // renderHelp renders the help text
