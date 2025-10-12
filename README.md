@@ -86,6 +86,7 @@ mise run build
 mise run tui
 mise run cli <command>
 ```
+- Go tool invocations use a project-local cache (`.gocache`) so builds/tests work even in sandboxed environments.
 
 ### Project layout
 ```
@@ -99,3 +100,13 @@ internal/storage/    # Filesystem storage (manifest + JSONL)
 internal/upload/     # Upload client (presigned URLs / token)
 internal/tui/        # TUI (bubbletea)
 ```
+
+### Data model primitives
+- `Run`: capture session envelope that links the source, manifest, capture settings, artifacts, and upload lifecycle.
+- `Manifest`: operator-supplied metadata stamped on every run; nests `DeviceInfo` (id, firmware, hardware rev) and `TestInfo` (plan, variant, run number) plus optional tags/attributes.
+- `CaptureSettings`: normalized view of how the stream was acquired (sample rate, duration hint, channel list).
+- `Record`: single normalized datum emitted by a source; ordered via `seq` and timestamped.
+- `Artifact`: on-disk payload belonging to the run (manifest JSON, JSONL data, device logs, attachments) with checksum + media type; `ArtifactRole` distinguishes core data vs. extras.
+- `UploadState`: tracks reconciliation with the QA backend (queue status, attempts, timestamps, remote run id).
+
+Supporting types (`SourceMeta`, `Checksum`, etc.) live in `internal/core/types.go` and are intended to be shared across packages.
