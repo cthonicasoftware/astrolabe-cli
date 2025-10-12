@@ -361,6 +361,16 @@ func (a App) clearBuffer() (tea.Model, tea.Cmd) {
 func (a *App) updateViewportContent() {
 	wrapper := NewLineWrapper(a.vp.Width)
 	wrappedContent := wrapper.Wrap(a.lineBuffer.GetDisplayLines())
+
+	// Bottom-align shorter content so new lines appear at the base of the viewport
+	if a.vp.Height > 0 && wrappedContent != "" {
+		lineCount := countLines(wrappedContent)
+		if lineCount < a.vp.Height {
+			padding := strings.Repeat("\n", a.vp.Height-lineCount)
+			wrappedContent = padding + wrappedContent
+		}
+	}
+
 	a.vp.SetContent(wrappedContent)
 }
 
@@ -495,6 +505,10 @@ func (a App) applyFadeEffect(content string) string {
 
 // applyColorIntensity applies color intensity to a line using ANSI color codes
 func (a App) applyColorIntensity(line string, intensity float64) string {
+	if line == "" {
+		return line
+	}
+
 	if intensity >= 0.99 {
 		return line
 	}
@@ -527,6 +541,13 @@ func clampFloat(value, min, max float64) float64 {
 		return max
 	}
 	return value
+}
+
+func countLines(content string) int {
+	if content == "" {
+		return 0
+	}
+	return strings.Count(content, "\n") + 1
 }
 
 // renderHelp renders the help text
