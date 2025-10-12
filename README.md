@@ -83,7 +83,8 @@ mise activate
 mise run build
 
 # run
-mise run run
+mise run tui
+mise run cli <command>
 ```
 
 ### Project layout
