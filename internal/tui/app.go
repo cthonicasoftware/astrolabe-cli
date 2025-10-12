@@ -21,7 +21,8 @@ const (
 	minViewportHeight     = 10
 	maxBufferedLines      = 1000
 	tickInterval          = 250 * time.Millisecond
-	spotlightMinIntensity = 0.20
+	spotlightMinIntensity = 0.3
+	spotlightFocusRadius  = 0.4
 )
 
 const ansiEscapePrefix = "\x1b["
@@ -443,14 +444,19 @@ func (a App) applyFadeEffect(content string) string {
 	}
 
 	maxIndex := math.Max(float64(len(lines)-1), 1)
-	scrollPercent := a.vp.ScrollPercent()
-	if a.vp.AtTop() && !a.vp.AtBottom() {
+
+	scrollPercent := clampFloat(a.vp.ScrollPercent(), 0, 1)
+	switch {
+	case a.vp.AtTop() && !a.vp.AtBottom():
 		scrollPercent = 0
-	} else if a.vp.AtBottom() && !a.vp.AtTop() {
+	case a.vp.AtBottom() && !a.vp.AtTop():
 		scrollPercent = 1
-	} else {
-		scrollPercent = clampFloat(scrollPercent, 0, 1)
+	case a.vp.AtTop() && a.vp.AtBottom():
+		scrollPercent = 1
 	}
+
+	focus := scrollPercent
+	focusRadius := math.Max(spotlightFocusRadius, 0.05)
 
 	var result strings.Builder
 	for i, line := range lines {
@@ -459,13 +465,11 @@ func (a App) applyFadeEffect(content string) string {
 		}
 
 		linePosition := clampFloat(float64(i)/maxIndex, 0, 1)
-		bottomProgress := linePosition
-		topProgress := 1 - linePosition
+		distance := math.Abs(linePosition - focus)
+		normalized := clampFloat(distance/focusRadius, 0, 1)
+		focusIntensity := easeOutCubic(1 - normalized)
 
-		bottomIntensity := spotlightMinIntensity + (1-spotlightMinIntensity)*easeOutCubic(bottomProgress)
-		topIntensity := spotlightMinIntensity + (1-spotlightMinIntensity)*easeOutCubic(topProgress)
-
-		intensity := bottomIntensity*scrollPercent + topIntensity*(1-scrollPercent)
+		intensity := spotlightMinIntensity + (1-spotlightMinIntensity)*focusIntensity
 		intensity = clampFloat(intensity, spotlightMinIntensity, 1)
 
 		result.WriteString(a.applyColorIntensity(line, intensity))
