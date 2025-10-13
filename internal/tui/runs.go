@@ -232,7 +232,8 @@ func newRunsTable(rows []table.Row) table.Model {
 		{Title: "Test Plan", Width: 18},
 	}
 
-	height := 8
+	// sensible row count
+	height := 10
 	if n := len(rows); n > 0 {
 		if n+2 < height {
 			height = n + 2

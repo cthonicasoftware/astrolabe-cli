@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
 
@@ -85,6 +86,53 @@ var captureSerialCmd = &cobra.Command{
 		serial := sources.NewSerialWithConfig(*serialCfg)
 
 		if launchTUI {
+			// Setup for TUI mode with optional save capability
+			appCfg := config.Load()
+			if err := os.MkdirAll(appCfg.OfflineCache, 0o755); err != nil {
+				return fmt.Errorf("ensure offline cache: %w", err)
+			}
+
+			tempRoot, err := os.MkdirTemp(appCfg.OfflineCache, ".tmp-run-")
+			if err != nil {
+				return fmt.Errorf("create temp run dir: %w", err)
+			}
+			defer os.RemoveAll(tempRoot)
+
+			store := storage.NewFS(tempRoot)
+			normalizer := normalize.NewLineJSON()
+
+			meta := serialManifestOptions{
+				Operator: serialOperator,
+				Location: serialLocation,
+				Device: core.DeviceInfo{
+					ID:              serialDeviceID,
+					Serial:          serialDeviceSerial,
+					Firmware:        serialDeviceFirmware,
+					FirmwareHash:    serialDeviceFWHash,
+					HardwareVersion: serialDeviceHWVersion,
+				},
+				Test: core.TestInfo{
+					Plan:    serialTestPlan,
+					Variant: serialTestVariant,
+					Run:     serialTestRun,
+				},
+				Tags:       append([]string(nil), serialTags...),
+				Attributes: cloneStringMap(serialAttributes),
+			}
+
+			pipelineOpts := capture.Options{
+				Source:     serial,
+				Normalizer: normalizer,
+				Store:      store,
+				Manifest:   buildSerialManifest(*serialCfg, serialName, meta),
+				Capture:    buildSerialCaptureSettings(*serialCfg),
+			}
+
+			pipeline, err := capture.NewPipeline(pipelineOpts)
+			if err != nil {
+				return fmt.Errorf("build pipeline: %w", err)
+			}
+
 			// Open the serial port
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -98,35 +146,108 @@ var captureSerialCmd = &cobra.Command{
 				}
 			}()
 
-			// Create a string channel for the TUI
+			// Create channels for TUI display and pipeline data
 			stringCh := make(chan string, 16)
+			pipelineFramesCh := make(chan []byte, 16)
 
-			// Convert byte frames to strings
+			// Create a wrapper source for the pipeline that reads from our tee'd channel
+			pipelineSource := &frameChannelSource{
+				framesCh: pipelineFramesCh,
+				meta:     serial.Meta(),
+			}
+			pipelineOpts.Source = pipelineSource
+			pipeline, err = capture.NewPipeline(pipelineOpts)
+			if err != nil {
+				return fmt.Errorf("rebuild pipeline with wrapper source: %w", err)
+			}
+
+			// Tee the data: read from serial and send to both pipeline and TUI
 			go func() {
 				defer close(stringCh)
+				defer close(pipelineFramesCh)
 				for frame := range serial.Frames() {
-					// Send the entire frame (including newlines) to the TUI
-					// The TUI will handle splitting on newlines and buffering partial lines
-					if len(frame) > 0 {
-						select {
-						case stringCh <- string(frame):
-						case <-ctx.Done():
-							return
-						}
+					if len(frame) == 0 {
+						continue
+					}
+					// Send to TUI display
+					select {
+					case stringCh <- string(frame):
+					case <-ctx.Done():
+						return
+					}
+					// Send to pipeline
+					select {
+					case pipelineFramesCh <- frame:
+					case <-ctx.Done():
+						return
 					}
 				}
+			}()
+
+			// Run the capture pipeline in the background
+			pipelineResultCh := make(chan *core.Run, 1)
+			pipelineErrCh := make(chan error, 1)
+			go func() {
+				run, err := pipeline.Run(ctx)
+				pipelineResultCh <- run
+				pipelineErrCh <- err
 			}()
 
 			// Launch the TUI
 			title := fmt.Sprintf("Serial Capture - %s @ %d", serialCfg.Port, serialCfg.Baud)
 			m := tui.NewApp(title, stringCh)
 			p := tea.NewProgram(m, tea.WithAltScreen())
-			if _, err := p.Run(); err != nil {
+			finalModel, err := p.Run()
+			if err != nil {
+				cancel()
 				return err
 			}
 
-			// Cancel context to stop serial reading
+			// Check if user requested to save
+			tuiApp, ok := finalModel.(*tui.App)
+			if !ok {
+				cancel()
+				return fmt.Errorf("unexpected model type: %T", finalModel)
+			}
+
+			// Cancel context to stop serial reading and pipeline
 			cancel()
+
+			if tuiApp.SaveRequested() {
+				fmt.Println("\nSaving capture data...")
+				run := <-pipelineResultCh
+				runErr := <-pipelineErrCh
+
+				if runErr != nil && !errors.Is(runErr, context.Canceled) {
+					return fmt.Errorf("capture pipeline: %w", runErr)
+				}
+				if run == nil {
+					return fmt.Errorf("capture pipeline: run not returned")
+				}
+
+				if err := promoteRunArtifacts(run, tempRoot, appCfg.OfflineCache); err != nil {
+					return fmt.Errorf("finalize run artifacts: %w", err)
+				}
+
+				fmt.Printf("Capture saved. Records: %d\n", run.RecordsCount)
+				fmt.Printf("Run ID: %s\n", run.ID)
+				fmt.Printf("Cache dir: %s\n", appCfg.OfflineCache)
+				for _, artifact := range run.Artifacts {
+					fmt.Printf(" - %s (%s)\n", artifact.Path, artifact.Role)
+				}
+			} else {
+				fmt.Println("\nExited without saving.")
+				// Wait for pipeline to finish but discard results
+				run := <-pipelineResultCh
+				runErr := <-pipelineErrCh
+				if runErr != nil && !errors.Is(runErr, context.Canceled) {
+					fmt.Fprintf(os.Stderr, "capture pipeline error: %v\n", runErr)
+				}
+				if run != nil {
+					runDir := filepath.Join(tempRoot, run.ID)
+					_ = os.RemoveAll(runDir)
+				}
+			}
 		} else {
 			appCfg := config.Load()
 			store := storage.NewFS(appCfg.OfflineCache)
@@ -275,6 +396,55 @@ func buildSerialCaptureSettings(cfg sources.Config) core.CaptureSettings {
 	}
 }
 
+func promoteRunArtifacts(run *core.Run, tempRoot, cacheRoot string) error {
+	if run == nil {
+		return fmt.Errorf("run is nil")
+	}
+
+	tempDir := filepath.Join(tempRoot, run.ID)
+	finalDir := filepath.Join(cacheRoot, run.ID)
+
+	if _, err := os.Stat(tempDir); err != nil {
+		return fmt.Errorf("temporary run artifacts missing: %w", err)
+	}
+	if _, err := os.Stat(finalDir); err == nil {
+		return fmt.Errorf("run directory already exists: %s", finalDir)
+	}
+
+	if err := os.Rename(tempDir, finalDir); err != nil {
+		return fmt.Errorf("move run artifacts: %w", err)
+	}
+
+	relocate := func(path string) (string, error) {
+		if path == "" {
+			return "", nil
+		}
+		rel, err := filepath.Rel(tempDir, path)
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(finalDir, rel), nil
+	}
+
+	if run.PrimaryDataURI != "" {
+		newPrimary, err := relocate(run.PrimaryDataURI)
+		if err != nil {
+			return fmt.Errorf("update primary data path: %w", err)
+		}
+		run.PrimaryDataURI = newPrimary
+	}
+
+	for i := range run.Artifacts {
+		newPath, err := relocate(run.Artifacts[i].Path)
+		if err != nil {
+			return fmt.Errorf("update artifact %q path: %w", run.Artifacts[i].Name, err)
+		}
+		run.Artifacts[i].Path = newPath
+	}
+
+	return nil
+}
+
 func cloneStringMap(src map[string]string) map[string]string {
 	if len(src) == 0 {
 		return nil
@@ -284,4 +454,18 @@ func cloneStringMap(src map[string]string) map[string]string {
 		dst[k] = v
 	}
 	return dst
+}
+
+// frameChannelSource wraps a frames channel and implements the capture.Source interface
+type frameChannelSource struct {
+	framesCh <-chan []byte
+	meta     core.SourceMeta
+}
+
+func (f *frameChannelSource) Frames() <-chan []byte {
+	return f.framesCh
+}
+
+func (f *frameChannelSource) Meta() core.SourceMeta {
+	return f.meta
 }

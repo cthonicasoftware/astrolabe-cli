@@ -24,21 +24,23 @@ const (
 // keymap defines the key bindings for the application
 type keymap struct {
 	Quit  key.Binding
+	Save  key.Binding
 	Help  key.Binding
 	Pause key.Binding
 	Clear key.Binding
 	Spot  key.Binding
 }
 
-func (k keymap) ShortHelp() []key.Binding { return []key.Binding{k.Quit, k.Pause, k.Spot, k.Help} }
+func (k keymap) ShortHelp() []key.Binding { return []key.Binding{k.Save, k.Pause, k.Spot, k.Help} }
 func (k keymap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Quit, k.Pause, k.Spot, k.Clear, k.Help},
+		{k.Quit, k.Save, k.Pause, k.Spot, k.Clear, k.Help},
 	}
 }
 
 var keys = keymap{
-	Quit:  key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q/ctrl+c", "quit")),
+	Quit:  key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q/ctrl+c", "quit without saving")),
+	Save:  key.NewBinding(key.WithKeys("ctrl+w"), key.WithHelp("ctrl+w", "stop & save run")),
 	Help:  key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "toggle help")),
 	Pause: key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "pause/resume capture")),
 	Clear: key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "clear buffer")),
@@ -51,6 +53,7 @@ type App struct {
 	vp               viewport.Model
 	help             help.Model
 	paused           bool
+	saveRequested    bool
 	feed             <-chan string
 	lineBuffer       *LineBuffer
 	lastTick         time.Time
@@ -62,7 +65,7 @@ type App struct {
 }
 
 // NewApp creates a new App instance
-func NewApp(title string, feed <-chan string) App {
+func NewApp(title string, feed <-chan string) *App {
 	vp := viewport.New(0, 0)
 	vp.SetContent("")
 	vp.MouseWheelEnabled = true
@@ -75,10 +78,12 @@ func NewApp(title string, feed <-chan string) App {
 		BorderForeground(ColorPrimary).
 		Padding(1, 2)
 
-	return App{
+	return &App{
 		title:            title,
 		vp:               vp,
 		help:             help.New(),
+		paused:           false,
+		saveRequested:    false,
 		feed:             feed,
 		boxStyle:         boxStyle,
 		lineBuffer:       NewLineBuffer(),
@@ -92,12 +97,12 @@ type tickMsg time.Time
 type lineMsg string
 
 // Init initializes the app
-func (a App) Init() tea.Cmd {
+func (a *App) Init() tea.Cmd {
 	return tea.Batch(a.tickCmd(), a.pullLine())
 }
 
 // Update handles messages and updates the model
-func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case tea.WindowSizeMsg:
 		return a.handleWindowResize(m)
@@ -116,7 +121,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // handleWindowResize handles terminal window resize events
-func (a App) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
+func (a *App) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	a.width = msg.Width
 	a.height = msg.Height
 
@@ -144,7 +149,7 @@ func (a App) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 }
 
 // handleTick handles periodic tick events
-func (a App) handleTick(msg tickMsg) (tea.Model, tea.Cmd) {
+func (a *App) handleTick(msg tickMsg) (tea.Model, tea.Cmd) {
 	a.lastTick = time.Time(msg)
 
 	if !a.paused {
@@ -154,32 +159,37 @@ func (a App) handleTick(msg tickMsg) (tea.Model, tea.Cmd) {
 }
 
 // handleLineData handles incoming line data
-func (a App) handleLineData(msg lineMsg) (tea.Model, tea.Cmd) {
-	if a.paused {
-		return a, nil
+func (a *App) handleLineData(msg lineMsg) (tea.Model, tea.Cmd) {
+	// Always drain the channel to prevent blocking the pipeline
+	// even when paused
+	if !a.paused {
+		// Check if user is at the bottom before adding new data
+		wasAtBottom := a.vp.AtBottom()
+
+		// Process incoming data
+		a.lineBuffer.AddData(string(msg))
+
+		// Update viewport with current state
+		a.updateViewportContent()
+
+		// Only auto-scroll to bottom if user was already at bottom
+		if wasAtBottom {
+			a.vp.GotoBottom()
+		}
 	}
 
-	// Check if user is at the bottom before adding new data
-	wasAtBottom := a.vp.AtBottom()
-
-	// Process incoming data
-	a.lineBuffer.AddData(string(msg))
-
-	// Update viewport with current state
-	a.updateViewportContent()
-
-	// Only auto-scroll to bottom if user was already at bottom
-	if wasAtBottom {
-		a.vp.GotoBottom()
-	}
-
+	// Always pull the next line, even when paused, to prevent blocking
 	return a, a.pullLine()
 }
 
 // handleKeyPress handles keyboard input
-func (a App) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (a *App) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, keys.Quit):
+		a.saveRequested = false
+		return a, tea.Quit
+	case key.Matches(msg, keys.Save):
+		a.saveRequested = true
 		return a, tea.Quit
 	case key.Matches(msg, keys.Help):
 		a.help.ShowAll = !a.help.ShowAll
@@ -199,7 +209,7 @@ func (a App) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // togglePause toggles the pause state
-func (a App) togglePause() (tea.Model, tea.Cmd) {
+func (a *App) togglePause() (tea.Model, tea.Cmd) {
 	a.paused = !a.paused
 	if !a.paused {
 		return a, a.pullLine()
@@ -208,7 +218,7 @@ func (a App) togglePause() (tea.Model, tea.Cmd) {
 }
 
 // clearBuffer clears the line buffer and viewport
-func (a App) clearBuffer() (tea.Model, tea.Cmd) {
+func (a *App) clearBuffer() (tea.Model, tea.Cmd) {
 	a.lineBuffer.Clear()
 	a.vp.SetContent("")
 	return a, nil
@@ -232,7 +242,7 @@ func (a *App) updateViewportContent() {
 }
 
 // tickCmd returns a command that sends a tick message
-func (a App) tickCmd() tea.Cmd {
+func (a *App) tickCmd() tea.Cmd {
 	return tea.Tick(tickInterval, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
@@ -253,7 +263,7 @@ func (a *App) pullLine() tea.Cmd {
 }
 
 // View renders the application UI
-func (a App) View() string {
+func (a *App) View() string {
 	var s strings.Builder
 
 	// Title
@@ -278,7 +288,7 @@ func (a App) View() string {
 }
 
 // renderStatus renders the status line with metadata
-func (a App) renderStatus() string {
+func (a *App) renderStatus() string {
 	statusText := fmt.Sprintf("Lines: %d", a.lineBuffer.LineCount())
 
 	if a.paused {
@@ -301,7 +311,7 @@ func (a App) renderStatus() string {
 }
 
 // renderViewport renders the viewport in a bordered box with fade effect
-func (a App) renderViewport() string {
+func (a *App) renderViewport() string {
 	// Get the visible content from viewport
 	visibleContent := a.vp.View()
 
@@ -324,16 +334,21 @@ func (a App) renderViewport() string {
 }
 
 // renderHelp renders the help text
-func (a App) renderHelp() string {
+func (a *App) renderHelp() string {
 	if a.help.ShowAll {
 		return StyleHelp.Render(a.help.View(keys))
 	}
-	helpText := "space: pause/resume • s: toggle spotlight • ↑/↓/pgup/pgdn: scroll • ctrl+l: clear • ?: help • q: quit"
+	helpText := "ctrl+w: save & quit • space: pause/resume • s: spotlight • ↑/↓: scroll • ctrl+l: clear • q: quit without saving"
 	return StyleHelp.Render(helpText)
 }
 
 // toggleSpotlight toggles the spotlight fade effect
-func (a App) toggleSpotlight() (tea.Model, tea.Cmd) {
+func (a *App) toggleSpotlight() (tea.Model, tea.Cmd) {
 	a.spotlightEnabled = !a.spotlightEnabled
 	return a, nil
+}
+
+// SaveRequested returns true if the user requested to save the run
+func (a *App) SaveRequested() bool {
+	return a.saveRequested
 }
