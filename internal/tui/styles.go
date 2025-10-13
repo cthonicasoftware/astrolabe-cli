@@ -2,6 +2,10 @@ package tui
 
 import "github.com/charmbracelet/lipgloss"
 
+const menuWidth = 44
+const styleKeyWidth = 8
+const marginSize = 1
+
 // Color Palette - centralized color definitions
 var (
 	ColorPrimary   = lipgloss.Color("#00D9FF") // Cyan - main highlights, cursor
@@ -11,6 +15,7 @@ var (
 	ColorError     = lipgloss.Color("#FF5F87") // Pink - errors, logo
 	ColorMuted     = lipgloss.Color("#626262") // Gray - unselected, help text
 	ColorText      = lipgloss.Color("#FFFFFF") // White - normal text
+	ColorHighlight = lipgloss.Color("#313244") // Slate highlight for selections
 )
 
 // Common Styles - reusable across all TUI components
@@ -25,6 +30,8 @@ var (
 	StyleDim = lipgloss.NewStyle().
 			Faint(true)
 
+	StyleSelected = lipgloss.NewStyle().Bold(true).Italic(true).Foreground(ColorWarning).Background(ColorHighlight)
+
 	// Component styles
 	StyleBorder = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
@@ -33,13 +40,13 @@ var (
 	StyleTitle = lipgloss.NewStyle().
 			Foreground(ColorPrimary).
 			Bold(true).
-			MarginTop(1).
-			MarginBottom(1)
+			MarginTop(marginSize).
+			MarginBottom(marginSize)
 
 	StyleHeader = lipgloss.NewStyle().
 			Foreground(ColorSecondary).
 			Bold(true).
-			MarginTop(1)
+			MarginTop(marginSize)
 
 	StyleSubheader = lipgloss.NewStyle().
 			Foreground(ColorText).
@@ -50,14 +57,9 @@ var (
 			Foreground(ColorPrimary).
 			Bold(true)
 
-	StyleSelected = lipgloss.NewStyle().
-			Foreground(ColorSuccess).
-			Bold(true).
-			PaddingLeft(1)
-
 	StyleUnselected = lipgloss.NewStyle().
 			Foreground(ColorMuted).
-			PaddingLeft(1)
+			PaddingLeft(marginSize)
 
 	StyleHighlight = lipgloss.NewStyle().
 			Foreground(ColorWarning).
@@ -71,7 +73,7 @@ var (
 	StyleError = lipgloss.NewStyle().
 			Foreground(ColorError).
 			Bold(true).
-			MarginTop(1)
+			MarginTop(marginSize)
 
 	StyleWarning = lipgloss.NewStyle().
 			Foreground(ColorWarning).
@@ -81,15 +83,27 @@ var (
 			Foreground(ColorMuted)
 
 	// Help text
+
+	StyleMenuItem = lipgloss.NewStyle().
+			Foreground(ColorText).
+			Padding(0, 2).
+			Width(menuWidth)
+
+	StyleMenuSelected = lipgloss.NewStyle().
+				Background(ColorHighlight).
+				Foreground(ColorWarning).
+				Bold(true).
+				Width(menuWidth)
+
 	StyleHelp = lipgloss.NewStyle().
 			Foreground(ColorMuted).
-			MarginTop(1).
+			MarginTop(marginSize).
 			Italic(true)
 
 	// Key-value display
 	StyleKey = lipgloss.NewStyle().
 			Foreground(ColorMuted).
-			Width(8)
+			Width(styleKeyWidth)
 
 	StyleValue = lipgloss.NewStyle().
 			Foreground(ColorPrimary).
@@ -99,4 +113,25 @@ var (
 	StyleIcon = lipgloss.NewStyle().
 			Foreground(ColorPrimary).
 			Bold(true)
+)
+
+// Icon Palette - Nerd Font glyphs
+// Update these values as needed
+const (
+	IconStatusInfo    = "" // nf-fa-info_circle
+	IconStatusSuccess = "" // nf-fa-check
+	IconStatusWarning = "" // nf-fa-exclamation_triangle
+	IconStatusError   = "" // nf-fa-times
+
+	IconMenuCapture   = "" // nf-fa-bar_chart
+	IconMenuListPorts = "" // nf-fa-usb
+	IconMenuMetadata  = "" // nf-fa-id_badge
+	IconMenuViewRuns  = "" // nf-fa-database
+	IconMenuUpload    = "" // nf-fa-upload
+	IconMenuConfig    = "" // nf-fa-cog
+	IconMenuNewFile   = "" // nf-fa-file_text
+	IconSelectedItem  = "❯ "
+	IconMenuSeparator = "\ue621" // nf-indentation line
+
+	IconTitlePorts = IconMenuListPorts
 )

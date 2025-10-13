@@ -219,10 +219,12 @@ func (m *metadataModel) View() string {
 	content.WriteString("\n")
 
 	if m.errorMsg != "" {
-		content.WriteString(StyleError.Render("✗ " + m.errorMsg))
+		msg := NewStatusMessage(StatusError, "Save Failed", m.errorMsg)
+		content.WriteString(msg.Render(m.width))
 		content.WriteString("\n")
 	} else if m.statusMsg != "" {
-		content.WriteString(StyleSuccess.Render("✓ " + m.statusMsg))
+		msg := NewStatusMessage(StatusSuccess, "Saved", m.statusMsg)
+		content.WriteString(msg.Render(m.width))
 		content.WriteString("\n")
 	}
 

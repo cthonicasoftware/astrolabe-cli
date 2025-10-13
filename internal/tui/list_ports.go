@@ -188,7 +188,7 @@ func (m *listPortsModel) View() string {
 	var s strings.Builder
 
 	// Title
-	s.WriteString(StyleTitle.Render("📡 Available Serial Ports"))
+	s.WriteString(StyleTitle.Render(fmt.Sprintf("%s Available Serial Ports", IconTitlePorts)))
 	s.WriteString("\n\n")
 
 	if m.err != nil {
