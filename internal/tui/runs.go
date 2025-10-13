@@ -47,7 +47,7 @@ type runsViewModel struct {
 }
 
 // RunRunsViewer launches the runs viewer TUI.
-func RunRunsViewer() error {
+func RunRunsViewer(status *StatusMessage) (*StatusMessage, error) {
 	cfg := config.Load()
 	model := &runsViewModel{
 		cacheRoot: cfg.OfflineCache,
@@ -55,8 +55,22 @@ func RunRunsViewer() error {
 		table:     newRunsTable(nil),
 	}
 	p := tea.NewProgram(model, tea.WithAltScreen())
-	_, err := p.Run()
-	return err
+	finalModel, err := p.Run()
+	if err != nil {
+		return status, err
+	}
+
+	if model, ok := finalModel.(*runsViewModel); ok {
+		switch {
+		case model.err != nil:
+			status = NewStatusMessage(StatusError, "Load Runs Failed", model.err.Error())
+		case len(model.result.Runs) == 0:
+			status = NewStatusMessage(StatusInfo, "No Runs", "No cached runs available yet. Capture data to populate this view.")
+		default:
+			status = NewStatusMessage(StatusSuccess, "Runs Available", fmt.Sprintf("%d cached run(s) available.", len(model.result.Runs)))
+		}
+	}
+	return status, nil
 }
 
 func (m *runsViewModel) Init() tea.Cmd {
@@ -168,7 +182,6 @@ func (m *runsViewModel) View() string {
 	var sections []string
 	sections = append(sections, StyleTitle.Render("📊 Cached Runs"))
 	sections = append(sections, StyleHelp.Render(fmt.Sprintf("Cache root: %s", m.result.Root)))
-
 	if m.showDetail {
 		sections = append(sections, renderRunDetails(m.detailSummary))
 		sections = append(sections, StyleHelp.Render("esc: back • q: return"))

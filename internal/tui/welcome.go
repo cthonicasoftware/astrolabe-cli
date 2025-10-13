@@ -14,6 +14,7 @@ type welcomeModel struct {
 	width          int
 	height         int
 	selectedAction string
+	status         *StatusMessage
 }
 
 type menuItem struct {
@@ -45,7 +46,7 @@ const logo = `
  ╚══▀▀═╝ ╚═╝  ╚═╝      ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝
 `
 
-func NewWelcome() tea.Model {
+func NewWelcome(status *StatusMessage) tea.Model {
 	return &welcomeModel{
 		cursor: 0,
 		menuItems: []menuItem{
@@ -57,6 +58,7 @@ func NewWelcome() tea.Model {
 			{icon: "⚙️ ", label: "Configuration", shortcut: "", action: "config"},
 			{icon: "📄", label: "New File", shortcut: "", action: "new"},
 		},
+		status: status,
 	}
 }
 
@@ -140,6 +142,12 @@ func (m *welcomeModel) View() string {
 
 	s.WriteString("\n\n")
 
+	if m.status != nil {
+		statusView := lipgloss.PlaceHorizontal(m.width, lipgloss.Center, m.status.Render(m.width))
+		s.WriteString(statusView)
+		s.WriteString("\n\n")
+	}
+
 	// Menu items
 	menuBlock := strings.Builder{}
 	for i, item := range m.menuItems {
@@ -180,8 +188,8 @@ func (m *welcomeModel) View() string {
 }
 
 // RunWelcome launches the welcome screen and returns the selected action
-func RunWelcome() (string, error) {
-	p := tea.NewProgram(NewWelcome(), tea.WithAltScreen())
+func RunWelcome(status *StatusMessage) (string, error) {
+	p := tea.NewProgram(NewWelcome(status), tea.WithAltScreen())
 	finalModel, err := p.Run()
 	if err != nil {
 		return "", err

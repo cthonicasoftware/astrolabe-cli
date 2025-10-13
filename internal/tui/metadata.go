@@ -371,7 +371,7 @@ func formatAttributeLines(attrs map[string]string) string {
 }
 
 // RunMetadataEditor launches the metadata configuration TUI.
-func RunMetadataEditor() error {
+func RunMetadataEditor(status *StatusMessage) (*StatusMessage, error) {
 	meta, err := config.LoadMetadata()
 	var path string
 	if p, perr := config.MetadataPath(); perr == nil {
@@ -380,6 +380,14 @@ func RunMetadataEditor() error {
 
 	model := NewMetadataEditor(meta, path, err)
 	p := tea.NewProgram(model, tea.WithAltScreen())
-	_, runErr := p.Run()
-	return runErr
+	finalModel, runErr := p.Run()
+	if runErr != nil {
+		return status, runErr
+	}
+
+	editor, ok := finalModel.(*metadataModel)
+	if ok && editor != nil && editor.statusMsg != "" {
+		status = NewStatusMessage(StatusSuccess, "Metadata Saved", editor.statusMsg)
+	}
+	return status, nil
 }

@@ -280,8 +280,22 @@ func (m *listPortsModel) View() string {
 }
 
 // RunListPorts launches the list ports view
-func RunListPorts() error {
+func RunListPorts(status *StatusMessage) (*StatusMessage, error) {
 	p := tea.NewProgram(NewListPorts(), tea.WithAltScreen())
-	_, err := p.Run()
-	return err
+	finalModel, err := p.Run()
+	if err != nil {
+		return status, err
+	}
+
+	if model, ok := finalModel.(*listPortsModel); ok {
+		switch {
+		case model.err != nil:
+			status = NewStatusMessage(StatusError, "Port Enumeration Failed", model.err.Error())
+		case len(model.ports) == 0:
+			status = NewStatusMessage(StatusWarning, "No Ports Detected", "No serial devices were detected. Check connections and try again.")
+		default:
+			status = NewStatusMessage(StatusSuccess, "Ports Detected", fmt.Sprintf("%d serial port(s) available.", len(model.ports)))
+		}
+	}
+	return status, nil
 }
