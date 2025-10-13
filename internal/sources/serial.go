@@ -243,3 +243,5 @@ func (s *Serial) Close() error {
 	}
 	return nil
 }
+
+//TODO: Create goroutine to refresh available port list on a timer or via os event

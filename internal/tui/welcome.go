@@ -14,6 +14,7 @@ type welcomeModel struct {
 	width          int
 	height         int
 	selectedAction string
+	status         *StatusMessage
 }
 
 type menuItem struct {
@@ -26,8 +27,6 @@ type menuItem struct {
 type executeActionMsg struct {
 	action string
 }
-
-// Styles are now centralized in styles.go
 
 var (
 	// Logo uses error color for the distinctive pink/red
@@ -45,17 +44,19 @@ const logo = `
  ╚══▀▀═╝ ╚═╝  ╚═╝      ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝
 `
 
-func NewWelcome() tea.Model {
+func NewWelcome(status *StatusMessage) tea.Model {
 	return &welcomeModel{
 		cursor: 0,
 		menuItems: []menuItem{
-			{icon: "📡", label: "Capture Serial", shortcut: "", action: "capture"},
-			{icon: "🔍", label: "List Ports", shortcut: "", action: "list-ports"},
-			{icon: "📊", label: "View Runs", shortcut: "", action: "view-runs"},
-			{icon: "☁️ ", label: "Upload Data", shortcut: "", action: "upload"},
-			{icon: "⚙️ ", label: "Configuration", shortcut: "", action: "config"},
-			{icon: "📄", label: "New File", shortcut: "", action: "new"},
+			{icon: IconMenuCapture, label: IconMenuSeparator + " Capture Serial", shortcut: "", action: "capture"},
+			{icon: IconMenuListPorts, label: IconMenuSeparator + " List Ports", shortcut: "", action: "list-ports"},
+			{icon: IconMenuMetadata, label: IconMenuSeparator + " Configure Metadata", shortcut: "", action: "metadata"},
+			{icon: IconMenuViewRuns, label: IconMenuSeparator + " View Runs", shortcut: "", action: "view-runs"},
+			{icon: IconMenuUpload, label: IconMenuSeparator + " Upload Data", shortcut: "", action: "upload"},
+			{icon: IconMenuConfig, label: IconMenuSeparator + " Configuration", shortcut: "", action: "config"},
+			{icon: IconMenuNewFile, label: IconMenuSeparator + " New File", shortcut: "", action: "new"},
 		},
+		status: status,
 	}
 }
 
@@ -102,6 +103,22 @@ func (m *welcomeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, func() tea.Msg {
 					return executeActionMsg{action: "list-ports"}
 				}
+			case "metadata":
+				return m, func() tea.Msg {
+					return executeActionMsg{action: "metadata"}
+				}
+			case "view-runs":
+				return m, func() tea.Msg {
+					return executeActionMsg{action: "view-runs"}
+				}
+			case "upload":
+				return m, func() tea.Msg {
+					return executeActionMsg{action: "upload"}
+				}
+			case "config":
+				return m, func() tea.Msg {
+					return executeActionMsg{action: "config"}
+				}
 			default:
 				// Not implemented yet
 				return m, tea.Quit
@@ -123,23 +140,23 @@ func (m *welcomeModel) View() string {
 
 	s.WriteString("\n\n")
 
+	if m.status != nil {
+		statusView := lipgloss.PlaceHorizontal(m.width, lipgloss.Center, m.status.Render(m.width))
+		s.WriteString(statusView)
+		s.WriteString("\n\n")
+	}
+
 	// Menu items
 	menuBlock := strings.Builder{}
 	for i, item := range m.menuItems {
+		icon := StyleIcon.Render(item.icon)
+		label := item.label
 		var line string
 
 		if i == m.cursor {
-			// Selected item
-			cursor := StyleHighlight.Render("❯ ")
-			icon := StyleIcon.Render(item.icon)
-			label := StyleHighlight.Render(item.label)
-			line = fmt.Sprintf("%s%s %s", cursor, icon, label)
+			line = StyleMenuSelected.Render(fmt.Sprintf("%s %s %s", IconSelectedItem, item.icon, StyleMenuSelected.Render(label)))
 		} else {
-			// Unselected item
-			cursor := "  "
-			icon := StyleIcon.Render(item.icon)
-			label := StyleSubheader.Render(item.label)
-			line = fmt.Sprintf("%s%s %s", cursor, icon, label)
+			line = StyleMenuItem.Render(fmt.Sprintf("  %s %s", icon, label))
 		}
 
 		menuBlock.WriteString(line)
@@ -163,8 +180,8 @@ func (m *welcomeModel) View() string {
 }
 
 // RunWelcome launches the welcome screen and returns the selected action
-func RunWelcome() (string, error) {
-	p := tea.NewProgram(NewWelcome(), tea.WithAltScreen())
+func RunWelcome(status *StatusMessage) (string, error) {
+	p := tea.NewProgram(NewWelcome(status), tea.WithAltScreen())
 	finalModel, err := p.Run()
 	if err != nil {
 		return "", err
