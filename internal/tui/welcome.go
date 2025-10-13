@@ -51,6 +51,7 @@ func NewWelcome() tea.Model {
 		menuItems: []menuItem{
 			{icon: "📡", label: "Capture Serial", shortcut: "", action: "capture"},
 			{icon: "🔍", label: "List Ports", shortcut: "", action: "list-ports"},
+			{icon: "📝", label: "Configure Metadata", shortcut: "", action: "metadata"},
 			{icon: "📊", label: "View Runs", shortcut: "", action: "view-runs"},
 			{icon: "☁️ ", label: "Upload Data", shortcut: "", action: "upload"},
 			{icon: "⚙️ ", label: "Configuration", shortcut: "", action: "config"},
@@ -101,6 +102,22 @@ func (m *welcomeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Launch list ports
 				return m, func() tea.Msg {
 					return executeActionMsg{action: "list-ports"}
+				}
+			case "metadata":
+				return m, func() tea.Msg {
+					return executeActionMsg{action: "metadata"}
+				}
+			case "view-runs":
+				return m, func() tea.Msg {
+					return executeActionMsg{action: "view-runs"}
+				}
+			case "upload":
+				return m, func() tea.Msg {
+					return executeActionMsg{action: "upload"}
+				}
+			case "config":
+				return m, func() tea.Msg {
+					return executeActionMsg{action: "config"}
 				}
 			default:
 				// Not implemented yet

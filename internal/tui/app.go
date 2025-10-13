@@ -282,9 +282,9 @@ func (a App) renderStatus() string {
 	statusText := fmt.Sprintf("Lines: %d", a.lineBuffer.LineCount())
 
 	if a.paused {
-		statusText = StyleWarning.Render("⏸ PAUSED") + " • " + statusText
+		statusText = StyleWarning.Render("\uf28b PAUSED") + " • " + statusText
 	} else {
-		statusText = StyleSuccess.Render("● LIVE") + " • " + statusText
+		statusText = StyleSuccess.Render("\uf144  LIVE ") + " • " + statusText
 	}
 
 	if !a.lastTick.IsZero() {

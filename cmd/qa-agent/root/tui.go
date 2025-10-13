@@ -3,6 +3,7 @@ package root
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/sources"
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/tui"
@@ -47,7 +48,11 @@ var tuiCmd = &cobra.Command{
 					if err := serial.Open(ctx); err != nil {
 						return fmt.Errorf("failed to open serial port: %w", err)
 					}
-					defer serial.Close()
+					defer func() {
+						if err := serial.Close(); err != nil {
+							fmt.Fprintf(os.Stderr, "warning: failed to close serial port: %v\n", err)
+						}
+					}()
 
 					// Create a string channel for the TUI
 					stringCh := make(chan string, 16)
@@ -89,8 +94,16 @@ var tuiCmd = &cobra.Command{
 				}
 				// Return to welcome screen (continue loop)
 
+			case "metadata":
+				if err := tui.RunMetadataEditor(); err != nil {
+					return err
+				}
+				// Return to welcome screen (continue loop)
+
 			case "view-runs":
-				// TODO: Implement view runs
+				if err := tui.RunRunsViewer(); err != nil {
+					return err
+				}
 				// Return to welcome screen (continue loop)
 
 			case "upload":
