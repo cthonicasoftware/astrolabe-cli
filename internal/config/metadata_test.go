@@ -96,7 +96,7 @@ func TestMetadataFilePathUsesHome(t *testing.T) {
 	if err != nil {
 		t.Fatalf("metadataFilePath: %v", err)
 	}
-	want := filepath.Join(tmp, ".qa-agent", metadataFileName)
+	want := filepath.Join(tmp, ".astrolabe", metadataFileName)
 	if path != want {
 		t.Fatalf("expected %s, got %s", want, path)
 	}

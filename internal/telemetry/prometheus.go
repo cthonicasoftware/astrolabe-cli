@@ -127,7 +127,7 @@ import (
 var (
 	captureCounter = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "qa_agent_captures_total",
+			Name: "astrolabe_captures_total",
 			Help: "Total number of captures by source kind",
 		},
 		[]string{"source_kind"},
@@ -135,7 +135,7 @@ var (
 
 	bytesCounter = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "qa_agent_bytes_total",
+			Name: "astrolabe_bytes_total",
 			Help: "Total bytes processed by stage",
 		},
 		[]string{"stage"},
@@ -143,7 +143,7 @@ var (
 
 	uploadCounter = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "qa_agent_uploads_total",
+			Name: "astrolabe_uploads_total",
 			Help: "Total upload attempts",
 		},
 		[]string{"status"},
@@ -151,7 +151,7 @@ var (
 
 	uploadDurationHistogram = promauto.NewHistogram(
 		prometheus.HistogramOpts{
-			Name:    "qa_agent_upload_duration_ms",
+			Name:    "astrolabe_upload_duration_ms",
 			Help:    "Upload duration in milliseconds",
 			Buckets: prometheus.ExponentialBuckets(10, 2, 10),
 		},
@@ -159,7 +159,7 @@ var (
 
 	errorCounter = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "qa_agent_errors_total",
+			Name: "astrolabe_errors_total",
 			Help: "Total errors by category",
 		},
 		[]string{"category"},

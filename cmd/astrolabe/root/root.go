@@ -11,15 +11,15 @@ import (
 var cfgFile string
 
 var rootCmd = &cobra.Command{
-	Use:   "qa-agent",
+	Use:   "astrolabe",
 	Short: "Standardized capture & upload for QA artifacts",
-	Long:  "qa-agent is a stylish, operator-friendly CLI to capture, normalize, cache, and upload QA run data.",
+	Long:  "Astrolabe is a stylish, operator-friendly CLI to capture, normalize, cache, and upload QA run data.",
 }
 
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.qa-agent.yml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.astrolabe.yml)")
 	rootCmd.PersistentFlags().BoolP("json", "", false, "emit machine-readable JSON output")
 	viper.BindPFlag("json", rootCmd.PersistentFlags().Lookup("json"))
 }
@@ -32,10 +32,10 @@ func initConfig() {
 		if err == nil {
 			viper.AddConfigPath(home)
 		}
-		viper.SetConfigName(".qa-agent")
+		viper.SetConfigName(".astrolabe")
 		viper.SetConfigType("yaml")
 	}
-	viper.SetEnvPrefix("QA_AGENT")
+	viper.SetEnvPrefix("ASTROLABE")
 	viper.AutomaticEnv()
 	_ = viper.ReadInConfig()
 }

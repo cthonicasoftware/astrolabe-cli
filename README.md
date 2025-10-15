@@ -6,7 +6,7 @@
 - Replace ad-hoc scripts with a single, consistent tool that engineers can trust.
 
 ### 2) End-to-end flow
-1. User/CI invokes `qa-agent capture …`  
+1. User/CI invokes `astrolabe capture …`  
 2. Agent connects to source (serial, TCP, file, or instrument plugin).  
 3. Data is normalized into JSONL + manifest.  
 4. Artifacts are stored locally with metadata.  
@@ -14,16 +14,16 @@
 6. If offline, artifacts remain cached until connection is restored.
 
 ### 3) Core commands
-- `qa-agent capture` – start a capture from a port/device.  
-- `qa-agent upload` – send cached runs to server.  
-- `qa-agent config` – manage API tokens, defaults (baud, port).  
-- `qa-agent validate` – check file/manifest consistency before upload.  
-- `qa-agent version` – report agent + schema versions.
+- `astrolabe capture` – start a capture from a port/device.  
+- `astrolabe upload` – send cached runs to server.  
+- `astrolabe config` – manage API tokens, defaults (baud, port).  
+- `astrolabe validate` – check file/manifest consistency before upload.  
+- `astrolabe version` – report agent + schema versions.
 
 ### 4) Configuration
-- Defaults stored in `.qa-agent.yml`.  
+- Defaults stored in `.astrolabe.yml`.  
 - Fields: API URL, project ID, auth token, capture defaults (baud, port, sample rate), offline cache path.  
-- Environment variables override config (e.g., `QA_AGENT_TOKEN`).  
+- Environment variables override config (e.g., `ASTROLABE_TOKEN`).  
 - Configurable retry/backoff and upload batch size.
 
 ### 5) Supported sources (MVP)
@@ -62,7 +62,7 @@
 - Upload works with API token + presigned URLs.  
 - Offline cache + retry proven in tests.  
 - Deterministic schema versioning.  
-- Command help/docs are self-contained (`qa-agent --help`).  
+- Command help/docs are self-contained (`astrolabe --help`).  
 
 
 ## Project Setup
@@ -90,7 +90,7 @@ mise run cli <command>
 
 ### Project layout
 ```
-cmd/qa-agent/        # Cobra commands entrypoints
+cmd/astrolabe/       # Cobra commands entrypoints
 internal/core/       # Core domain models (Run, Record, SourceMeta)
 internal/config/     # Config loader (file + env + flags)
 internal/logging/    # Logging helpers

@@ -104,13 +104,13 @@ func (r *FileMetadataRepository) Save(meta Metadata) (string, error) {
 
 var defaultMetadataRepository MetadataRepository = NewFileMetadataRepository(nil)
 
-// metadataFilePath resolves the metadata file location within the qa-agent config directory.
+// metadataFilePath resolves the metadata file location within the astrolabe config directory.
 func metadataFilePath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("locate metadata file: %w", err)
 	}
-	return filepath.Join(home, ".qa-agent", metadataFileName), nil
+	return filepath.Join(home, ".astrolabe", metadataFileName), nil
 }
 
 // MetadataPath exposes the configured metadata file location.

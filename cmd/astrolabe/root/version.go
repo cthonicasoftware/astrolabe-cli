@@ -31,7 +31,7 @@ var versionCmd = &cobra.Command{
 			fmt.Println(string(b))
 			return nil
 		}
-		fmt.Printf("qa-agent %s (schema %s)\n", info.Agent, info.Schema)
+		fmt.Printf("astrolabe %s (schema %s)\n", info.Agent, info.Schema)
 		return nil
 	},
 }
