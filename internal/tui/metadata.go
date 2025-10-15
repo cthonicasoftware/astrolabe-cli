@@ -73,7 +73,7 @@ func NewMetadataEditor(meta config.Metadata, path string, loadErr error) tea.Mod
 		lastSaved:  meta,
 	}
 
-	for i := 0; i < totalMetadataInputs; i++ {
+	for i := range totalMetadataInputs {
 		ti := textinput.New()
 		ti.Placeholder = metadataFields[i].placeholder
 		ti.Prompt = ""
