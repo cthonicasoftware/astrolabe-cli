@@ -31,7 +31,7 @@ type executeActionMsg struct {
 var (
 	// Logo uses error color for the distinctive pink/red
 	welcomeLogoStyle = lipgloss.NewStyle().
-		Foreground(ColorError).
+		Foreground(ColorSecondary).
 		Bold(true)
 )
 
@@ -174,7 +174,7 @@ func (m *welcomeModel) View() string {
 	s.WriteString("\n\n")
 
 	// Footer
-	footer := StyleHelp.Render("QA command line tool")
+	footer := StyleHelp.Render("Astrolabe CLI, by Cthonica Software.")
 	centeredFooter := lipgloss.PlaceHorizontal(m.width, lipgloss.Center, footer)
 	s.WriteString(centeredFooter)
 
