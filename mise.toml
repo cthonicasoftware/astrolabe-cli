@@ -2,19 +2,19 @@
 go = "1.25.1"
 
 [tasks.build]
-run = "go build ./cmd/qa-agent"
-description = "Build the qa-agent CLI"
+run = "go build ./cmd/astrolabe"
+description = "Build the astrolabe CLI"
 
 [tasks.test]
 run = "go test ./..."
 description = "Run all tests"
 
 [tasks.cli]
-run = "go run ./cmd/qa-agent"
+run = "go run ./cmd/astrolabe"
 description = "Run the CLI"
 
 [tasks.tui]
-run = "go run ./cmd/qa-agent tui"
+run = "go run ./cmd/astrolabe tui"
 description = "Run the Bubble Tea TUI demo (after build)"
 
 [env]

@@ -33,7 +33,7 @@ func Load() Config {
 		APIURL:       viper.GetString("api_url"),
 		ProjectID:    viper.GetString("project_id"),
 		AuthToken:    viper.GetString("auth_token"),
-		OfflineCache: firstNonEmpty(viper.GetString("offline_cache"), filepath.Join(home, ".qa-agent", "runs")),
+		OfflineCache: firstNonEmpty(viper.GetString("offline_cache"), filepath.Join(home, ".astrolabe", "runs")),
 		Upload: UploadCfg{
 			BatchBytes: viper.GetInt64("upload.batch_bytes"),
 			MaxRetries: viper.GetInt("upload.max_retries"),

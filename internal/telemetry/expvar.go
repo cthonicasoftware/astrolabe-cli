@@ -32,16 +32,16 @@ type ExpvarMetrics struct {
 // NewExpvarMetrics creates and registers an expvar-based metrics collector.
 func NewExpvarMetrics() *ExpvarMetrics {
 	e := &ExpvarMetrics{
-		captureCount:    getOrCreateInt("qa_agent.captures.total"),
-		captureByKind:   getOrCreateMap("qa_agent.captures.by_kind"),
-		bytesIngested:   getOrCreateInt("qa_agent.bytes.ingested"),
-		bytesNormalized: getOrCreateInt("qa_agent.bytes.normalized"),
-		bytesUploaded:   getOrCreateInt("qa_agent.bytes.uploaded"),
-		uploadAttempts:  getOrCreateInt("qa_agent.uploads.attempts"),
-		uploadSuccess:   getOrCreateInt("qa_agent.uploads.success"),
-		uploadFailures:  getOrCreateInt("qa_agent.uploads.failures"),
-		uploadDuration:  getOrCreateInt("qa_agent.uploads.duration_ms"),
-		errors:          getOrCreateMap("qa_agent.errors"),
+		captureCount:    getOrCreateInt("astrolabe.captures.total"),
+		captureByKind:   getOrCreateMap("astrolabe.captures.by_kind"),
+		bytesIngested:   getOrCreateInt("astrolabe.bytes.ingested"),
+		bytesNormalized: getOrCreateInt("astrolabe.bytes.normalized"),
+		bytesUploaded:   getOrCreateInt("astrolabe.bytes.uploaded"),
+		uploadAttempts:  getOrCreateInt("astrolabe.uploads.attempts"),
+		uploadSuccess:   getOrCreateInt("astrolabe.uploads.success"),
+		uploadFailures:  getOrCreateInt("astrolabe.uploads.failures"),
+		uploadDuration:  getOrCreateInt("astrolabe.uploads.duration_ms"),
+		errors:          getOrCreateMap("astrolabe.errors"),
 	}
 	return e
 }

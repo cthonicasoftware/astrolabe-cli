@@ -1,4 +1,4 @@
-package tui
+package config
 
 import (
 	"reflect"
@@ -18,15 +18,15 @@ func TestParseTags(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got, err := parseTags(tt.input)
+		got, err := ParseTags(tt.input)
 		if tt.wantErr && err == nil {
-			t.Fatalf("parseTags(%q) expected error", tt.input)
+			t.Fatalf("ParseTags(%q) expected error", tt.input)
 		}
 		if !tt.wantErr && err != nil {
-			t.Fatalf("parseTags(%q) unexpected error: %v", tt.input, err)
+			t.Fatalf("ParseTags(%q) unexpected error: %v", tt.input, err)
 		}
 		if !reflect.DeepEqual(got, tt.expected) {
-			t.Fatalf("parseTags(%q) = %#v, want %#v", tt.input, got, tt.expected)
+			t.Fatalf("ParseTags(%q) = %#v, want %#v", tt.input, got, tt.expected)
 		}
 	}
 }
@@ -45,27 +45,27 @@ func TestParseAttributes(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got, err := parseAttributes(tt.input)
+		got, err := ParseAttributes(tt.input)
 		if tt.wantErr && err == nil {
-			t.Fatalf("parseAttributes(%q) expected error", tt.input)
+			t.Fatalf("ParseAttributes(%q) expected error", tt.input)
 		}
 		if !tt.wantErr && err != nil {
-			t.Fatalf("parseAttributes(%q) unexpected error: %v", tt.input, err)
+			t.Fatalf("ParseAttributes(%q) unexpected error: %v", tt.input, err)
 		}
 		if tt.wantErr {
 			continue
 		}
 		if !reflect.DeepEqual(got, tt.expected) {
-			t.Fatalf("parseAttributes(%q) = %#v, want %#v", tt.input, got, tt.expected)
+			t.Fatalf("ParseAttributes(%q) = %#v, want %#v", tt.input, got, tt.expected)
 		}
 	}
 }
 
 func TestFormatAttributeLines(t *testing.T) {
 	input := map[string]string{"b": "2", "a": "1"}
-	got := formatAttributeLines(input)
+	got := FormatAttributeLines(input)
 	want := "a=1\nb=2"
 	if got != want {
-		t.Fatalf("formatAttributeLines mismatch\ngot:\n%s\nwant:\n%s", got, want)
+		t.Fatalf("FormatAttributeLines mismatch\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }

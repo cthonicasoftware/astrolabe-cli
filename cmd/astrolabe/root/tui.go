@@ -41,6 +41,10 @@ var tuiCmd = &cobra.Command{
 				if err != nil {
 					return err
 				}
+				savedMetadata, metaErr := config.LoadMetadata()
+				if metaErr != nil {
+					fmt.Fprintf(os.Stderr, "warning: failed to load metadata: %v\n", metaErr)
+				}
 				if launchTUI {
 					appCfg := config.Load()
 					if err := os.MkdirAll(appCfg.OfflineCache, 0o755); err != nil {
@@ -53,11 +57,15 @@ var tuiCmd = &cobra.Command{
 					defer os.RemoveAll(tempRoot)
 					store := storage.NewFS(tempRoot)
 					normalizer := normalize.NewLineJSON()
-					meta := serialManifestOptions{
-						Operator: os.Getenv("USER"),
-						Test: core.TestInfo{
-							Plan: "unspecified",
-						},
+					meta := serialManifestOptions{}
+					if metaErr == nil {
+						applyMetadataDefaults(&meta, savedMetadata, nil)
+					}
+					if meta.Operator == "" {
+						meta.Operator = os.Getenv("USER")
+					}
+					if meta.Test.Plan == "" {
+						meta.Test.Plan = "unspecified"
 					}
 					serial := sources.NewSerialWithConfig(*serialCfg)
 					pipelineOpts := capture.Options{

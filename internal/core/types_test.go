@@ -48,11 +48,11 @@ func TestRunJSONRoundTrip(t *testing.T) {
 		Started:        started,
 		Completed:      &completed,
 		RecordsCount:   42,
-		PrimaryDataURI: "file:///tmp/qa-agent/run-123/data.jsonl",
+		PrimaryDataURI: "file:///tmp/astrolabe/run-123/data.jsonl",
 		Artifacts: []Artifact{
 			{
 				Name:      "manifest.json",
-				Path:      "/tmp/qa-agent/run-123/manifest.json",
+				Path:      "/tmp/astrolabe/run-123/manifest.json",
 				MediaType: "application/json",
 				Role:      ArtifactRoleManifest,
 				SizeBytes: 512,
@@ -66,7 +66,7 @@ func TestRunJSONRoundTrip(t *testing.T) {
 			},
 			{
 				Name:      "data.jsonl",
-				Path:      "/tmp/qa-agent/run-123/data.jsonl",
+				Path:      "/tmp/astrolabe/run-123/data.jsonl",
 				MediaType: "application/x-ndjson",
 				Role:      ArtifactRoleData,
 				SizeBytes: 10240,

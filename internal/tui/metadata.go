@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textarea"
@@ -33,6 +32,7 @@ const (
 type metadataModel struct {
 	inputs     []textinput.Model
 	attributes textarea.Model
+	repo       config.MetadataRepository
 	focusIndex int
 	width      int
 	height     int
@@ -40,7 +40,6 @@ type metadataModel struct {
 	errorMsg   string
 	loadErr    error
 	configPath string
-	lastSaved  config.Metadata
 }
 
 type metadataField struct {
@@ -63,17 +62,21 @@ var metadataFields = [totalMetadataInputs]metadataField{
 }
 
 // NewMetadataEditor constructs the metadata TUI model pre-populated with existing values.
-func NewMetadataEditor(meta config.Metadata, path string, loadErr error) tea.Model {
+func NewMetadataEditor(repo config.MetadataRepository, meta config.Metadata, path string, loadErr error) tea.Model {
+	if repo == nil {
+		repo = config.NewFileMetadataRepository(nil)
+	}
+
 	model := &metadataModel{
 		inputs:     make([]textinput.Model, totalMetadataInputs),
 		attributes: textarea.New(),
+		repo:       repo,
 		focusIndex: 0,
 		configPath: path,
 		loadErr:    loadErr,
-		lastSaved:  meta,
 	}
 
-	for i := 0; i < totalMetadataInputs; i++ {
+	for i := range totalMetadataInputs {
 		ti := textinput.New()
 		ti.Placeholder = metadataFields[i].placeholder
 		ti.Prompt = ""
@@ -98,7 +101,7 @@ func NewMetadataEditor(meta config.Metadata, path string, loadErr error) tea.Mod
 	model.attributes.Prompt = ""
 	model.attributes.SetHeight(5)
 	model.attributes.SetWidth(40)
-	model.attributes.SetValue(formatAttributeLines(meta.Attributes))
+	model.attributes.SetValue(config.FormatAttributeLines(meta.Attributes))
 
 	model.setFocus(0)
 
@@ -273,6 +276,10 @@ func (m *metadataModel) clearMessages() {
 }
 
 func (m *metadataModel) save() error {
+	if m.repo == nil {
+		return fmt.Errorf("metadata repository not configured")
+	}
+
 	meta := config.Metadata{
 		Operator: m.inputs[fieldOperator].Value(),
 		Location: m.inputs[fieldLocation].Value(),
@@ -294,93 +301,37 @@ func (m *metadataModel) save() error {
 		meta.Test.Plan = "unspecified"
 	}
 
-	tags, err := parseTags(m.inputs[fieldTags].Value())
+	tags, err := config.ParseTags(m.inputs[fieldTags].Value())
 	if err != nil {
 		return err
 	}
 	meta.Tags = tags
 
-	attrs, err := parseAttributes(m.attributes.Value())
+	attrs, err := config.ParseAttributes(m.attributes.Value())
 	if err != nil {
 		return err
 	}
 	meta.Attributes = attrs
 
-	path, err := config.SaveMetadata(meta)
+	path, err := m.repo.Save(meta)
 	if err != nil {
 		return err
 	}
 	m.configPath = path
-	m.lastSaved = meta
 	return nil
-}
-
-func parseTags(input string) ([]string, error) {
-	if strings.TrimSpace(input) == "" {
-		return nil, nil
-	}
-	raw := strings.Split(input, ",")
-	tags := make([]string, 0, len(raw))
-	for _, tag := range raw {
-		t := strings.TrimSpace(tag)
-		if t == "" {
-			return nil, fmt.Errorf("tags cannot contain empty values")
-		}
-		tags = append(tags, t)
-	}
-	return tags, nil
-}
-
-func parseAttributes(input string) (map[string]string, error) {
-	result := map[string]string{}
-	lines := strings.Split(input, "\n")
-	for _, line := range lines {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid attribute %q (expected key=value)", line)
-		}
-		key := strings.TrimSpace(parts[0])
-		value := strings.TrimSpace(parts[1])
-		if key == "" {
-			return nil, fmt.Errorf("attribute key missing in %q", line)
-		}
-		if value == "" {
-			return nil, fmt.Errorf("attribute %q has empty value", key)
-		}
-		result[key] = value
-	}
-	return result, nil
-}
-
-func formatAttributeLines(attrs map[string]string) string {
-	if len(attrs) == 0 {
-		return ""
-	}
-	keys := make([]string, 0, len(attrs))
-	for k := range attrs {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	lines := make([]string, 0, len(keys))
-	for _, k := range keys {
-		lines = append(lines, fmt.Sprintf("%s=%s", k, attrs[k]))
-	}
-	return strings.Join(lines, "\n")
 }
 
 // RunMetadataEditor launches the metadata configuration TUI.
 func RunMetadataEditor(status *StatusMessage) (*StatusMessage, error) {
-	meta, err := config.LoadMetadata()
+	repo := config.NewFileMetadataRepository(nil)
+
+	meta, err := repo.Load()
 	var path string
-	if p, perr := config.MetadataPath(); perr == nil {
+	if p, perr := repo.Path(); perr == nil {
 		path = p
 	}
 
-	model := NewMetadataEditor(meta, path, err)
+	model := NewMetadataEditor(repo, meta, path, err)
 	p := tea.NewProgram(model, tea.WithAltScreen())
 	finalModel, runErr := p.Run()
 	if runErr != nil {

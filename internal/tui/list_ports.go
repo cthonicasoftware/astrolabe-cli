@@ -258,7 +258,7 @@ func (m *listPortsModel) View() string {
 
 	// Usage example
 	exampleTitle := StyleMuted.Render("Usage Example:")
-	exampleCmd := StyleSubheader.Render(fmt.Sprintf("qa-agent capture serial --port %s --baud 115200", m.ports[0].Name))
+	exampleCmd := StyleSubheader.Render(fmt.Sprintf("astrolabe capture serial --port %s --baud 115200", m.ports[0].Name))
 	portList.WriteString(exampleTitle + "\n")
 	portList.WriteString("  " + exampleCmd)
 
