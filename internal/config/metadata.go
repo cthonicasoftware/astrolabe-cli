@@ -24,23 +24,35 @@ type Metadata struct {
 
 const metadataFileName = "metadata.json"
 
-// metadataFilePath resolves the metadata file location within the qa-agent config directory.
-func metadataFilePath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("locate metadata file: %w", err)
+// MetadataRepository defines the contract for loading and saving metadata.
+type MetadataRepository interface {
+	Load() (Metadata, error)
+	Save(Metadata) (string, error)
+	Path() (string, error)
+}
+
+// MetadataPathResolver returns the metadata file path.
+type MetadataPathResolver func() (string, error)
+
+// FileMetadataRepository persists metadata to disk using a configurable path resolver.
+type FileMetadataRepository struct {
+	resolvePath MetadataPathResolver
+}
+
+// NewFileMetadataRepository constructs a repository that resolves its path on demand.
+func NewFileMetadataRepository(resolver MetadataPathResolver) *FileMetadataRepository {
+	if resolver == nil {
+		resolver = metadataFilePath
 	}
-	return filepath.Join(home, ".qa-agent", metadataFileName), nil
+	return &FileMetadataRepository{resolvePath: resolver}
 }
 
-// MetadataPath exposes the configured metadata file location.
-func MetadataPath() (string, error) {
-	return metadataFilePath()
+func (r *FileMetadataRepository) Path() (string, error) {
+	return r.resolvePath()
 }
 
-// LoadMetadata reads the persisted metadata file if present, returning defaults otherwise.
-func LoadMetadata() (Metadata, error) {
-	path, err := metadataFilePath()
+func (r *FileMetadataRepository) Load() (Metadata, error) {
+	path, err := r.resolvePath()
 	if err != nil {
 		return Metadata{}, err
 	}
@@ -62,13 +74,12 @@ func LoadMetadata() (Metadata, error) {
 	return meta, nil
 }
 
-// SaveMetadata writes the metadata document to disk, ensuring directory creation.
-func SaveMetadata(meta Metadata) (string, error) {
+func (r *FileMetadataRepository) Save(meta Metadata) (string, error) {
 	if err := meta.Validate(); err != nil {
 		return "", err
 	}
 
-	path, err := metadataFilePath()
+	path, err := r.resolvePath()
 	if err != nil {
 		return "", err
 	}
@@ -89,6 +100,32 @@ func SaveMetadata(meta Metadata) (string, error) {
 		return "", fmt.Errorf("write metadata: %w", err)
 	}
 	return path, nil
+}
+
+var defaultMetadataRepository MetadataRepository = NewFileMetadataRepository(nil)
+
+// metadataFilePath resolves the metadata file location within the qa-agent config directory.
+func metadataFilePath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("locate metadata file: %w", err)
+	}
+	return filepath.Join(home, ".qa-agent", metadataFileName), nil
+}
+
+// MetadataPath exposes the configured metadata file location.
+func MetadataPath() (string, error) {
+	return defaultMetadataRepository.Path()
+}
+
+// LoadMetadata reads the persisted metadata file if present, returning defaults otherwise.
+func LoadMetadata() (Metadata, error) {
+	return defaultMetadataRepository.Load()
+}
+
+// SaveMetadata writes the metadata document to disk, ensuring directory creation.
+func SaveMetadata(meta Metadata) (string, error) {
+	return defaultMetadataRepository.Save(meta)
 }
 
 // Validate ensures the metadata conforms to simple structural constraints.
@@ -135,4 +172,64 @@ func (m *Metadata) normalize() {
 		sort.Strings(unique)
 		m.Tags = unique
 	}
+}
+
+// ParseTags converts a comma-delimited list into normalized tags.
+func ParseTags(input string) ([]string, error) {
+	if strings.TrimSpace(input) == "" {
+		return nil, nil
+	}
+	raw := strings.Split(input, ",")
+	tags := make([]string, 0, len(raw))
+	for _, tag := range raw {
+		t := strings.TrimSpace(tag)
+		if t == "" {
+			return nil, fmt.Errorf("tags cannot contain empty values")
+		}
+		tags = append(tags, t)
+	}
+	return tags, nil
+}
+
+// ParseAttributes converts newline-delimited key=value pairs to a map.
+func ParseAttributes(input string) (map[string]string, error) {
+	result := map[string]string{}
+	lines := strings.Split(input, "\n")
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid attribute %q (expected key=value)", line)
+		}
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		if key == "" {
+			return nil, fmt.Errorf("attribute key missing in %q", line)
+		}
+		if value == "" {
+			return nil, fmt.Errorf("attribute %q has empty value", key)
+		}
+		result[key] = value
+	}
+	return result, nil
+}
+
+// FormatAttributeLines renders attributes as sorted key=value lines.
+func FormatAttributeLines(attrs map[string]string) string {
+	if len(attrs) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(attrs))
+	for k := range attrs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	lines := make([]string, 0, len(keys))
+	for _, k := range keys {
+		lines = append(lines, fmt.Sprintf("%s=%s", k, attrs[k]))
+	}
+	return strings.Join(lines, "\n")
 }

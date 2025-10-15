@@ -95,6 +95,15 @@ var captureSerialCmd = &cobra.Command{
 
 		serial := sources.NewSerialWithConfig(*serialCfg)
 
+		flagTags, err := parseTagFlags(serialTags)
+		if err != nil {
+			return fmt.Errorf("invalid --tag value: %w", err)
+		}
+		flagAttrs, err := parseAttributeFlags(serialAttributes)
+		if err != nil {
+			return fmt.Errorf("invalid --attr value: %w", err)
+		}
+
 		if launchTUI {
 			// Setup for TUI mode with optional save capability
 			appCfg := config.Load()
@@ -126,8 +135,8 @@ var captureSerialCmd = &cobra.Command{
 					Variant: serialTestVariant,
 					Run:     serialTestRun,
 				},
-				Tags:       append([]string(nil), serialTags...),
-				Attributes: cloneStringMap(serialAttributes),
+				Tags:       append([]string(nil), flagTags...),
+				Attributes: cloneStringMap(flagAttrs),
 			}
 			if metaErr == nil {
 				applyMetadataDefaults(&meta, savedMetadata, cmd.Flags())
@@ -281,8 +290,8 @@ var captureSerialCmd = &cobra.Command{
 					Variant: serialTestVariant,
 					Run:     serialTestRun,
 				},
-				Tags:       append([]string(nil), serialTags...),
-				Attributes: cloneStringMap(serialAttributes),
+				Tags:       append([]string(nil), flagTags...),
+				Attributes: cloneStringMap(flagAttrs),
 			}
 			if metaErr == nil {
 				applyMetadataDefaults(&meta, savedMetadata, cmd.Flags())
@@ -462,6 +471,29 @@ func applyMetadataDefaults(opts *serialManifestOptions, saved config.Metadata, f
 	if len(saved.Attributes) > 0 && !isChanged("attr") && len(opts.Attributes) == 0 {
 		opts.Attributes = cloneStringMap(saved.Attributes)
 	}
+}
+
+func parseTagFlags(values []string) ([]string, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+	return config.ParseTags(strings.Join(values, ","))
+}
+
+func parseAttributeFlags(values map[string]string) (map[string]string, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+	var b strings.Builder
+	first := true
+	for k, v := range values {
+		if !first {
+			b.WriteRune('\n')
+		}
+		first = false
+		b.WriteString(fmt.Sprintf("%s=%s", k, v))
+	}
+	return config.ParseAttributes(b.String())
 }
 
 func promoteRunArtifacts(run *core.Run, tempRoot, cacheRoot string) error {
