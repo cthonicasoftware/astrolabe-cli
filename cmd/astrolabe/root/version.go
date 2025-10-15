@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-var Version = "0.0.0"
+var Version = "0.1.0"
 var Schema = "1.0.0"
 
 type versionInfo struct {
