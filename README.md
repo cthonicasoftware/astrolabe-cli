@@ -1,4 +1,4 @@
-## CLI Agent Outline
+## Astrolabe CLI Outline
 
 ### 1) Purpose & scope
 
