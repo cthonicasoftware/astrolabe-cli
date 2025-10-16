@@ -12,6 +12,7 @@ var configCmd = &cobra.Command{
 	Short: "Manage configuration",
 }
 
+// TODO: Pipe cli get and set config to pipe data from metadata.json if available
 var configGetCmd = &cobra.Command{
 	Use:   "get <key>",
 	Short: "Get a config value",

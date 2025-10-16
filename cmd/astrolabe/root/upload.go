@@ -16,6 +16,7 @@ var uploadCmd = &cobra.Command{
 	Short: "Upload cached runs to the server",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Uploading runs (run_id=%s, force=%v) ...\n", uploadRunID, uploadForce)
+		//TODO: implement uploader with presigned URLs + resume.
 		fmt.Println("TODO: implement uploader with presigned URLs + resume.")
 		return nil
 	},
