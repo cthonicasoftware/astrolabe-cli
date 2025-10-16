@@ -12,8 +12,8 @@ var cfgFile string
 
 var rootCmd = &cobra.Command{
 	Use:   "astrolabe",
-	Short: "Standardized capture & upload for QA artifacts",
-	Long:  "Astrolabe is a stylish, operator-friendly CLI to capture, normalize, cache, and upload QA run data.",
+	Short: "Standardized capture & upload of QA artifacts",
+	Long:  "Astrolabe captures, normalizes, caches, and uploads QA test run data.",
 }
 
 func init() {
