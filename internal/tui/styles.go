@@ -1,6 +1,10 @@
 package tui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"github.com/charmbracelet/bubbles/progress"
+	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/lipgloss"
+)
 
 const menuWidth = 44
 const styleKeyWidth = 8
@@ -138,10 +142,64 @@ const (
 )
 
 const (
+	// Status indicators
 	IconAlchemyComplete = "🜏 "
 	IconAlchemyUpload   = "🜍 "
 	IconAlchemySuccess  = ""
 	IconAlchemyWarning  = "⌽ "
 	IconAlchemyError    = "⊗ "
 	IconAlchemySettings = "⚖ "
+
+	// Operational states
+	IconAlchemyActive     = "🜃 " // Fire - operations in progress
+	IconAlchemyProcess    = "⚗ " // Alembic - data transformation
+	IconAlchemyCached     = "🜄 " // Earth - stored locally
+	IconAlchemyStreaming  = "🜂 " // Water - live data flow
+	IconAlchemyInfo       = "🜔 " // Quintessence - information/knowledge
+	IconAlchemyDownload   = "🝱 " // Precipitate - download operations
+	IconAlchemyConnected  = "🜁 " // Air - connection active
+	IconAlchemyValidation = "🜨 " // Retort - validation/verification
+)
+
+// Progress bar configuration
+// Custom gradient that matches our color palette (cyan → purple)
+var (
+	ProgressGradientStart   = lipgloss.Color("#00D9FF") // Cyan
+	ProgressGradientEnd     = lipgloss.Color("#7D56F4") // Purple
+	DefaultProgressGradient = progress.WithGradient(string(ProgressGradientStart), string(ProgressGradientEnd))
+)
+
+// NewDefaultProgress creates a progress bar with consistent styling across the application.
+func NewDefaultProgress(width int) progress.Model {
+	p := progress.New(
+		DefaultProgressGradient,
+		progress.WithWidth(width),
+		progress.WithoutPercentage(),
+	)
+	return p
+}
+
+// NewDefaultSpinner creates a spinner with consistent styling across the application.
+func NewDefaultSpinner() spinner.Model {
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(ColorPrimary)
+	return s
+}
+
+// Styled alchemy symbols for status display
+var (
+	// Status indicators
+	StyledAlchemySuccess = lipgloss.NewStyle().Foreground(ColorSuccess).SetString(IconAlchemySuccess)
+	StyledAlchemyError   = lipgloss.NewStyle().Foreground(ColorError).SetString(IconAlchemyError)
+	StyledAlchemyWarning = lipgloss.NewStyle().Foreground(ColorWarning).SetString(IconAlchemyWarning)
+
+	// Operational states
+	StyledAlchemyActive     = lipgloss.NewStyle().Foreground(ColorWarning).SetString(IconAlchemyActive)     // Yellow for active ops
+	StyledAlchemyProcess    = lipgloss.NewStyle().Foreground(ColorPrimary).SetString(IconAlchemyProcess)    // Cyan for processing
+	StyledAlchemyCached     = lipgloss.NewStyle().Foreground(ColorMuted).SetString(IconAlchemyCached)       // Gray for cached
+	StyledAlchemyStreaming  = lipgloss.NewStyle().Foreground(ColorPrimary).SetString(IconAlchemyStreaming)  // Cyan for streaming
+	StyledAlchemyInfo       = lipgloss.NewStyle().Foreground(ColorSecondary).SetString(IconAlchemyInfo)     // Purple for info
+	StyledAlchemyConnected  = lipgloss.NewStyle().Foreground(ColorSuccess).SetString(IconAlchemyConnected)  // Green for connected
+	StyledAlchemyValidation = lipgloss.NewStyle().Foreground(ColorPrimary).SetString(IconAlchemyValidation) // Cyan for validation
 )

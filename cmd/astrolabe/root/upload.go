@@ -8,8 +8,10 @@ import (
 	"time"
 
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/config"
+	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/tui"
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/upload"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var (
@@ -51,14 +53,23 @@ var uploadCmd = &cobra.Command{
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 		defer cancel()
 
+		// Check if we should use TUI or text mode
+		isInteractive := term.IsTerminal(int(os.Stdout.Fd()))
+
 		// Upload specific run or all pending runs
 		if uploadRunID != "" {
 			// Upload single run
-			fmt.Printf("Uploading run %s...\n", uploadRunID)
-			if err := client.UploadRun(ctx, uploadRunID); err != nil {
-				return fmt.Errorf("upload run: %w", err)
+			if isInteractive {
+				if err := tui.RunUploadTUI(client, []string{uploadRunID}); err != nil {
+					return fmt.Errorf("upload run: %w", err)
+				}
+			} else {
+				fmt.Printf("Uploading run %s...\n", uploadRunID)
+				if err := client.UploadRun(ctx, uploadRunID); err != nil {
+					return fmt.Errorf("upload run: %w", err)
+				}
+				fmt.Printf("✓ Successfully uploaded run %s\n", uploadRunID)
 			}
-			fmt.Printf("✓ Successfully uploaded run %s\n", uploadRunID)
 		} else {
 			// Upload all pending runs
 			runs, err := findPendingRuns(cfg.OfflineCache)
@@ -71,24 +82,32 @@ var uploadCmd = &cobra.Command{
 				return nil
 			}
 
-			fmt.Printf("Found %d pending run(s) to upload\n", len(runs))
-			succeeded := 0
-			failed := 0
-
-			for i, runID := range runs {
-				fmt.Printf("[%d/%d] Uploading %s...\n", i+1, len(runs), runID)
-				if err := client.UploadRun(ctx, runID); err != nil {
-					fmt.Fprintf(os.Stderr, "  ✗ Failed: %v\n", err)
-					failed++
-				} else {
-					fmt.Printf("  ✓ Success\n")
-					succeeded++
+			if isInteractive {
+				// Use TUI for interactive mode
+				if err := tui.RunUploadTUI(client, runs); err != nil {
+					return err
 				}
-			}
+			} else {
+				// Use text output for non-interactive (CI/scripts)
+				fmt.Printf("Found %d pending run(s) to upload\n", len(runs))
+				succeeded := 0
+				failed := 0
 
-			fmt.Printf("\nUpload complete: %d succeeded, %d failed\n", succeeded, failed)
-			if failed > 0 {
-				return fmt.Errorf("%d run(s) failed to upload", failed)
+				for i, runID := range runs {
+					fmt.Printf("[%d/%d] Uploading %s...\n", i+1, len(runs), runID)
+					if err := client.UploadRun(ctx, runID); err != nil {
+						fmt.Fprintf(os.Stderr, "  ✗ Failed: %v\n", err)
+						failed++
+					} else {
+						fmt.Printf("  ✓ Success\n")
+						succeeded++
+					}
+				}
+
+				fmt.Printf("\nUpload complete: %d succeeded, %d failed\n", succeeded, failed)
+				if failed > 0 {
+					return fmt.Errorf("%d run(s) failed to upload", failed)
+				}
 			}
 		}
 
