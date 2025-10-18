@@ -2,12 +2,14 @@ package root
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/config"
+	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/tui"
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/upload"
 	"github.com/spf13/cobra"
@@ -121,6 +123,9 @@ func init() {
 }
 
 // findPendingRuns scans the cache directory for runs that haven't been uploaded yet.
+// Runs are considered pending if:
+// - No upload_state.json exists (never attempted)
+// - upload_state.json exists but status != "succeeded" (failed or incomplete)
 func findPendingRuns(cacheRoot string) ([]string, error) {
 	entries, err := os.ReadDir(cacheRoot)
 	if err != nil {
@@ -146,12 +151,26 @@ func findPendingRuns(cacheRoot string) ([]string, error) {
 
 		// Check upload state
 		statePath := filepath.Join(cacheRoot, runID, "upload_state.json")
-		if _, err := os.Stat(statePath); err != nil {
+		stateData, err := os.ReadFile(statePath)
+		if err != nil {
 			// No state file means never uploaded
 			pending = append(pending, runID)
+			continue
 		}
-		// If upload_state.json exists, skip it for now
-		// In the future, we could check the status and retry failed uploads
+
+		// Parse upload state to check status
+		var state core.UploadState
+		if err := json.Unmarshal(stateData, &state); err != nil {
+			// If we can't parse the state, treat as pending
+			pending = append(pending, runID)
+			continue
+		}
+
+		// Only skip runs that have successfully uploaded
+		// Retry runs that failed, are in-flight, queued, or pending
+		if state.Status != core.UploadStatusSucceeded {
+			pending = append(pending, runID)
+		}
 	}
 
 	return pending, nil

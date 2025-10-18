@@ -184,3 +184,69 @@ func runUploadTUIWithClient(client upload.UploadClient, runIDs []string) error {
 
 	return nil
 }
+
+// RunUploadWithStatus launches the upload process and returns a status message for the TUI.
+// This integrates with the welcome screen status message pattern.
+func RunUploadWithStatus(client *upload.Client, runIDs []string, currentStatus *StatusMessage) (*StatusMessage, error) {
+	// If no runs to upload, return info status
+	if len(runIDs) == 0 {
+		return NewStatusMessage(
+			StatusInfo,
+			"No Runs to Upload",
+			"All runs have been uploaded. Capture new data to upload more runs.",
+		), nil
+	}
+
+	// Run the upload TUI
+	model := newUploadModel(client, runIDs)
+	finalModel, err := tea.NewProgram(model).Run()
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract results from the final model
+	uploadModel, ok := finalModel.(uploadModel)
+	if !ok {
+		return nil, fmt.Errorf("unexpected model type: %T", finalModel)
+	}
+
+	// Generate status message based on results
+	totalRuns := len(runIDs)
+	succeeded := totalRuns - uploadModel.failed
+
+	if uploadModel.failed == 0 {
+		// All succeeded
+		var msg string
+		if totalRuns == 1 {
+			msg = "1 run uploaded successfully."
+		} else {
+			msg = fmt.Sprintf("%d runs uploaded successfully.", totalRuns)
+		}
+		return NewStatusMessage(
+			StatusSuccess,
+			"Upload Complete",
+			msg,
+		), nil
+	} else if succeeded == 0 {
+		// All failed
+		var msg string
+		if totalRuns == 1 {
+			msg = "Upload failed. Check your connection settings and try again."
+		} else {
+			msg = fmt.Sprintf("All %d uploads failed. Check your connection settings and try again.", totalRuns)
+		}
+		return NewStatusMessage(
+			StatusError,
+			"Upload Failed",
+			msg,
+		), nil
+	} else {
+		// Partial failure
+		msg := fmt.Sprintf("%d succeeded, %d failed. Check your connection for failed runs.", succeeded, uploadModel.failed)
+		return NewStatusMessage(
+			StatusWarning,
+			"Upload Partially Complete",
+			msg,
+		), nil
+	}
+}
