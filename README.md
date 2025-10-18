@@ -55,7 +55,7 @@
 ### 8) Integration with QA app
 
 - Uses presigned URLs or API tokens for upload.  
-- All artifacts tied to a `run_id` created in the Rails backend.  
+- All artifacts tied to a `run_id` created in the Django backend.  
 - Agent reports parser version + capture conditions.  
 - Server treats agent uploads just like manual file uploads.
 
