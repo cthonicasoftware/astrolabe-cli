@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/config"
+	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/tui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -13,6 +14,21 @@ import (
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Manage configuration",
+}
+
+var configEditCmd = &cobra.Command{
+	Use:   "edit",
+	Short: "Edit configuration interactively",
+	Long: `Launch an interactive TUI to configure Astrolabe settings:
+- API URL for your backend
+- Project ID
+- Authentication token
+- Offline cache location
+- Upload retry settings`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		_, err := tui.RunConfigEditor(nil)
+		return err
+	},
 }
 
 var configGetCmd = &cobra.Command{
@@ -97,6 +113,7 @@ var configSetCmd = &cobra.Command{
 }
 
 func init() {
+	configCmd.AddCommand(configEditCmd)
 	configCmd.AddCommand(configGetCmd)
 	configCmd.AddCommand(configSetCmd)
 }

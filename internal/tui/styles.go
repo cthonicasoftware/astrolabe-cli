@@ -123,15 +123,16 @@ const (
 	IconStatusWarning = " " // nf-fa-exclamation_triangle
 	IconStatusError   = " " // nf-fa-times
 
-	IconMenuCapture   = " " // nf-fa-bar_chart
-	IconMenuListPorts = " " // nf-fa-usb
-	IconMenuMetadata  = " " // nf-fa-id_badge
-	IconMenuViewRuns  = " " // nf-fa-database
-	IconMenuUpload    = " " // nf-fa-upload
-	IconMenuConfig    = " " // nf-fa-cog
-	IconMenuNewFile   = " " // nf-fa-file_text
-	IconSelectedItem  = "❯ "
-	IconMenuSeparator = "\ue621" // nf-indentation line
+	IconMenuCapture    = " " // nf-fa-bar_chart
+	IconMenuListPorts  = " " // nf-fa-usb
+	IconMenuMetadata   = " " // nf-fa-id_badge
+	IconMenuViewRuns   = " " // nf-fa-database
+	IconMenuUpload     = " " // nf-fa-upload
+	IconMenuConfig     = " " // nf-fa-cog
+	IconMenuConnection = "󱘖 " // nf-md-connection
+	IconMenuNewFile    = " " // nf-fa-file_text
+	IconSelectedItem   = "❯ "
+	IconMenuSeparator  = "\ue621" // nf-indentation line
 
 	IconTitlePorts = IconMenuListPorts
 )

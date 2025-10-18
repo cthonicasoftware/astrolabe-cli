@@ -54,10 +54,10 @@ func NewWelcome(status *StatusMessage) tea.Model {
 		menuItems: []menuItem{
 			{icon: IconMenuCapture, label: IconMenuSeparator + " Capture Serial", shortcut: "", action: "capture"},
 			{icon: IconMenuListPorts, label: IconMenuSeparator + " List Ports", shortcut: "", action: "list-ports"},
-			{icon: IconMenuMetadata, label: IconMenuSeparator + " Configure Metadata", shortcut: "", action: "metadata"},
 			{icon: IconMenuViewRuns, label: IconMenuSeparator + " View Runs", shortcut: "", action: "view-runs"},
 			{icon: IconMenuUpload, label: IconMenuSeparator + " Upload Data", shortcut: "", action: "upload"},
-			{icon: IconMenuConfig, label: IconMenuSeparator + " Configuration", shortcut: "", action: "config"},
+			{icon: IconMenuMetadata, label: IconMenuSeparator + " Configure Metadata", shortcut: "", action: "metadata"},
+			{icon: IconMenuConnection, label: IconMenuSeparator + " Configure Connection", shortcut: "", action: "config-connection"},
 			{icon: IconMenuNewFile, label: IconMenuSeparator + " New File", shortcut: "", action: "new"},
 		},
 		status: status,
@@ -119,9 +119,9 @@ func (m *welcomeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, func() tea.Msg {
 					return executeActionMsg{action: "upload"}
 				}
-			case "config":
+			case "config-connection":
 				return m, func() tea.Msg {
-					return executeActionMsg{action: "config"}
+					return executeActionMsg{action: "config-connection"}
 				}
 			default:
 				// Not implemented yet

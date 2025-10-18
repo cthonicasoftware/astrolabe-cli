@@ -199,8 +199,10 @@ var tuiCmd = &cobra.Command{
 				if err := uploadCmd.RunE(cmd, args); err != nil {
 					return err
 				}
-			case "config":
-				if err := configCmd.RunE(cmd, args); err != nil {
+			case "config-connection":
+				var err error
+				status, err = tui.RunConfigEditor(status)
+				if err != nil {
 					return err
 				}
 			default:
