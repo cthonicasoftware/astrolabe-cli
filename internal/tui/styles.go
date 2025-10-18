@@ -182,7 +182,7 @@ func NewDefaultProgress(width int) progress.Model {
 // NewDefaultSpinner creates a spinner with consistent styling across the application.
 func NewDefaultSpinner() spinner.Model {
 	s := spinner.New()
-	s.Spinner = spinner.Dot
+	s.Spinner = spinner.Moon
 	s.Style = lipgloss.NewStyle().Foreground(ColorPrimary)
 	return s
 }
