@@ -124,9 +124,9 @@ func (m *metadataModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c", "esc":
 			return m, tea.Quit
-		case "tab", "shift+tab":
+		case "tab", "shift+tab", "up", "down":
 			step := 1
-			if msg.String() == "shift+tab" {
+			if msg.String() == "shift+tab" || msg.String() == "up" {
 				step = -1
 			}
 			m.cycleFocus(step)
@@ -231,7 +231,7 @@ func (m *metadataModel) View() string {
 		content.WriteString("\n")
 	}
 
-	help := "tab/shift+tab: navigate • ctrl+s: save • esc: close"
+	help := " ↑/↓ tab/tabshift+tab: navigate • ctrl+s: save • esc: close"
 	content.WriteString(StyleHelp.Render(help))
 
 	return lipgloss.PlaceVertical(m.height, lipgloss.Center,
