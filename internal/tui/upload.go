@@ -23,7 +23,7 @@ type uploadModel struct {
 	progress progress.Model
 	done     bool
 	failed   int
-	client   *upload.Client
+	client   upload.UploadClient
 	ctx      context.Context
 }
 
@@ -37,7 +37,7 @@ var (
 	uploadDoneStyle = lipgloss.NewStyle().Margin(1, 2)
 )
 
-func newUploadModel(client *upload.Client, runIDs []string) uploadModel {
+func newUploadModel(client upload.UploadClient, runIDs []string) uploadModel {
 	return uploadModel{
 		runIDs:   runIDs,
 		spinner:  NewDefaultSpinner(),
@@ -150,7 +150,7 @@ func (m uploadModel) View() string {
 	return spin + info + gap + prog + runCount
 }
 
-func uploadRun(client *upload.Client, ctx context.Context, runID string) tea.Cmd {
+func uploadRun(client upload.UploadClient, ctx context.Context, runID string) tea.Cmd {
 	return func() tea.Msg {
 		// Add a small delay to make the UI feel responsive
 		// Remove this in production if uploads are already slow
@@ -166,6 +166,12 @@ func uploadRun(client *upload.Client, ctx context.Context, runID string) tea.Cmd
 
 // RunUploadTUI launches the upload progress TUI.
 func RunUploadTUI(client *upload.Client, runIDs []string) error {
+	return runUploadTUIWithClient(client, runIDs)
+}
+
+// runUploadTUIWithClient launches the upload progress TUI with any UploadClient implementation.
+// This is exported for testing purposes.
+func runUploadTUIWithClient(client upload.UploadClient, runIDs []string) error {
 	if len(runIDs) == 0 {
 		fmt.Println("No runs to upload")
 		return nil
