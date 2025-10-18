@@ -326,3 +326,208 @@ func TestMockUploadClient_CustomFunction(t *testing.T) {
 		t.Error("expected error for 'fail-me' call")
 	}
 }
+
+func TestUploadModel_Cancellation(t *testing.T) {
+	mock := upload.NewMockUploadClient()
+	mock.SetSuccess("run-1")
+	mock.SetError("run-2", "network error")
+	mock.SetSuccess("run-3")
+	mock.SetSuccess("run-4")
+	mock.SetSuccess("run-5")
+
+	runIDs := []string{"run-1", "run-2", "run-3", "run-4", "run-5"}
+	model := newUploadModel(mock, runIDs)
+
+	// Upload run-1 (success)
+	msg1 := uploadedRunMsg{runID: "run-1", err: nil}
+	updatedModel, _ := model.Update(msg1)
+	model = updatedModel.(uploadModel)
+
+	if model.succeeded != 1 {
+		t.Errorf("expected succeeded=1, got %d", model.succeeded)
+	}
+	if model.failed != 0 {
+		t.Errorf("expected failed=0, got %d", model.failed)
+	}
+
+	// Upload run-2 (failure)
+	msg2 := uploadedRunMsg{runID: "run-2", err: fmt.Errorf("network error")}
+	updatedModel, _ = model.Update(msg2)
+	model = updatedModel.(uploadModel)
+
+	if model.succeeded != 1 {
+		t.Errorf("expected succeeded=1, got %d", model.succeeded)
+	}
+	if model.failed != 1 {
+		t.Errorf("expected failed=1, got %d", model.failed)
+	}
+
+	// User cancels (hits ESC)
+	keyMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	updatedModel, _ = model.Update(keyMsg)
+	model = updatedModel.(uploadModel)
+
+	// Verify cancellation state
+	if !model.cancelled {
+		t.Error("expected cancelled=true")
+	}
+	if !model.done {
+		t.Error("expected done=true")
+	}
+
+	// Verify counts are correct
+	if model.succeeded != 1 {
+		t.Errorf("expected succeeded=1 after cancel, got %d", model.succeeded)
+	}
+	if model.failed != 1 {
+		t.Errorf("expected failed=1 after cancel, got %d", model.failed)
+	}
+
+	// Remaining should be calculated correctly: 5 total - 1 success - 1 failure = 3 remaining
+	totalRuns := len(runIDs)
+	remaining := totalRuns - model.succeeded - model.failed
+	if remaining != 3 {
+		t.Errorf("expected 3 remaining runs, got %d", remaining)
+	}
+}
+
+func TestUploadModel_EarlyTermination(t *testing.T) {
+	mock := upload.NewMockUploadClient()
+	// All uploads will fail
+	mock.SetError("run-1", "network error")
+	mock.SetError("run-2", "network error")
+	mock.SetError("run-3", "network error")
+	mock.SetError("run-4", "network error")
+	mock.SetError("run-5", "network error")
+
+	runIDs := []string{"run-1", "run-2", "run-3", "run-4", "run-5"}
+	model := newUploadModel(mock, runIDs)
+
+	// Verify max consecutive fails is set
+	if model.maxConsecutiveFails != 3 {
+		t.Errorf("expected maxConsecutiveFails=3, got %d", model.maxConsecutiveFails)
+	}
+
+	// Upload run-1 (fail)
+	msg1 := uploadedRunMsg{runID: "run-1", err: fmt.Errorf("network error")}
+	updatedModel, _ := model.Update(msg1)
+	model = updatedModel.(uploadModel)
+
+	if model.consecutiveFails != 1 {
+		t.Errorf("expected consecutiveFails=1, got %d", model.consecutiveFails)
+	}
+	if model.aborted {
+		t.Error("should not abort after 1 failure")
+	}
+
+	// Upload run-2 (fail)
+	msg2 := uploadedRunMsg{runID: "run-2", err: fmt.Errorf("network error")}
+	updatedModel, _ = model.Update(msg2)
+	model = updatedModel.(uploadModel)
+
+	if model.consecutiveFails != 2 {
+		t.Errorf("expected consecutiveFails=2, got %d", model.consecutiveFails)
+	}
+	if model.aborted {
+		t.Error("should not abort after 2 failures")
+	}
+
+	// Upload run-3 (fail) - should trigger abort
+	msg3 := uploadedRunMsg{runID: "run-3", err: fmt.Errorf("network error")}
+	updatedModel, _ = model.Update(msg3)
+	model = updatedModel.(uploadModel)
+
+	if model.consecutiveFails != 3 {
+		t.Errorf("expected consecutiveFails=3, got %d", model.consecutiveFails)
+	}
+	if !model.aborted {
+		t.Error("expected abort after 3 consecutive failures")
+	}
+	if !model.done {
+		t.Error("expected done=true after abort")
+	}
+
+	// Verify final counts
+	if model.succeeded != 0 {
+		t.Errorf("expected succeeded=0, got %d", model.succeeded)
+	}
+	if model.failed != 3 {
+		t.Errorf("expected failed=3, got %d", model.failed)
+	}
+
+	// Remaining runs should be 2 (run-4 and run-5 not attempted)
+	totalRuns := len(runIDs)
+	remaining := totalRuns - model.succeeded - model.failed
+	if remaining != 2 {
+		t.Errorf("expected 2 remaining runs, got %d", remaining)
+	}
+}
+
+func TestUploadModel_ConsecutiveFailsResetOnSuccess(t *testing.T) {
+	mock := upload.NewMockUploadClient()
+	mock.SetError("run-1", "network error")
+	mock.SetError("run-2", "network error")
+	mock.SetSuccess("run-3") // Success resets consecutive counter
+	mock.SetError("run-4", "network error")
+	mock.SetSuccess("run-5")
+
+	runIDs := []string{"run-1", "run-2", "run-3", "run-4", "run-5"}
+	model := newUploadModel(mock, runIDs)
+
+	// Fail 1
+	msg1 := uploadedRunMsg{runID: "run-1", err: fmt.Errorf("network error")}
+	updatedModel, _ := model.Update(msg1)
+	model = updatedModel.(uploadModel)
+
+	if model.consecutiveFails != 1 {
+		t.Errorf("expected consecutiveFails=1, got %d", model.consecutiveFails)
+	}
+
+	// Fail 2
+	msg2 := uploadedRunMsg{runID: "run-2", err: fmt.Errorf("network error")}
+	updatedModel, _ = model.Update(msg2)
+	model = updatedModel.(uploadModel)
+
+	if model.consecutiveFails != 2 {
+		t.Errorf("expected consecutiveFails=2, got %d", model.consecutiveFails)
+	}
+
+	// Success - should reset counter
+	msg3 := uploadedRunMsg{runID: "run-3", err: nil}
+	updatedModel, _ = model.Update(msg3)
+	model = updatedModel.(uploadModel)
+
+	if model.consecutiveFails != 0 {
+		t.Errorf("expected consecutiveFails=0 after success, got %d", model.consecutiveFails)
+	}
+	if model.aborted {
+		t.Error("should not abort when consecutive failures are reset")
+	}
+
+	// Fail 4
+	msg4 := uploadedRunMsg{runID: "run-4", err: fmt.Errorf("network error")}
+	updatedModel, _ = model.Update(msg4)
+	model = updatedModel.(uploadModel)
+
+	if model.consecutiveFails != 1 {
+		t.Errorf("expected consecutiveFails=1 after reset, got %d", model.consecutiveFails)
+	}
+
+	// Success 5 - completes normally
+	msg5 := uploadedRunMsg{runID: "run-5", err: nil}
+	updatedModel, _ = model.Update(msg5)
+	model = updatedModel.(uploadModel)
+
+	if model.aborted {
+		t.Error("should complete normally without abort")
+	}
+	if !model.done {
+		t.Error("expected done=true")
+	}
+	if model.succeeded != 2 {
+		t.Errorf("expected succeeded=2, got %d", model.succeeded)
+	}
+	if model.failed != 3 {
+		t.Errorf("expected failed=3, got %d", model.failed)
+	}
+}

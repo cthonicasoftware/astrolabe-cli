@@ -15,16 +15,21 @@ import (
 )
 
 type uploadModel struct {
-	runIDs   []string
-	index    int
-	width    int
-	height   int
-	spinner  spinner.Model
-	progress progress.Model
-	done     bool
-	failed   int
-	client   upload.UploadClient
-	ctx      context.Context
+	runIDs              []string
+	index               int
+	width               int
+	height              int
+	spinner             spinner.Model
+	progress            progress.Model
+	done                bool
+	succeeded           int
+	failed              int
+	consecutiveFails    int
+	cancelled           bool
+	aborted             bool // Early termination due to repeated failures
+	client              upload.UploadClient
+	ctx                 context.Context
+	maxConsecutiveFails int // Stop after this many consecutive failures
 }
 
 type uploadedRunMsg struct {
@@ -39,11 +44,12 @@ var (
 
 func newUploadModel(client upload.UploadClient, runIDs []string) uploadModel {
 	return uploadModel{
-		runIDs:   runIDs,
-		spinner:  NewDefaultSpinner(),
-		progress: NewDefaultProgress(40),
-		client:   client,
-		ctx:      context.Background(),
+		runIDs:              runIDs,
+		spinner:             NewDefaultSpinner(),
+		progress:            NewDefaultProgress(40),
+		client:              client,
+		ctx:                 context.Background(),
+		maxConsecutiveFails: 3, // Stop after 3 consecutive failures
 	}
 }
 
@@ -63,26 +69,43 @@ func (m uploadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc", "q":
+			m.cancelled = true
+			m.done = true
 			return m, tea.Quit
 		}
 
 	case uploadedRunMsg:
 		runID := m.runIDs[m.index]
 
-		// Track failures
+		// Track results and consecutive failures
 		if msg.err != nil {
 			m.failed++
+			m.consecutiveFails++
+		} else {
+			m.succeeded++
+			m.consecutiveFails = 0 // Reset on success
 		}
 
-		// Check if we're done
+		var symbol string
+		if msg.err != nil {
+			symbol = StyledAlchemyError.String()
+		} else {
+			symbol = StyledAlchemySuccess.String()
+		}
+
+		// Check for early termination due to consecutive failures
+		if m.consecutiveFails >= m.maxConsecutiveFails {
+			m.done = true
+			m.aborted = true
+			return m, tea.Sequence(
+				tea.Printf("%s %s", symbol, runID),
+				tea.Quit,
+			)
+		}
+
+		// Check if we're done with all uploads
 		if m.index >= len(m.runIDs)-1 {
 			m.done = true
-			var symbol string
-			if msg.err != nil {
-				symbol = StyledAlchemyError.String()
-			} else {
-				symbol = StyledAlchemySuccess.String()
-			}
 			return m, tea.Sequence(
 				tea.Printf("%s %s", symbol, runID),
 				tea.Quit,
@@ -92,13 +115,6 @@ func (m uploadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Update progress bar
 		m.index++
 		progressCmd := m.progress.SetPercent(float64(m.index) / float64(len(m.runIDs)))
-
-		var symbol string
-		if msg.err != nil {
-			symbol = StyledAlchemyError.String()
-		} else {
-			symbol = StyledAlchemySuccess.String()
-		}
 
 		return m, tea.Batch(
 			progressCmd,
@@ -126,12 +142,44 @@ func (m uploadModel) View() string {
 	w := lipgloss.Width(fmt.Sprintf("%d", n))
 
 	if m.done {
-		succeeded := n - m.failed
-		summary := fmt.Sprintf("Upload complete! %d succeeded", succeeded)
-		if m.failed > 0 {
-			summary += fmt.Sprintf(", %d failed", m.failed)
+		remaining := n - m.succeeded - m.failed
+
+		var lines []string
+		if m.aborted {
+			// Early termination due to consecutive failures
+			lines = append(lines, fmt.Sprintf("Upload stopped after %d consecutive failures.", m.maxConsecutiveFails))
+
+			statusLine := fmt.Sprintf("%d succeeded, %d failed", m.succeeded, m.failed)
+			if remaining > 0 {
+				statusLine += fmt.Sprintf(", %d not attempted", remaining)
+			}
+			statusLine += "."
+			lines = append(lines, statusLine)
+			lines = append(lines, "Check your connection settings and try again.")
+		} else if m.cancelled {
+			lines = append(lines, "Upload cancelled.")
+
+			statusLine := fmt.Sprintf("%d succeeded", m.succeeded)
+			if m.failed > 0 {
+				statusLine += fmt.Sprintf(", %d failed", m.failed)
+			}
+			if remaining > 0 {
+				statusLine += fmt.Sprintf(", %d not attempted", remaining)
+			}
+			statusLine += "."
+			lines = append(lines, statusLine)
+		} else {
+			lines = append(lines, "Upload complete!")
+
+			statusLine := fmt.Sprintf("%d succeeded", m.succeeded)
+			if m.failed > 0 {
+				statusLine += fmt.Sprintf(", %d failed", m.failed)
+			}
+			statusLine += "."
+			lines = append(lines, statusLine)
 		}
-		summary += ".\n"
+
+		summary := strings.Join(lines, "\n")
 		return uploadDoneStyle.Render(summary)
 	}
 
@@ -212,15 +260,63 @@ func RunUploadWithStatus(client *upload.Client, runIDs []string, currentStatus *
 
 	// Generate status message based on results
 	totalRuns := len(runIDs)
-	succeeded := totalRuns - uploadModel.failed
+	succeeded := uploadModel.succeeded
+	failed := uploadModel.failed
+	remaining := totalRuns - succeeded - failed
 
-	if uploadModel.failed == 0 {
+	// Handle early termination due to consecutive failures
+	if uploadModel.aborted {
+		lines := []string{
+			fmt.Sprintf("Stopped after %d consecutive failures.", uploadModel.maxConsecutiveFails),
+		}
+		if succeeded > 0 {
+			lines = append(lines, fmt.Sprintf("%d succeeded, %d failed, %d not attempted.", succeeded, failed, remaining))
+		} else {
+			lines = append(lines, fmt.Sprintf("%d failed, %d not attempted.", failed, remaining))
+		}
+		lines = append(lines, "Check your connection settings.")
+
+		return NewStatusMessage(
+			StatusError,
+			"Upload Stopped",
+			strings.Join(lines, "\n"),
+		), nil
+	}
+
+	// Handle cancellation
+	if uploadModel.cancelled {
+		if succeeded == 0 {
+			lines := []string{
+				"Upload cancelled.",
+				fmt.Sprintf("No runs were uploaded. %d pending.", remaining),
+			}
+			return NewStatusMessage(
+				StatusInfo,
+				"Upload Cancelled",
+				strings.Join(lines, "\n"),
+			), nil
+		}
+		lines := []string{"Upload cancelled."}
+		if failed > 0 {
+			lines = append(lines, fmt.Sprintf("%d succeeded, %d failed, %d not attempted.", succeeded, failed, remaining))
+		} else {
+			lines = append(lines, fmt.Sprintf("%d succeeded, %d not attempted.", succeeded, remaining))
+		}
+		return NewStatusMessage(
+			StatusWarning,
+			"Upload Cancelled",
+			strings.Join(lines, "\n"),
+		), nil
+	}
+
+	// Normal completion
+	if failed == 0 {
 		// All succeeded
 		var msg string
 		if totalRuns == 1 {
 			msg = "1 run uploaded successfully."
 		} else {
-			msg = fmt.Sprintf("%d runs uploaded successfully.", totalRuns)
+			msg = fmt.Sprintf("%d runs uploaded successfully.", succeeded)
 		}
 		return NewStatusMessage(
 			StatusSuccess,
@@ -229,24 +325,25 @@ func RunUploadWithStatus(client *upload.Client, runIDs []string, currentStatus *
 		), nil
 	} else if succeeded == 0 {
 		// All failed
-		var msg string
-		if totalRuns == 1 {
-			msg = "Upload failed. Check your connection settings and try again."
-		} else {
-			msg = fmt.Sprintf("All %d uploads failed. Check your connection settings and try again.", totalRuns)
+		lines := []string{
+			fmt.Sprintf("All %d uploads failed.", totalRuns),
+			"Check your connection settings and try again.",
 		}
 		return NewStatusMessage(
 			StatusError,
 			"Upload Failed",
-			msg,
+			strings.Join(lines, "\n"),
 		), nil
 	} else {
 		// Partial failure
-		msg := fmt.Sprintf("%d succeeded, %d failed. Check your connection for failed runs.", succeeded, uploadModel.failed)
+		lines := []string{
+			fmt.Sprintf("%d succeeded, %d failed.", succeeded, failed),
+			"Check your connection for failed runs.",
+		}
 		return NewStatusMessage(
 			StatusWarning,
 			"Upload Partially Complete",
-			msg,
+			strings.Join(lines, "\n"),
 		), nil
 	}
 }

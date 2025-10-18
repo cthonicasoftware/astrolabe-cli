@@ -2,8 +2,11 @@ package upload
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -173,12 +176,20 @@ func (c *Client) loadRun(runID string) (*core.Run, error) {
 	// Manifest artifact
 	manifestStat, err := os.Stat(manifestPath)
 	if err == nil {
+		checksum, err := computeFileSHA256(manifestPath)
+		if err != nil {
+			return nil, fmt.Errorf("compute manifest checksum: %w", err)
+		}
 		artifacts = append(artifacts, core.Artifact{
 			Name:      "manifest.json",
 			Path:      manifestPath,
 			MediaType: "application/json",
 			Role:      core.ArtifactRoleManifest,
 			SizeBytes: manifestStat.Size(),
+			Checksum: core.Checksum{
+				Algorithm: "sha256",
+				Value:     checksum,
+			},
 			CreatedAt: doc.Started,
 		})
 	}
@@ -187,12 +198,20 @@ func (c *Client) loadRun(runID string) (*core.Run, error) {
 	dataPath := filepath.Join(runDir, "data.jsonl")
 	dataStat, err := os.Stat(dataPath)
 	if err == nil {
+		checksum, err := computeFileSHA256(dataPath)
+		if err != nil {
+			return nil, fmt.Errorf("compute data checksum: %w", err)
+		}
 		artifacts = append(artifacts, core.Artifact{
 			Name:      "data.jsonl",
 			Path:      dataPath,
 			MediaType: "application/x-ndjson",
 			Role:      core.ArtifactRoleData,
 			SizeBytes: dataStat.Size(),
+			Checksum: core.Checksum{
+				Algorithm: "sha256",
+				Value:     checksum,
+			},
 			CreatedAt: doc.Started,
 		})
 	}
@@ -228,4 +247,20 @@ func (c *Client) saveRunState(run *core.Run) error {
 	}
 
 	return nil
+}
+
+// computeFileSHA256 calculates the SHA256 checksum of a file.
+func computeFileSHA256(filePath string) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", fmt.Errorf("open file: %w", err)
+	}
+	defer file.Close()
+
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", fmt.Errorf("compute hash: %w", err)
+	}
+
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
