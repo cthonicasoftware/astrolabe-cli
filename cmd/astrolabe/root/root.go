@@ -19,7 +19,7 @@ var rootCmd = &cobra.Command{
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.astrolabe.yml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.astrolabe/connection.yml)")
 	rootCmd.PersistentFlags().BoolP("json", "", false, "emit machine-readable JSON output")
 	viper.BindPFlag("json", rootCmd.PersistentFlags().Lookup("json"))
 }
@@ -30,9 +30,9 @@ func initConfig() {
 	} else {
 		home, err := os.UserHomeDir()
 		if err == nil {
-			viper.AddConfigPath(home)
+			viper.AddConfigPath(home + "/.astrolabe")
 		}
-		viper.SetConfigName(".astrolabe")
+		viper.SetConfigName("connection")
 		viper.SetConfigType("yaml")
 	}
 	viper.SetEnvPrefix("ASTROLABE")

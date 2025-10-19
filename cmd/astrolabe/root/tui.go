@@ -14,6 +14,7 @@ import (
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/sources"
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/storage"
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/tui"
+	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/upload"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 )
@@ -196,11 +197,48 @@ var tuiCmd = &cobra.Command{
 					return err
 				}
 			case "upload":
-				if err := uploadCmd.RunE(cmd, args); err != nil {
+				// Load configuration and create upload client
+				appCfg := config.Load()
+
+				// Validate configuration
+				if appCfg.APIURL == "" || appCfg.AuthToken == "" || appCfg.ProjectID == "" {
+					status = tui.NewStatusMessage(
+						tui.StatusError,
+						"Upload Configuration Missing",
+						"Configure connection settings before uploading. Select 'Configure Connection'.",
+					)
+					continue
+				}
+
+				maxRetries := appCfg.Upload.MaxRetries
+				if maxRetries == 0 {
+					maxRetries = 3
+				}
+
+				// Create upload client
+				client := upload.NewClient(upload.Config{
+					APIURL:     appCfg.APIURL,
+					AuthToken:  appCfg.AuthToken,
+					ProjectID:  appCfg.ProjectID,
+					CacheRoot:  appCfg.OfflineCache,
+					MaxRetries: maxRetries,
+				})
+
+				// Find pending runs
+				runs, err := findPendingRuns(appCfg.OfflineCache)
+				if err != nil {
+					return fmt.Errorf("find pending runs: %w", err)
+				}
+
+				// Run upload with status
+				status, err = tui.RunUploadWithStatus(client, runs, status)
+				if err != nil {
 					return err
 				}
-			case "config":
-				if err := configCmd.RunE(cmd, args); err != nil {
+			case "config-connection":
+				var err error
+				status, err = tui.RunConfigEditor(status)
+				if err != nil {
 					return err
 				}
 			default:

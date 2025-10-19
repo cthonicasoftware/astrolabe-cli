@@ -76,7 +76,15 @@ func (m *StatusMessage) Render(width int) string {
 	}
 
 	if body != "" {
-		lines = append(lines, statusBodyStyle.Copy().MaxWidth(available-4).Render(body))
+		// Split body by newlines and render each line separately to preserve formatting
+		bodyLines := strings.Split(body, "\n")
+		for _, line := range bodyLines {
+			if line != "" {
+				lines = append(lines, statusBodyStyle.Copy().MaxWidth(available-4).Render(line))
+			} else {
+				lines = append(lines, "") // Preserve empty lines
+			}
+		}
 	}
 
 	content := strings.Join(lines, "\n")

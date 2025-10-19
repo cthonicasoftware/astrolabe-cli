@@ -25,9 +25,10 @@
 
 ### 4) Configuration
 
-- Defaults stored in `.astrolabe.yml`.  
-- Fields: API URL, project ID, auth token, capture defaults (baud, port, sample rate), offline cache path.  
-- Environment variables override config (e.g., `ASTROLABE_TOKEN`).  
+- Connection settings stored in `~/.astrolabe/connection.yml`.
+- Metadata defaults stored in `~/.astrolabe/metadata.json`.
+- Fields: API URL, project ID, auth token, capture defaults (baud, port, sample rate), offline cache path.
+- Environment variables override config (e.g., `ASTROLABE_TOKEN`).
 - Configurable retry/backoff and upload batch size.
 
 ### 5) Supported sources (MVP)
