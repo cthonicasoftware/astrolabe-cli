@@ -128,6 +128,7 @@ const (
 	IconStatusError   = " " // nf-fa-times
 
 	IconMenuCapture    = " " // nf-fa-bar_chart
+	IconMenuTCP        = "󰛶 " // nf-md-ethernet
 	IconMenuListPorts  = " " // nf-fa-usb
 	IconMenuMetadata   = " " // nf-fa-id_badge
 	IconMenuViewRuns   = " " // nf-fa-database

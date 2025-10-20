@@ -68,16 +68,27 @@ var captureSerialCmd = &cobra.Command{
 			launchTUI bool = serialTUI
 		)
 		if isInteractive {
-			// Run interactive prompt
+			// Run interactive prompt with tabbed capture interface
 			var err error
-			serialCfg, launchTUI, err = tui.RunSerialPrompt()
+			captureConfig, err := tui.RunCaptureTabs()
 			if err != nil {
 				return fmt.Errorf("interactive prompt failed: %w", err)
 			}
+			if captureConfig == nil {
+				return fmt.Errorf("capture configuration cancelled")
+			}
+			if captureConfig.SourceType != "serial" {
+				return fmt.Errorf("serial source required for this command, got: %s", captureConfig.SourceType)
+			}
+			if captureConfig.SerialConfig == nil {
+				return fmt.Errorf("serial configuration missing")
+			}
 
 			// Use values from interactive prompt
+			serialCfg = captureConfig.SerialConfig
 			serialPort = serialCfg.Port
 			serialBaud = serialCfg.Baud
+			launchTUI = true // Always launch TUI when using interactive mode
 			serialTUI = launchTUI
 		} else {
 			// Use command-line flags with defaults
