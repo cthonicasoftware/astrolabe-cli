@@ -214,6 +214,8 @@ func (m *captureTabsModel) handleLeft() tea.Model {
 	switch m.focusMode {
 	case "tabs":
 		m.activeTab = max(m.activeTab-1, 0)
+	case "fields":
+		m.handleFieldLeft()
 	case "buttons":
 		m.focusedButton = max(m.focusedButton-1, 0)
 	}
@@ -224,6 +226,8 @@ func (m *captureTabsModel) handleRight() tea.Model {
 	switch m.focusMode {
 	case "tabs":
 		m.activeTab = min(m.activeTab+1, len(m.tabs)-1)
+	case "fields":
+		m.handleFieldRight()
 	case "buttons":
 		m.focusedButton = min(m.focusedButton+1, 1)
 	}
@@ -275,6 +279,46 @@ func (m *captureTabsModel) handleFieldUp() {
 	}
 }
 
+func (m *captureTabsModel) handleFieldLeft() {
+	switch m.activeTab {
+	case 0: // Serial tab
+		switch m.focusedField {
+		case 0: // Port
+			if len(m.availablePorts) > 0 && m.availablePorts[0] != "No ports found" {
+				if m.portCursor == 0 {
+					m.portCursor = len(m.availablePorts) - 1
+				} else {
+					m.portCursor--
+				}
+			}
+		case 1: // Baud
+			if len(m.baudRates) > 0 {
+				if m.baudCursor == 0 {
+					m.baudCursor = len(m.baudRates) - 1
+				} else {
+					m.baudCursor--
+				}
+			}
+		}
+	}
+}
+
+func (m *captureTabsModel) handleFieldRight() {
+	switch m.activeTab {
+	case 0: // Serial tab
+		switch m.focusedField {
+		case 0: // Port
+			if len(m.availablePorts) > 0 && m.availablePorts[0] != "No ports found" {
+				m.portCursor = (m.portCursor + 1) % len(m.availablePorts)
+			}
+		case 1: // Baud
+			if len(m.baudRates) > 0 {
+				m.baudCursor = (m.baudCursor + 1) % len(m.baudRates)
+			}
+		}
+	}
+}
+
 func (m *captureTabsModel) handleEnter() (tea.Model, tea.Cmd) {
 	switch m.focusMode {
 	case "tabs":
@@ -318,8 +362,7 @@ func (m *captureTabsModel) handleFieldSelect() {
 			if len(m.availablePorts) > 0 && m.availablePorts[0] != "No ports found" {
 				m.portCursor = (m.portCursor + 1) % len(m.availablePorts)
 			}
-		case 1: // Baud - cycle through
-			m.baudCursor = (m.baudCursor + 1) % len(m.baudRates)
+		case 1: // Baud uses left/right arrows
 		}
 	case 1: // TCP
 		// Toggle editing mode for text fields
@@ -412,15 +455,17 @@ func (m *captureTabsModel) View() string {
 	}
 
 	row := lipgloss.JoinHorizontal(lipgloss.Top, renderedTabs...)
+	innerWidth := lipgloss.Width(row) - windowStyle.GetHorizontalFrameSize()
+	if innerWidth < 0 {
+		innerWidth = 0
+	}
 
 	// Build content window with configuration UI
 	var windowContent strings.Builder
 	windowContent.WriteString("\n")
-	m.renderTabContent(&windowContent)
+	m.renderTabContent(&windowContent, innerWidth)
 	windowContent.WriteString("\n")
-
-	windowWidth := lipgloss.Width(row) - windowStyle.GetHorizontalFrameSize()
-	window := windowStyle.Width(windowWidth).Render(windowContent.String())
+	window := windowStyle.Width(innerWidth).Render(windowContent.String())
 
 	// Combine tabs and window
 	var tabbedBox strings.Builder
@@ -448,55 +493,57 @@ func (m *captureTabsModel) View() string {
 	return lipgloss.PlaceVertical(m.height, lipgloss.Center, content)
 }
 
-func (m *captureTabsModel) renderTabContent(content *strings.Builder) {
+func (m *captureTabsModel) renderTabContent(content *strings.Builder, innerWidth int) {
 	switch m.activeTab {
 	case 0:
-		m.renderSerialTab(content)
+		m.renderSerialTab(content, innerWidth)
 	case 1:
-		m.renderTCPTab(content)
+		m.renderTCPTab(content, innerWidth)
 	case 2:
-		m.renderFileTab(content)
+		m.renderFileTab(content, innerWidth)
 	}
 }
 
-func (m *captureTabsModel) renderSerialTab(content *strings.Builder) {
+func (m *captureTabsModel) renderSerialTab(content *strings.Builder, innerWidth int) {
 	// Port selection
 	portLabel := "Port:"
 	portValue := "No ports found"
 	if len(m.availablePorts) > 0 && m.availablePorts[0] != "No ports found" {
 		portValue = m.availablePorts[m.portCursor]
 	}
-	m.renderField(content, 0, portLabel, portValue, " (Enter to cycle)")
+	m.renderField(content, 0, portLabel, portValue, " (←/→ to change)", innerWidth)
 
 	// Baud selection
 	baudLabel := "Baud Rate:"
 	baudValue := fmt.Sprintf("%d", m.baudRates[m.baudCursor])
-	m.renderField(content, 1, baudLabel, baudValue, " (Enter to cycle)")
+	m.renderField(content, 1, baudLabel, baudValue, " (←/→ to change)", innerWidth)
 
 	// Advanced settings hint
 	content.WriteString("\n")
-	content.WriteString(StyleMuted.Render("  Press 'a' for advanced settings"))
+	hint := "  Press 'a' for advanced settings"
+	hint = fitStringToWidth(hint, innerWidth)
+	content.WriteString(StyleMuted.Render(hint))
 	content.WriteString("\n")
 }
 
-func (m *captureTabsModel) renderTCPTab(content *strings.Builder) {
+func (m *captureTabsModel) renderTCPTab(content *strings.Builder, innerWidth int) {
 	// Host input
 	hostValue := m.tcpHost
 	if m.focusMode == "fields" && m.focusedField == 0 && m.editingField {
 		hostValue += "_"
 	}
-	m.renderField(content, 0, "Host:", hostValue, " (Enter to edit)")
+	m.renderField(content, 0, "Host:", hostValue, " (Enter to edit)", innerWidth)
 
 	// Port input
 	portValue := m.tcpPort
 	if m.focusMode == "fields" && m.focusedField == 1 && m.editingField {
 		portValue += "_"
 	}
-	m.renderField(content, 1, "Port:", portValue, " (Enter to edit)")
+	m.renderField(content, 1, "Port:", portValue, " (Enter to edit)", innerWidth)
 	content.WriteString("\n")
 }
 
-func (m *captureTabsModel) renderFileTab(content *strings.Builder) {
+func (m *captureTabsModel) renderFileTab(content *strings.Builder, innerWidth int) {
 	// File path input
 	pathValue := m.filePath
 	if pathValue == "" {
@@ -505,11 +552,25 @@ func (m *captureTabsModel) renderFileTab(content *strings.Builder) {
 	if m.focusMode == "fields" && m.focusedField == 0 && m.editingField {
 		pathValue += "_"
 	}
-	m.renderField(content, 0, "File Path:", pathValue, " (Enter to edit)")
+	m.renderField(content, 0, "File Path:", pathValue, " (Enter to edit)", innerWidth)
 	content.WriteString("\n")
 }
 
-func (m *captureTabsModel) renderField(content *strings.Builder, fieldIndex int, label, value, hint string) {
+func fitStringToWidth(text string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return ""
+	}
+	runes := []rune(text)
+	if len(runes) <= maxWidth {
+		return text
+	}
+	if maxWidth <= 3 {
+		return strings.Repeat(".", maxWidth)
+	}
+	return string(runes[:maxWidth-3]) + "..."
+}
+
+func (m *captureTabsModel) renderField(content *strings.Builder, fieldIndex int, label, value, hint string, innerWidth int) {
 	isFocused := m.focusMode == "fields" && m.focusedField == fieldIndex
 
 	var cursorStr, labelStr, valueStr, hintStr string
@@ -517,12 +578,30 @@ func (m *captureTabsModel) renderField(content *strings.Builder, fieldIndex int,
 	if isFocused {
 		cursorStr = StyleCursor.Render("❯ ")
 		labelStr = StyleWarning.Render(fmt.Sprintf("%-12s", label))
-		valueStr = StyleValue.Render(value)
-		hintStr = StyleMuted.Render(hint)
 	} else {
 		cursorStr = "  "
 		labelStr = StyleKey.Render(fmt.Sprintf("%-12s", label))
-		valueStr = StyleValue.Render(value)
+	}
+
+	cursorWidth := lipgloss.Width(cursorStr)
+	labelWidth := lipgloss.Width(labelStr)
+	remaining := innerWidth - cursorWidth - labelWidth
+	if remaining < 0 {
+		remaining = 0
+	}
+
+	valueText := fitStringToWidth(value, remaining)
+	valueStr = StyleValue.Render(valueText)
+	valueWidth := lipgloss.Width(valueStr)
+	remaining -= valueWidth
+	if remaining < 0 {
+		remaining = 0
+	}
+
+	if isFocused && hint != "" && remaining > 0 {
+		hintText := fitStringToWidth(hint, remaining)
+		hintStr = StyleMuted.Render(hintText)
+	} else {
 		hintStr = ""
 	}
 
@@ -555,7 +634,7 @@ func (m *captureTabsModel) renderHelp(s *strings.Builder) {
 	case "tabs":
 		helpText = "←/→ or Tab: switch tabs • ↑/↓: enter fields • a: advanced • q: cancel"
 	case "fields":
-		helpText = "↑/↓: navigate fields • Enter: select/edit • a: advanced • q: cancel"
+		helpText = "↑/↓: navigate fields • Enter: select/edit • ←/→: adjust options • a: advanced • q: cancel"
 	case "buttons":
 		helpText = "←/→: select button • Enter: confirm • ↑: back to fields • q: cancel"
 	default:
