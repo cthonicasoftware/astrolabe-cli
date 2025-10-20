@@ -33,10 +33,10 @@
 
 ### 5) Supported sources (MVP)
 
-- **Serial ports** (USB-UART, RS-485, etc.)  
-- **Files** (CSV, JSONL, logs) for retroactive ingestion.  
-- **TCP sockets** (simple streaming sources).  
-- Future: USB (via libusb), SCPI instruments (DMM, scope).
+- **Serial ports** (USB-UART, RS-485, etc.) ✅ Implemented
+- **Files** (CSV, JSONL, logs) for retroactive ingestion ✅ Implemented
+- **TCP sockets** (simple streaming sources) ✅ Implemented
+- Future: USB (via libusb), SCPI instruments (DMM, scope)
 
 ### 6) Normalization & metadata
 
