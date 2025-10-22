@@ -10,6 +10,13 @@ import (
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/sources"
 )
 
+const (
+	settingParity      = 0
+	settingDatabits    = 1
+	settingStopbits    = 2
+	settingFlowcontrol = 3
+)
+
 type advancedSettingsModel struct {
 	sourceType string // "serial", "tcp", "file"
 	focusMode  string // "fields" or "buttons"
@@ -60,22 +67,10 @@ func NewAdvancedSettings(sourceType string, config sources.Config) *advancedSett
 
 	// Set indices based on current config (reusing sources package data)
 	if sourceType == "serial" {
-		m.parityIndex = optionIndex(sources.ParityOptions, config.Parity)
-		if m.parityIndex < 0 {
-			m.parityIndex = 0
-		}
-		m.dataBitsIndex = intIndex(sources.DataBitsOptions, config.DataBits)
-		if m.dataBitsIndex < 0 {
-			m.dataBitsIndex = 0
-		}
-		m.stopBitsIndex = optionIndex(sources.StopBitsOptions, config.StopBits)
-		if m.stopBitsIndex < 0 {
-			m.stopBitsIndex = 0
-		}
-		m.flowControlIndex = optionIndex(sources.FlowControlOptions, config.FlowControl)
-		if m.flowControlIndex < 0 {
-			m.flowControlIndex = 0
-		}
+		m.parityIndex = max(optionIndex(sources.ParityOptions, config.Parity), 0)
+		m.dataBitsIndex = max(intIndex(sources.DataBitsOptions, config.DataBits), 0)
+		m.stopBitsIndex = max(optionIndex(sources.StopBitsOptions, config.StopBits), 0)
+		m.flowControlIndex = max(optionIndex(sources.FlowControlOptions, config.FlowControl), 0)
 	}
 
 	return m
@@ -164,7 +159,7 @@ func (m *advancedSettingsModel) Update(msg tea.Msg) (*advancedSettingsModel, tea
 
 func (m *advancedSettingsModel) cycleOption(direction int) {
 	switch m.focusedField {
-	case 0: // parity
+	case settingParity:
 		if direction > 0 {
 			m.parityIndex = (m.parityIndex + 1) % len(sources.ParityOptions)
 		} else {
@@ -174,7 +169,7 @@ func (m *advancedSettingsModel) cycleOption(direction int) {
 				m.parityIndex = len(sources.ParityOptions) - 1
 			}
 		}
-	case 1: // data bits
+	case settingDatabits:
 		if direction > 0 {
 			m.dataBitsIndex = (m.dataBitsIndex + 1) % len(sources.DataBitsOptions)
 		} else {
@@ -184,7 +179,7 @@ func (m *advancedSettingsModel) cycleOption(direction int) {
 				m.dataBitsIndex = len(sources.DataBitsOptions) - 1
 			}
 		}
-	case 2: // stop bits
+	case settingStopbits:
 		if direction > 0 {
 			m.stopBitsIndex = (m.stopBitsIndex + 1) % len(sources.StopBitsOptions)
 		} else {
@@ -194,7 +189,7 @@ func (m *advancedSettingsModel) cycleOption(direction int) {
 				m.stopBitsIndex = len(sources.StopBitsOptions) - 1
 			}
 		}
-	case 3: // flow control
+	case settingFlowcontrol:
 		if direction > 0 {
 			m.flowControlIndex = (m.flowControlIndex + 1) % len(sources.FlowControlOptions)
 		} else {
@@ -249,6 +244,7 @@ func (m *advancedSettingsModel) View() string {
 	// Help text
 	var help strings.Builder
 	help.WriteString("\n\n")
+	//TODO: Centralize help navigation strings
 	help.WriteString(StyleHelp.Render("↑/↓: navigate • ←/→/Space/Enter: change • Esc: cancel"))
 
 	// Combine box and help
@@ -280,13 +276,13 @@ func (m *advancedSettingsModel) renderSerialSettings(content *strings.Builder) {
 		var cursorStr, labelStr, valueStr, indicatorStr string
 
 		if isFocused {
-			cursorStr = StyleCursor.Render("❯ ")
-			labelStr = StyleWarning.Copy().UnsetWidth().Render(fmt.Sprintf("%-14s", setting.label))
+			cursorStr = StyleCursor.Render(IconSelectedItem)
+			labelStr = StyleWarning.UnsetWidth().Render(fmt.Sprintf("%-14s", setting.label))
 			valueStr = StyleValue.Render(setting.value)
 			indicatorStr = StyleMuted.Render(" ←/→")
 		} else {
 			cursorStr = "  "
-			labelStr = StyleKey.Copy().UnsetWidth().Render(fmt.Sprintf("%-14s", setting.label))
+			labelStr = StyleKey.UnsetWidth().Render(fmt.Sprintf("%-14s", setting.label))
 			valueStr = StyleValue.Render(setting.value)
 			indicatorStr = ""
 		}
