@@ -789,8 +789,7 @@ func (m *captureTabsModel) renderField(content *strings.Builder, fieldIndex int,
 	labelWidth := lipgloss.Width(labelStr)
 	remaining := max(innerWidth-cursorWidth-labelWidth, 0)
 
-	valueText := fitStringToWidth(value, remaining)
-	valueStr = StyleValue.Render(valueText)
+	valueStr = StyleValue.Render(value)
 	valueWidth := lipgloss.Width(valueStr)
 	remaining -= valueWidth
 	if remaining < 0 {

@@ -7,7 +7,6 @@ import (
 )
 
 const menuWidth = 44
-const styleKeyWidth = 8
 const marginSize = 1
 
 // Color Palette - centralized color definitions
@@ -106,8 +105,7 @@ var (
 
 	// Key-value display
 	StyleKey = lipgloss.NewStyle().
-			Foreground(ColorMuted).
-			Width(styleKeyWidth)
+			Foreground(ColorMuted)
 
 	StyleValue = lipgloss.NewStyle().
 			Foreground(ColorPrimary).
