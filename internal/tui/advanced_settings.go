@@ -281,12 +281,12 @@ func (m *advancedSettingsModel) renderSerialSettings(content *strings.Builder) {
 
 		if isFocused {
 			cursorStr = StyleCursor.Render("❯ ")
-			labelStr = StyleWarning.Render(fmt.Sprintf("%-14s", setting.label))
+			labelStr = StyleWarning.Copy().UnsetWidth().Render(fmt.Sprintf("%-14s", setting.label))
 			valueStr = StyleValue.Render(setting.value)
 			indicatorStr = StyleMuted.Render(" ←/→")
 		} else {
 			cursorStr = "  "
-			labelStr = StyleKey.Render(fmt.Sprintf("%-14s", setting.label))
+			labelStr = StyleKey.Copy().UnsetWidth().Render(fmt.Sprintf("%-14s", setting.label))
 			valueStr = StyleValue.Render(setting.value)
 			indicatorStr = ""
 		}

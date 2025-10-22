@@ -211,12 +211,6 @@ func (m *captureTabsModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "enter", " ":
 		return m.handleEnter()
-
-	default:
-		// Handle text input for TCP fields
-		if m.activeTab == 1 && m.focusMode == "fields" && m.editingField {
-			return m.handleTextInput(msg.String()), nil
-		}
 	}
 
 	return m, nil
@@ -379,6 +373,8 @@ func (m *captureTabsModel) handleFieldSelect() {
 	case 1: // TCP
 		// Toggle editing mode for text fields
 		m.editingField = !m.editingField
+		// Sync tcpCursor with focusedField
+		m.tcpCursor = m.focusedField
 	}
 }
 
@@ -467,10 +463,10 @@ func (m *captureTabsModel) View() string {
 	}
 
 	row := lipgloss.JoinHorizontal(lipgloss.Top, renderedTabs...)
-	innerWidth := lipgloss.Width(row) - windowStyle.GetHorizontalFrameSize()
-	if innerWidth < 0 {
-		innerWidth = 0
-	}
+	// Use a minimum width to avoid cramped appearance
+	minWidth := 60
+	tabWidth := lipgloss.Width(row) - windowStyle.GetHorizontalFrameSize()
+	innerWidth := max(minWidth, tabWidth)
 
 	// Build content window with configuration UI
 	var windowContent strings.Builder
@@ -589,18 +585,15 @@ func (m *captureTabsModel) renderField(content *strings.Builder, fieldIndex int,
 
 	if isFocused {
 		cursorStr = StyleCursor.Render("❯ ")
-		labelStr = StyleWarning.Render(fmt.Sprintf("%-12s", label))
+		labelStr = StyleWarning.Copy().UnsetWidth().Render(fmt.Sprintf("%-12s", label))
 	} else {
 		cursorStr = "  "
-		labelStr = StyleKey.Render(fmt.Sprintf("%-12s", label))
+		labelStr = StyleKey.Copy().UnsetWidth().Render(fmt.Sprintf("%-12s", label))
 	}
 
 	cursorWidth := lipgloss.Width(cursorStr)
 	labelWidth := lipgloss.Width(labelStr)
-	remaining := innerWidth - cursorWidth - labelWidth
-	if remaining < 0 {
-		remaining = 0
-	}
+	remaining := max(innerWidth-cursorWidth-labelWidth, 0)
 
 	valueText := fitStringToWidth(value, remaining)
 	valueStr = StyleValue.Render(valueText)
