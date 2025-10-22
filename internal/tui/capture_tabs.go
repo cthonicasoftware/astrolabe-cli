@@ -153,6 +153,18 @@ func (m *captureTabsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *captureTabsModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Handle text input first when in editing mode
+	if m.activeTab == 1 && m.focusMode == "fields" && m.editingField {
+		key := msg.String()
+		// Allow esc and enter to exit edit mode
+		if key != "esc" && key != "enter" {
+			return m.handleTextInput(key), nil
+		}
+		// esc or enter exits edit mode
+		m.editingField = false
+		return m, nil
+	}
+
 	switch msg.String() {
 	case "ctrl+c":
 		return m, tea.Quit
