@@ -66,7 +66,6 @@ func tabBorderWithBottom(left, middle, right string) lipgloss.Border {
 var (
 	inactiveTabBorder = tabBorderWithBottom("┴", "─", "┴")
 	activeTabBorder   = tabBorderWithBottom("┘", " ", "└")
-	docStyle          = lipgloss.NewStyle().Padding(1, 2, 1, 2)
 	inactiveTabStyle  = lipgloss.NewStyle().Border(inactiveTabBorder, true).BorderForeground(ColorPrimary).Padding(0, 1)
 	//DO NOT CHANGE THE COLOR. IT LOOKS BAD!!!
 	activeTabStyle = inactiveTabStyle.Border(activeTabBorder, true)
@@ -123,16 +122,18 @@ const (
 )
 
 // UI text constants
+// TODO: Centralize all Help Warn and Placholder strings for app-wide consistency
 const (
+	HelpSeparator     = "•"
 	HelpEnterEditMode = " (Enter to edit)"
-	HelpArrowsChange  = " (←/→ to change)"
+	HelpArrowsChange  = " ←/→"
 	WarnNoPortsFound  = "No ports found"
 	PlaceholderNotSet = "(not set)"
 )
 
 // Field formatting
 const (
-	LabelWidth    = 12
+	LabelWidth    = 14
 	CursorPadding = "  "
 )
 
@@ -558,18 +559,20 @@ func (m *captureTabsModel) buildTCPContent() string {
 	content.WriteString("\n")
 
 	// Host field
+	hostLabel := "Host:"
 	hostValue := m.tcpHost
 	if m.focusMode == FocusModeFields && m.focusedField == TCPFieldHost && m.editingField {
 		hostValue += "_"
 	}
-	m.buildField(&content, TCPFieldHost, "Host:", hostValue, HelpEnterEditMode)
+	m.buildField(&content, TCPFieldHost, hostLabel, hostValue, HelpEnterEditMode)
 
 	// Port field
+	portLabel := "Port:"
 	portValue := m.tcpPort
 	if m.focusMode == FocusModeFields && m.focusedField == TCPFieldPort && m.editingField {
 		portValue += "_"
 	}
-	m.buildField(&content, TCPFieldPort, "Port:", portValue, HelpEnterEditMode)
+	m.buildField(&content, TCPFieldPort, portLabel, portValue, HelpEnterEditMode)
 	content.WriteString("\n")
 
 	return content.String()
@@ -581,6 +584,7 @@ func (m *captureTabsModel) buildFileContent() string {
 	content.WriteString("\n")
 
 	// File path field
+	pathLabel := "File Path:"
 	pathValue := m.filePath
 	if pathValue == "" {
 		pathValue = PlaceholderNotSet
@@ -588,7 +592,7 @@ func (m *captureTabsModel) buildFileContent() string {
 	if m.focusMode == FocusModeFields && m.focusedField == FileFieldPath && m.editingField {
 		pathValue += "_"
 	}
-	m.buildField(&content, FileFieldPath, "File Path:", pathValue, HelpEnterEditMode)
+	m.buildField(&content, FileFieldPath, pathLabel, pathValue, HelpEnterEditMode)
 	content.WriteString("\n")
 
 	return content.String()
@@ -602,18 +606,11 @@ func (m *captureTabsModel) buildField(content *strings.Builder, fieldIndex int, 
 	var cursorStr, labelStr, valueStr, hintStr string
 
 	if isFocused {
-		cursorStr = StyleCursor.Render("❯ ")
-		// Create new style instead of using deprecated Copy()
-		warningStyle := lipgloss.NewStyle().
-			Foreground(ColorWarning).
-			Bold(true)
-		labelStr = warningStyle.Render(fmt.Sprintf("%-*s", LabelWidth, label))
+		cursorStr = StyleSelected.Render(IconSelectedItem)
+		labelStr = StyleSelected.Render(fmt.Sprintf("%-*s", LabelWidth, label))
 	} else {
-		cursorStr = CursorPadding
-		// Create new style instead of using deprecated Copy()
-		keyStyle := lipgloss.NewStyle().
-			Foreground(ColorMuted)
-		labelStr = keyStyle.Render(fmt.Sprintf("%-*s", LabelWidth, label))
+		cursorStr = StyleUnselected.Render(CursorPadding)
+		labelStr = StyleUnselected.Render(fmt.Sprintf("%-*s", LabelWidth, label))
 	}
 
 	valueStr = StyleValue.Render(value)
@@ -660,6 +657,7 @@ func (m *captureTabsModel) View() string {
 
 	row := lipgloss.JoinHorizontal(lipgloss.Top, renderedTabs...)
 	//TODO: Investigate why adding to tabWidth breaks top of border.
+	// need to pad with "─" about the row content?
 	tabWidth := lipgloss.Width(row) - windowStyle.GetHorizontalFrameSize()
 
 	//Build window
@@ -704,41 +702,46 @@ func (m *captureTabsModel) renderTabContent(content *strings.Builder, innerWidth
 func (m *captureTabsModel) renderSerialTab(content *strings.Builder, innerWidth int) {
 	// Port selection
 	portLabel := "Port:"
-	portValue := "No ports found"
-	if len(m.availablePorts) > 0 && m.availablePorts[0] != "No ports found" {
+	portValue := WarnNoPortsFound
+	if len(m.availablePorts) > 0 && m.availablePorts[0] != WarnNoPortsFound {
 		portValue = m.availablePorts[m.portCursor]
 	}
-	m.renderField(content, 0, portLabel, portValue, " (←/→ to change)", innerWidth)
+	m.renderField(content, 0, portLabel, portValue, HelpArrowsChange, innerWidth)
 
 	// Baud selection
 	baudLabel := "Baud Rate:"
 	baudValue := fmt.Sprintf("%d", m.baudRates[m.baudCursor])
-	m.renderField(content, 1, baudLabel, baudValue, " (←/→ to change)", innerWidth)
+	m.renderField(content, 1, baudLabel, baudValue, HelpArrowsChange, innerWidth)
 
-	// Advanced settings hint
 	content.WriteString("\n")
-	content.WriteString("\n")
+	s := content.String()
+	lipgloss.PlaceHorizontal(innerWidth, lipgloss.Left, s)
 }
 
 func (m *captureTabsModel) renderTCPTab(content *strings.Builder, innerWidth int) {
 	// Host input
+	hostLabel := "Host:"
 	hostValue := m.tcpHost
 	if m.focusMode == "fields" && m.focusedField == 0 && m.editingField {
 		hostValue += "_"
 	}
-	m.renderField(content, 0, "Host:", hostValue, " (Enter to edit)", innerWidth)
+	m.renderField(content, 0, hostLabel, hostValue, HelpEnterEditMode, innerWidth)
 
 	// Port input
+	portLabel := "Port:"
 	portValue := m.tcpPort
 	if m.focusMode == "fields" && m.focusedField == 1 && m.editingField {
 		portValue += "_"
 	}
-	m.renderField(content, 1, "Port:", portValue, " (Enter to edit)", innerWidth)
+	m.renderField(content, 1, portLabel, portValue, HelpEnterEditMode, innerWidth)
+
 	content.WriteString("\n")
 }
 
 func (m *captureTabsModel) renderFileTab(content *strings.Builder, innerWidth int) {
 	// File path input
+
+	pathLabel := "File Path:"
 	pathValue := m.filePath
 	if pathValue == "" {
 		pathValue = "(not set)"
@@ -746,7 +749,11 @@ func (m *captureTabsModel) renderFileTab(content *strings.Builder, innerWidth in
 	if m.focusMode == "fields" && m.focusedField == 0 && m.editingField {
 		pathValue += "_"
 	}
-	m.renderField(content, 0, "File Path:", pathValue, " (Enter to edit)", innerWidth)
+	m.renderField(content, 0, pathLabel, pathValue, HelpEnterEditMode, innerWidth)
+
+	//TODO: replace with extra field if needed
+	content.WriteString("\n")
+
 	content.WriteString("\n")
 }
 
@@ -764,17 +771,18 @@ func fitStringToWidth(text string, maxWidth int) string {
 	return string(runes[:maxWidth-3]) + "..."
 }
 
+// TODO: Left justify fields
 func (m *captureTabsModel) renderField(content *strings.Builder, fieldIndex int, label, value, hint string, innerWidth int) {
 	isFocused := m.focusMode == "fields" && m.focusedField == fieldIndex
 
 	var cursorStr, labelStr, valueStr, hintStr string
 
 	if isFocused {
-		cursorStr = StyleCursor.Render("❯ ")
-		labelStr = StyleWarning.UnsetWidth().Render(fmt.Sprintf("%-12s", label))
+		cursorStr = StyleCursor.Render(IconSelectedItem)
+		labelStr = StyleWarning.UnsetWidth().Render(fmt.Sprintf("%-14s", label))
 	} else {
-		cursorStr = "  "
-		labelStr = StyleKey.UnsetWidth().Render(fmt.Sprintf("%-12s", label))
+		cursorStr = CursorPadding
+		labelStr = StyleKey.UnsetWidth().Render(fmt.Sprintf("%-14s", label))
 	}
 
 	cursorWidth := lipgloss.Width(cursorStr)
