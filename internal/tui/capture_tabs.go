@@ -14,13 +14,14 @@ import (
 
 type captureTabsModel struct {
 	// Tab state
-	tabs      []string
-	activeTab int
+	tabs       []string
+	tabContent []string // Pre-rendered content for each tab
+	activeTab  int
 
 	// Focus state
-	focusMode     string // "tabs", "fields", "buttons", "advanced"
+	focusMode     string // FocusModeTabs, FocusModeFields, FocusModeButtons, FocusModeAdvanced
 	focusedField  int    // which field in active tab
-	focusedButton int    // 0=Confirm, 1=Reset
+	focusedButton int    // ButtonIndexConfirm or ButtonIndexReset
 
 	// Serial configuration
 	serialConfig   sources.Config
@@ -43,6 +44,10 @@ type captureTabsModel struct {
 	showAdvanced  bool
 	advancedModel *advancedSettingsModel
 
+	// Buttons
+	buttonConfirm string
+	buttonCancel  string
+
 	// Result
 	confirmed      bool
 	selectedSource string
@@ -61,17 +66,81 @@ func tabBorderWithBottom(left, middle, right string) lipgloss.Border {
 var (
 	inactiveTabBorder = tabBorderWithBottom("┴", "─", "┴")
 	activeTabBorder   = tabBorderWithBottom("┘", " ", "└")
+	docStyle          = lipgloss.NewStyle().Padding(1, 2, 1, 2)
 	inactiveTabStyle  = lipgloss.NewStyle().Border(inactiveTabBorder, true).BorderForeground(ColorPrimary).Padding(0, 1)
 	//DO NOT CHANGE THE COLOR. IT LOOKS BAD!!!
 	activeTabStyle = inactiveTabStyle.Border(activeTabBorder, true)
 	windowStyle    = lipgloss.NewStyle().BorderForeground(ColorPrimary).Padding(2, 0).Align(lipgloss.Center).Border(lipgloss.NormalBorder()).UnsetBorderTop()
 )
 
+// Tab indices
+const (
+	TabIndexSerial = 0
+	TabIndexTCP    = 1
+	TabIndexFile   = 2
+	TabCount       = 3
+)
+
+// Field indices for Serial tab
+const (
+	SerialFieldPort  = 0
+	SerialFieldBaud  = 1
+	SerialFieldCount = 2
+)
+
+// Field indices for TCP tab
+const (
+	TCPFieldHost  = 0
+	TCPFieldPort  = 1
+	TCPFieldCount = 2
+)
+
+// Field indices for File tab
+const (
+	FileFieldPath  = 0
+	FileFieldCount = 1
+)
+
+// Button indices
+const (
+	ButtonIndexConfirm = 0
+	ButtonIndexReset   = 1
+)
+
+// Focus modes
+const (
+	FocusModeTabs     = "tabs"
+	FocusModeFields   = "fields"
+	FocusModeButtons  = "buttons"
+	FocusModeAdvanced = "advanced"
+)
+
+// Source type identifiers
+const (
+	SourceTypeSerial = "serial"
+	SourceTypeTCP    = "tcp"
+	SourceTypeFile   = "file"
+)
+
+// UI text constants
+const (
+	HelpEnterEditMode = " (Enter to edit)"
+	HelpArrowsChange  = " (←/→ to change)"
+	WarnNoPortsFound  = "No ports found"
+	PlaceholderNotSet = "(not set)"
+)
+
+// Field formatting
+const (
+	LabelWidth    = 12
+	CursorPadding = "  "
+)
+
 func NewCaptureTabs() tea.Model {
 	// Get available serial ports
 	ports, err := serial.GetPortsList()
 	if err != nil || len(ports) == 0 {
-		ports = []string{"No ports found"}
+		ports = []string{WarnNoPortsFound}
 	}
 	sort.Strings(ports)
 
@@ -84,21 +153,25 @@ func NewCaptureTabs() tea.Model {
 			IconMenuTCP + "TCP",
 			IconMenuNewFile + "File",
 		},
-		activeTab:      0,
-		focusMode:      "tabs",
+		tabContent:     make([]string, TabCount),
+		activeTab:      TabIndexSerial,
+		focusMode:      FocusModeTabs,
 		focusedField:   0,
-		focusedButton:  0,
+		focusedButton:  ButtonIndexConfirm,
 		serialConfig:   defaultCfg,
 		availablePorts: ports,
 		baudRates:      append([]int(nil), sources.CommonBaudRates...),
-		portCursor:     0,
+		portCursor:     SerialFieldPort,
 		baudCursor:     findBaudIndex(sources.CommonBaudRates, defaultCfg.Baud),
 		tcpHost:        "localhost",
 		tcpPort:        "9000",
-		tcpCursor:      0,
+		tcpCursor:      TCPFieldHost,
 		filePath:       "",
-		fileCursor:     0,
+		fileCursor:     FileFieldPath,
 	}
+
+	// Initialize tab content
+	m.updateTabContent()
 
 	return m
 }
@@ -130,7 +203,8 @@ func (m *captureTabsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// Close the dialog (whether applied or canceled)
 			m.showAdvanced = false
-			m.focusMode = "fields"
+			m.focusMode = FocusModeFields
+			m.updateTabContent() // Refresh content after applying settings
 		}
 		return m, cmd
 	}
@@ -154,7 +228,7 @@ func (m *captureTabsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *captureTabsModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Handle text input first when in editing mode
-	if m.activeTab == 1 && m.focusMode == "fields" && m.editingField {
+	if m.activeTab == TabIndexTCP && m.focusMode == FocusModeFields && m.editingField {
 		key := msg.String()
 		// Allow esc and enter to exit edit mode
 		if key != "esc" && key != "enter" {
@@ -162,6 +236,7 @@ func (m *captureTabsModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		// esc or enter exits edit mode
 		m.editingField = false
+		m.updateTabContent() // Refresh to remove cursor
 		return m, nil
 	}
 
@@ -176,12 +251,12 @@ func (m *captureTabsModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "a":
 		// Open advanced settings for current tab
-		if m.activeTab == 0 { // Serial tab
+		if m.activeTab == TabIndexSerial {
 			m.showAdvanced = true
-			m.advancedModel = NewAdvancedSettings("serial", m.serialConfig)
+			m.advancedModel = NewAdvancedSettings(SourceTypeSerial, m.serialConfig)
 			m.advancedModel.width = m.width
 			m.advancedModel.height = m.height
-			m.focusMode = "advanced"
+			m.focusMode = FocusModeAdvanced
 		}
 		return m, nil
 
@@ -193,7 +268,7 @@ func (m *captureTabsModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.activeTab = max(m.activeTab-1, 0)
 		}
 		// Reset field focus when switching tabs
-		m.focusMode = "tabs"
+		m.focusMode = FocusModeTabs
 		m.focusedField = 0
 		return m, nil
 
@@ -218,39 +293,39 @@ func (m *captureTabsModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *captureTabsModel) handleLeft() tea.Model {
 	switch m.focusMode {
-	case "tabs":
+	case FocusModeTabs:
 		m.activeTab = max(m.activeTab-1, 0)
-	case "fields":
+	case FocusModeFields:
 		m.handleFieldLeft()
-	case "buttons":
-		m.focusedButton = max(m.focusedButton-1, 0)
+	case FocusModeButtons:
+		m.focusedButton = max(m.focusedButton-1, ButtonIndexConfirm)
 	}
 	return m
 }
 
 func (m *captureTabsModel) handleRight() tea.Model {
 	switch m.focusMode {
-	case "tabs":
+	case FocusModeTabs:
 		m.activeTab = min(m.activeTab+1, len(m.tabs)-1)
-	case "fields":
+	case FocusModeFields:
 		m.handleFieldRight()
-	case "buttons":
-		m.focusedButton = min(m.focusedButton+1, 1)
+	case FocusModeButtons:
+		m.focusedButton = min(m.focusedButton+1, ButtonIndexReset)
 	}
 	return m
 }
 
 func (m *captureTabsModel) handleUp() tea.Model {
 	switch m.focusMode {
-	case "tabs":
+	case FocusModeTabs:
 		// Enter fields mode
-		m.focusMode = "fields"
+		m.focusMode = FocusModeFields
 		m.focusedField = 0
-	case "fields":
+	case FocusModeFields:
 		m.handleFieldUp()
-	case "buttons":
+	case FocusModeButtons:
 		// Go back to fields
-		m.focusMode = "fields"
+		m.focusMode = FocusModeFields
 		m.focusedField = m.getMaxField()
 	}
 	return m
@@ -258,18 +333,18 @@ func (m *captureTabsModel) handleUp() tea.Model {
 
 func (m *captureTabsModel) handleDown() tea.Model {
 	switch m.focusMode {
-	case "tabs":
+	case FocusModeTabs:
 		// Enter fields mode
-		m.focusMode = "fields"
+		m.focusMode = FocusModeFields
 		m.focusedField = 0
-	case "fields":
+	case FocusModeFields:
 		if m.focusedField < m.getMaxField() {
 			m.focusedField++
 			m.editingField = false
 		} else {
 			// Move to buttons
-			m.focusMode = "buttons"
-			m.focusedButton = 0
+			m.focusMode = FocusModeButtons
+			m.focusedButton = ButtonIndexConfirm
 		}
 	}
 	return m
@@ -281,29 +356,31 @@ func (m *captureTabsModel) handleFieldUp() {
 		m.editingField = false
 	} else {
 		// Go back to tabs
-		m.focusMode = "tabs"
+		m.focusMode = FocusModeTabs
 	}
 }
 
 func (m *captureTabsModel) handleFieldLeft() {
 	switch m.activeTab {
-	case 0: // Serial tab
+	case TabIndexSerial:
 		switch m.focusedField {
-		case 0: // Port
-			if len(m.availablePorts) > 0 && m.availablePorts[0] != "No ports found" {
+		case SerialFieldPort:
+			if len(m.availablePorts) > 0 && m.availablePorts[0] != WarnNoPortsFound {
 				if m.portCursor == 0 {
 					m.portCursor = len(m.availablePorts) - 1
 				} else {
 					m.portCursor--
 				}
+				m.updateTabContent()
 			}
-		case 1: // Baud
+		case SerialFieldBaud:
 			if len(m.baudRates) > 0 {
 				if m.baudCursor == 0 {
 					m.baudCursor = len(m.baudRates) - 1
 				} else {
 					m.baudCursor--
 				}
+				m.updateTabContent()
 			}
 		}
 	}
@@ -311,15 +388,17 @@ func (m *captureTabsModel) handleFieldLeft() {
 
 func (m *captureTabsModel) handleFieldRight() {
 	switch m.activeTab {
-	case 0: // Serial tab
+	case TabIndexSerial:
 		switch m.focusedField {
-		case 0: // Port
-			if len(m.availablePorts) > 0 && m.availablePorts[0] != "No ports found" {
+		case SerialFieldPort:
+			if len(m.availablePorts) > 0 && m.availablePorts[0] != WarnNoPortsFound {
 				m.portCursor = (m.portCursor + 1) % len(m.availablePorts)
+				m.updateTabContent()
 			}
-		case 1: // Baud
+		case SerialFieldBaud:
 			if len(m.baudRates) > 0 {
 				m.baudCursor = (m.baudCursor + 1) % len(m.baudRates)
+				m.updateTabContent()
 			}
 		}
 	}
@@ -327,28 +406,28 @@ func (m *captureTabsModel) handleFieldRight() {
 
 func (m *captureTabsModel) handleEnter() (tea.Model, tea.Cmd) {
 	switch m.focusMode {
-	case "tabs":
+	case FocusModeTabs:
 		// Enter fields mode
-		m.focusMode = "fields"
+		m.focusMode = FocusModeFields
 		m.focusedField = 0
-	case "fields":
+	case FocusModeFields:
 		m.handleFieldSelect()
-	case "buttons":
-		if m.focusedButton == 0 {
+	case FocusModeButtons:
+		if m.focusedButton == ButtonIndexConfirm {
 			// Confirm
 			m.confirmed = true
 			switch m.activeTab {
-			case 0:
-				m.selectedSource = "serial"
+			case TabIndexSerial:
+				m.selectedSource = SourceTypeSerial
 				// Set port from selected cursor
-				if len(m.availablePorts) > 0 && m.availablePorts[0] != "No ports found" {
+				if len(m.availablePorts) > 0 && m.availablePorts[0] != WarnNoPortsFound {
 					m.serialConfig.Port = m.availablePorts[m.portCursor]
 				}
 				m.serialConfig.Baud = m.baudRates[m.baudCursor]
-			case 1:
-				m.selectedSource = "tcp"
-			case 2:
-				m.selectedSource = "file"
+			case TabIndexTCP:
+				m.selectedSource = SourceTypeTCP
+			case TabIndexFile:
+				m.selectedSource = SourceTypeFile
 			}
 			return m, tea.Quit
 		} else {
@@ -362,15 +441,17 @@ func (m *captureTabsModel) handleEnter() (tea.Model, tea.Cmd) {
 
 func (m *captureTabsModel) handleFieldSelect() {
 	switch m.activeTab {
-	case 0: // Serial
+	case TabIndexSerial:
 		switch m.focusedField {
-		case 0: // Port - cycle through
-			if len(m.availablePorts) > 0 && m.availablePorts[0] != "No ports found" {
+		case SerialFieldPort:
+			if len(m.availablePorts) > 0 && m.availablePorts[0] != WarnNoPortsFound {
 				m.portCursor = (m.portCursor + 1) % len(m.availablePorts)
+				m.updateTabContent()
 			}
-		case 1: // Baud uses left/right arrows
+		case SerialFieldBaud:
+			// Baud uses left/right arrows
 		}
-	case 1: // TCP
+	case TabIndexTCP:
 		// Toggle editing mode for text fields
 		m.editingField = !m.editingField
 		// Sync tcpCursor with focusedField
@@ -379,25 +460,29 @@ func (m *captureTabsModel) handleFieldSelect() {
 }
 
 func (m *captureTabsModel) handleTextInput(key string) tea.Model {
-	if m.activeTab != 1 {
+	if m.activeTab != TabIndexTCP {
 		return m
 	}
 
 	switch key {
 	case "backspace":
-		if m.tcpCursor == 0 && len(m.tcpHost) > 0 {
+		if m.tcpCursor == TCPFieldHost && len(m.tcpHost) > 0 {
 			m.tcpHost = m.tcpHost[:len(m.tcpHost)-1]
-		} else if m.tcpCursor == 1 && len(m.tcpPort) > 0 {
+			m.updateTabContent()
+		} else if m.tcpCursor == TCPFieldPort && len(m.tcpPort) > 0 {
 			m.tcpPort = m.tcpPort[:len(m.tcpPort)-1]
+			m.updateTabContent()
 		}
 	default:
 		if len(key) == 1 {
-			if m.tcpCursor == 0 {
+			if m.tcpCursor == TCPFieldHost {
 				m.tcpHost += key
-			} else if m.tcpCursor == 1 {
+				m.updateTabContent()
+			} else if m.tcpCursor == TCPFieldPort {
 				// Only allow digits for port
 				if key >= "0" && key <= "9" {
 					m.tcpPort += key
+					m.updateTabContent()
 				}
 			}
 		}
@@ -407,29 +492,139 @@ func (m *captureTabsModel) handleTextInput(key string) tea.Model {
 
 func (m *captureTabsModel) getMaxField() int {
 	switch m.activeTab {
-	case 0: // Serial: Port, Baud
-		return 1
-	case 1: // TCP: Host, Port
-		return 1
-	case 2: // File: Path
-		return 0
+	case TabIndexSerial:
+		return SerialFieldCount - 1 // Return max index, not count
+	case TabIndexTCP:
+		return TCPFieldCount - 1 // Return max index, not count
+	case TabIndexFile:
+		return FileFieldCount - 1 // Return max index, not count
 	}
 	return 0
 }
 
 func (m *captureTabsModel) resetCurrentTab() {
 	switch m.activeTab {
-	case 0: // Serial
+	case TabIndexSerial:
 		defaultCfg := sources.DefaultConfig()
 		m.serialConfig = defaultCfg
-		m.portCursor = 0
+		m.portCursor = SerialFieldPort
 		m.baudCursor = findBaudIndex(m.baudRates, defaultCfg.Baud)
-	case 1: // TCP
+	case TabIndexTCP:
 		m.tcpHost = "localhost"
 		m.tcpPort = "9000"
-	case 2: // File
+	case TabIndexFile:
 		m.filePath = ""
 	}
+	m.updateTabContent()
+}
+
+// updateTabContent refreshes the content for all tabs based on current state.
+// This follows the Single Responsibility Principle by separating content generation from rendering.
+func (m *captureTabsModel) updateTabContent() {
+	m.tabContent[TabIndexSerial] = m.buildSerialContent()
+	m.tabContent[TabIndexTCP] = m.buildTCPContent()
+	m.tabContent[TabIndexFile] = m.buildFileContent()
+}
+
+// buildSerialContent generates the serial tab content.
+// Separated method for maintainability (Single Responsibility).
+func (m *captureTabsModel) buildSerialContent() string {
+	var content strings.Builder
+	content.WriteString("\n")
+
+	// Port field
+	portLabel := "Port:"
+	portValue := WarnNoPortsFound
+	if len(m.availablePorts) > 0 && m.availablePorts[0] != WarnNoPortsFound {
+		portValue = m.availablePorts[m.portCursor]
+	}
+	m.buildField(&content, SerialFieldPort, portLabel, portValue, HelpArrowsChange)
+
+	// Baud field
+	baudLabel := "Baud Rate:"
+	baudValue := fmt.Sprintf("%d", m.baudRates[m.baudCursor])
+	m.buildField(&content, SerialFieldBaud, baudLabel, baudValue, HelpArrowsChange)
+
+	// Advanced settings hint
+	content.WriteString("\n")
+	content.WriteString("\n")
+
+	return content.String()
+}
+
+// buildTCPContent generates the TCP tab content.
+func (m *captureTabsModel) buildTCPContent() string {
+	var content strings.Builder
+	content.WriteString("\n")
+
+	// Host field
+	hostValue := m.tcpHost
+	if m.focusMode == FocusModeFields && m.focusedField == TCPFieldHost && m.editingField {
+		hostValue += "_"
+	}
+	m.buildField(&content, TCPFieldHost, "Host:", hostValue, HelpEnterEditMode)
+
+	// Port field
+	portValue := m.tcpPort
+	if m.focusMode == FocusModeFields && m.focusedField == TCPFieldPort && m.editingField {
+		portValue += "_"
+	}
+	m.buildField(&content, TCPFieldPort, "Port:", portValue, HelpEnterEditMode)
+	content.WriteString("\n")
+
+	return content.String()
+}
+
+// buildFileContent generates the file tab content.
+func (m *captureTabsModel) buildFileContent() string {
+	var content strings.Builder
+	content.WriteString("\n")
+
+	// File path field
+	pathValue := m.filePath
+	if pathValue == "" {
+		pathValue = PlaceholderNotSet
+	}
+	if m.focusMode == FocusModeFields && m.focusedField == FileFieldPath && m.editingField {
+		pathValue += "_"
+	}
+	m.buildField(&content, FileFieldPath, "File Path:", pathValue, HelpEnterEditMode)
+	content.WriteString("\n")
+
+	return content.String()
+}
+
+// buildField constructs a field line with cursor, label, value, and hint.
+// This method provides a consistent field rendering interface (Interface Segregation).
+func (m *captureTabsModel) buildField(content *strings.Builder, fieldIndex int, label, value, hint string) {
+	isFocused := m.focusMode == FocusModeFields && m.focusedField == fieldIndex
+
+	var cursorStr, labelStr, valueStr, hintStr string
+
+	if isFocused {
+		cursorStr = StyleCursor.Render("❯ ")
+		// Create new style instead of using deprecated Copy()
+		warningStyle := lipgloss.NewStyle().
+			Foreground(ColorWarning).
+			Bold(true)
+		labelStr = warningStyle.Render(fmt.Sprintf("%-*s", LabelWidth, label))
+	} else {
+		cursorStr = CursorPadding
+		// Create new style instead of using deprecated Copy()
+		keyStyle := lipgloss.NewStyle().
+			Foreground(ColorMuted)
+		labelStr = keyStyle.Render(fmt.Sprintf("%-*s", LabelWidth, label))
+	}
+
+	valueStr = StyleValue.Render(value)
+
+	if isFocused && hint != "" {
+		hintStr = StyleMuted.Render(hint)
+	} else {
+		hintStr = ""
+	}
+
+	content.WriteString(cursorStr + labelStr + valueStr + hintStr + "\n")
 }
 
 func (m *captureTabsModel) View() string {
@@ -440,6 +635,7 @@ func (m *captureTabsModel) View() string {
 
 	// Build tabs
 	var renderedTabs []string
+
 	for i, t := range m.tabs {
 		var style lipgloss.Style
 		isFirst, isLast, isActive := i == 0, i == len(m.tabs)-1, i == m.activeTab
@@ -463,42 +659,35 @@ func (m *captureTabsModel) View() string {
 	}
 
 	row := lipgloss.JoinHorizontal(lipgloss.Top, renderedTabs...)
-	// Use a minimum width to avoid cramped appearance
-	minWidth := 60
+	//TODO: Investigate why adding to tabWidth breaks top of border.
 	tabWidth := lipgloss.Width(row) - windowStyle.GetHorizontalFrameSize()
-	innerWidth := max(minWidth, tabWidth)
 
-	// Build content window with configuration UI
+	//Build window
 	var windowContent strings.Builder
 	windowContent.WriteString("\n")
-	m.renderTabContent(&windowContent, innerWidth)
+	m.renderTabContent(&windowContent, tabWidth)
 	windowContent.WriteString("\n")
-	window := windowStyle.Width(innerWidth).Render(windowContent.String())
 
-	// Combine tabs and window
+	m.renderButtons(&windowContent, tabWidth)
+
+	window := windowStyle.Width(tabWidth).Render(windowContent.String())
+
+	// combine tabs and window
 	var tabbedBox strings.Builder
 	tabbedBox.WriteString(row)
 	tabbedBox.WriteString("\n")
 	tabbedBox.WriteString(window)
 
-	// Center the tabbed box horizontally
 	centeredTabbedBox := lipgloss.PlaceHorizontal(m.width, lipgloss.Center, tabbedBox.String())
 
-	// Build final content
-	var s strings.Builder
-	s.WriteString(centeredTabbedBox)
-	s.WriteString("\n")
-
-	// Buttons
-	m.renderButtons(&s)
-	s.WriteString("\n\n")
+	var content strings.Builder
+	content.WriteString(centeredTabbedBox)
+	content.WriteString("\n\n")
 
 	// Help text
-	m.renderHelp(&s)
+	m.renderHelp(&content)
 
-	// Center everything vertically
-	content := s.String()
-	return lipgloss.PlaceVertical(m.height, lipgloss.Center, content)
+	return lipgloss.PlaceVertical(m.height, lipgloss.Center, content.String())
 }
 
 func (m *captureTabsModel) renderTabContent(content *strings.Builder, innerWidth int) {
@@ -528,9 +717,6 @@ func (m *captureTabsModel) renderSerialTab(content *strings.Builder, innerWidth 
 
 	// Advanced settings hint
 	content.WriteString("\n")
-	hint := "  Press 'a' for advanced settings"
-	hint = fitStringToWidth(hint, innerWidth)
-	content.WriteString(StyleMuted.Render(hint))
 	content.WriteString("\n")
 }
 
@@ -585,10 +771,10 @@ func (m *captureTabsModel) renderField(content *strings.Builder, fieldIndex int,
 
 	if isFocused {
 		cursorStr = StyleCursor.Render("❯ ")
-		labelStr = StyleWarning.Copy().UnsetWidth().Render(fmt.Sprintf("%-12s", label))
+		labelStr = StyleWarning.UnsetWidth().Render(fmt.Sprintf("%-12s", label))
 	} else {
 		cursorStr = "  "
-		labelStr = StyleKey.Copy().UnsetWidth().Render(fmt.Sprintf("%-12s", label))
+		labelStr = StyleKey.UnsetWidth().Render(fmt.Sprintf("%-12s", label))
 	}
 
 	cursorWidth := lipgloss.Width(cursorStr)
@@ -613,12 +799,12 @@ func (m *captureTabsModel) renderField(content *strings.Builder, fieldIndex int,
 	content.WriteString(cursorStr + labelStr + valueStr + hintStr + "\n")
 }
 
-func (m *captureTabsModel) renderButtons(s *strings.Builder) {
+func (m *captureTabsModel) renderButtons(s *strings.Builder, width int) {
 	confirmStyle := StyleUnselected
 	resetStyle := StyleUnselected
 
-	if m.focusMode == "buttons" {
-		if m.focusedButton == 0 {
+	if m.focusMode == FocusModeButtons {
+		if m.focusedButton == ButtonIndexConfirm {
 			confirmStyle = StyleSelected
 		} else {
 			resetStyle = StyleSelected
@@ -628,19 +814,19 @@ func (m *captureTabsModel) renderButtons(s *strings.Builder) {
 	confirmBtn := confirmStyle.Render("[ Confirm ]")
 	resetBtn := resetStyle.Render("[ Reset ]")
 
-	buttons := fmt.Sprintf("       %s  %s", confirmBtn, resetBtn)
-	centered := lipgloss.PlaceHorizontal(m.width, lipgloss.Center, buttons)
+	buttons := fmt.Sprintf("%s  %s", confirmBtn, resetBtn)
+	centered := lipgloss.PlaceHorizontal(width, lipgloss.Center, buttons)
 	s.WriteString(centered)
 }
 
 func (m *captureTabsModel) renderHelp(s *strings.Builder) {
 	var helpText string
 	switch m.focusMode {
-	case "tabs":
+	case FocusModeTabs:
 		helpText = "←/→ or Tab: switch tabs • ↑/↓: enter fields • a: advanced • q: cancel"
-	case "fields":
+	case FocusModeFields:
 		helpText = "↑/↓: navigate fields • Enter: select/edit • ←/→: adjust options • a: advanced • q: cancel"
-	case "buttons":
+	case FocusModeButtons:
 		helpText = "←/→: select button • Enter: confirm • ↑: back to fields • q: cancel"
 	default:
 		helpText = "Tab: switch tabs • ↑/↓: navigate • Enter: select • a: advanced • q: cancel"
@@ -669,12 +855,12 @@ func RunCaptureTabs() (*CaptureConfig, error) {
 	}
 
 	switch model.selectedSource {
-	case "serial":
+	case SourceTypeSerial:
 		config.SerialConfig = &model.serialConfig
-	case "tcp":
+	case SourceTypeTCP:
 		config.TCPHost = model.tcpHost
 		config.TCPPort = model.tcpPort
-	case "file":
+	case SourceTypeFile:
 		config.FilePath = model.filePath
 	}
 
@@ -683,7 +869,7 @@ func RunCaptureTabs() (*CaptureConfig, error) {
 
 // CaptureConfig holds the configuration for any capture source
 type CaptureConfig struct {
-	SourceType   string // "serial", "tcp", "file"
+	SourceType   string // SourceTypeSerial, SourceTypeTCP, or SourceTypeFile
 	SerialConfig *sources.Config
 	TCPHost      string
 	TCPPort      string
