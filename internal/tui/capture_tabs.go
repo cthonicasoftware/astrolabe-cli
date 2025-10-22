@@ -771,7 +771,6 @@ func fitStringToWidth(text string, maxWidth int) string {
 	return string(runes[:maxWidth-3]) + "..."
 }
 
-// TODO: Left justify fields
 func (m *captureTabsModel) renderField(content *strings.Builder, fieldIndex int, label, value, hint string, innerWidth int) {
 	isFocused := m.focusMode == "fields" && m.focusedField == fieldIndex
 
@@ -779,10 +778,10 @@ func (m *captureTabsModel) renderField(content *strings.Builder, fieldIndex int,
 
 	if isFocused {
 		cursorStr = StyleCursor.Render(IconSelectedItem)
-		labelStr = StyleWarning.UnsetWidth().Render(fmt.Sprintf("%-14s", label))
+		labelStr = StyleWarning.UnsetWidth().Render(fmt.Sprintf("%-*s", LabelWidth, label))
 	} else {
 		cursorStr = CursorPadding
-		labelStr = StyleKey.UnsetWidth().Render(fmt.Sprintf("%-14s", label))
+		labelStr = StyleKey.UnsetWidth().Render(fmt.Sprintf("%-*s", LabelWidth, label))
 	}
 
 	cursorWidth := lipgloss.Width(cursorStr)
@@ -803,7 +802,13 @@ func (m *captureTabsModel) renderField(content *strings.Builder, fieldIndex int,
 		hintStr = ""
 	}
 
-	content.WriteString(cursorStr + labelStr + valueStr + hintStr + "\n")
+	line := cursorStr + labelStr + valueStr + hintStr
+	if innerWidth > 0 {
+		content.WriteString(lipgloss.PlaceHorizontal(innerWidth, lipgloss.Left, line))
+	} else {
+		content.WriteString(line)
+	}
+	content.WriteString("\n")
 }
 
 func (m *captureTabsModel) renderButtons(s *strings.Builder, width int) {
