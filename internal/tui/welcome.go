@@ -52,7 +52,7 @@ func NewWelcome(status *StatusMessage) tea.Model {
 	return &welcomeModel{
 		cursor: 0,
 		menuItems: []menuItem{
-			{icon: IconMenuCapture, label: IconMenuSeparator + " Capture Serial", shortcut: "", action: "capture"},
+			{icon: IconMenuCapture, label: IconMenuSeparator + " Capture", shortcut: "", action: "capture"},
 			{icon: IconMenuListPorts, label: IconMenuSeparator + " List Ports", shortcut: "", action: "list-ports"},
 			{icon: IconMenuViewRuns, label: IconMenuSeparator + " View Runs", shortcut: "", action: "view-runs"},
 			{icon: IconMenuUpload, label: IconMenuSeparator + " Upload Data", shortcut: "", action: "upload"},
@@ -98,7 +98,7 @@ func (m *welcomeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			action := m.menuItems[m.cursor].action
 			switch action {
 			case "capture":
-				// Launch serial capture prompt
+				// Launch capture source selection
 				return m, func() tea.Msg {
 					return executeActionMsg{action: "capture"}
 				}
