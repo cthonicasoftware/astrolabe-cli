@@ -1,15 +1,5 @@
 # Astrolabe Project TODOs
 
-## Decouple CLI capture from TUI.
-
-- Add TCP capture source to CLI
-  - Add -H --host and -P --port flags
-
-- Add File capture source to CLI
-  - Add -p --path
-
-- Remove link to capture_tabs from CLI
-
 ## Create a `mise run` like interface for CLI
 
 - Unify CLI to this interface
@@ -31,12 +21,11 @@
 
 ## Verify Upload and Validation to API end point
 
-- Generate random capture files 
+- Generate random capture files
 
 ### Create Temperature calibration test
 
 - Use MCP9808 [Zephyr Driver](https://docs.zephyrproject.org/latest/boards/shields/adafruit_mcp9808/doc/index.html)
-
 
 - [Adafruit Boards](https://docs.zephyrproject.org/latest/boards/adafruit/index.html)
 

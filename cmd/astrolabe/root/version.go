@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"runtime/debug"
 
+	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/cliout"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -31,7 +32,20 @@ var versionCmd = &cobra.Command{
 			fmt.Println(string(b))
 			return nil
 		}
-		fmt.Printf("astrolabe %s (schema %s)\n", info.Agent, info.Schema)
+
+		// Create styled printer
+		jsonMode, _ := cmd.Flags().GetBool("json")
+		out := cliout.DefaultPrinter(jsonMode)
+
+		out.Header("Astrolabe CLI")
+		out.KeyValue("Version", info.Agent)
+		out.KeyValue("Schema", info.Schema)
+		if info.Commit != "" {
+			out.KeyValue("Commit", info.Commit)
+		}
+		out.Blank()
+		out.Muted("Data acquisition agent for test benches and QA systems")
+
 		return nil
 	},
 }

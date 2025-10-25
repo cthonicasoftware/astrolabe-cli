@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/cliout"
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/config"
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/tui"
 	"github.com/spf13/cobra"
@@ -36,6 +37,10 @@ var configGetCmd = &cobra.Command{
 	Short: "Get a config value",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Create styled printer
+		jsonMode, _ := cmd.Flags().GetBool("json")
+		out := cliout.DefaultPrinter(jsonMode)
+
 		key := args[0]
 
 		// Try to load from metadata.json first
@@ -48,24 +53,29 @@ var configGetCmd = &cobra.Command{
 		switch key {
 		case "operator":
 			if meta.Operator != "" {
-				fmt.Println(meta.Operator)
+				out.KeyValue(key, meta.Operator)
 				return nil
 			}
 		case "location":
 			if meta.Location != "" {
-				fmt.Println(meta.Location)
+				out.KeyValue(key, meta.Location)
 				return nil
 			}
 		}
 
 		// Check if the key exists in metadata attributes
 		if val, ok := meta.Attributes[key]; ok {
-			fmt.Println(val)
+			out.KeyValue(key, val)
 			return nil
 		}
 
 		// Fall back to viper config
-		fmt.Println(viper.Get(key))
+		val := viper.Get(key)
+		if val != nil {
+			out.KeyValue(key, fmt.Sprintf("%v", val))
+		} else {
+			out.Muted(fmt.Sprintf("Config key '%s' not set", key))
+		}
 		return nil
 	},
 }
@@ -75,6 +85,10 @@ var configSetCmd = &cobra.Command{
 	Short: "Set a config value",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Create styled printer
+		jsonMode, _ := cmd.Flags().GetBool("json")
+		out := cliout.DefaultPrinter(jsonMode)
+
 		key := args[0]
 		value := args[1]
 
@@ -107,7 +121,9 @@ var configSetCmd = &cobra.Command{
 		// Also set in viper for in-memory access during the current session
 		viper.Set(key, value)
 
-		fmt.Printf("ok (persisted to %s)\n", path)
+		out.Success("Configuration saved")
+		out.KeyValue(key, value)
+		out.Muted(fmt.Sprintf("Saved to: %s", path))
 		return nil
 	},
 }
