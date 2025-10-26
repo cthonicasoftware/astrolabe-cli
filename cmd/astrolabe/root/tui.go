@@ -384,12 +384,6 @@ var tuiCmd = &cobra.Command{
 					status = tui.NewStatusMessage(tui.StatusInfo, "Not Implemented", "File source capture is not yet implemented.")
 				}
 
-			case "list-ports":
-				var err error
-				status, err = tui.RunListPorts(status)
-				if err != nil {
-					return err
-				}
 			case "metadata":
 				var err error
 				status, err = tui.RunMetadataEditor(status)

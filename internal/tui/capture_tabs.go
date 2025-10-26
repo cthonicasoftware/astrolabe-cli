@@ -44,6 +44,10 @@ type captureTabsModel struct {
 	showAdvanced  bool
 	advancedModel *advancedSettingsModel
 
+	// Source info dialog
+	showInfo  bool
+	infoModel *sourceInfoModel
+
 	// Buttons
 	buttonConfirm string
 	buttonCancel  string
@@ -112,6 +116,7 @@ const (
 	FocusModeFields   = "fields"
 	FocusModeButtons  = "buttons"
 	FocusModeAdvanced = "advanced"
+	FocusModeInfo     = "info"
 )
 
 // Source type identifiers
@@ -191,6 +196,22 @@ func (m *captureTabsModel) Init() tea.Cmd {
 }
 
 func (m *captureTabsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// When the info dialog is visible, route all messages to it first.
+	if m.showInfo && m.infoModel != nil {
+		if sizeMsg, ok := msg.(tea.WindowSizeMsg); ok {
+			m.width = sizeMsg.Width
+			m.height = sizeMsg.Height
+		}
+		newInfo, cmd := m.infoModel.Update(msg)
+		m.infoModel = newInfo
+		if m.infoModel.ShouldClose() {
+			m.showInfo = false
+			m.focusMode = FocusModeFields
+			m.infoModel = nil
+		}
+		return m, cmd
+	}
+
 	// If advanced settings is showing, handle it first
 	if m.showAdvanced && m.advancedModel != nil {
 		newAdvanced, cmd := m.advancedModel.Update(msg)
@@ -214,6 +235,10 @@ func (m *captureTabsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		if m.infoModel != nil {
+			m.infoModel.width = msg.Width
+			m.infoModel.height = msg.Height
+		}
 		if m.advancedModel != nil {
 			m.advancedModel.width = msg.Width
 			m.advancedModel.height = msg.Height
@@ -258,6 +283,16 @@ func (m *captureTabsModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.advancedModel.width = m.width
 			m.advancedModel.height = m.height
 			m.focusMode = FocusModeAdvanced
+		}
+		return m, nil
+
+	case "i", "p":
+		sourceType := m.getSourceTypeForActiveTab()
+		if sourceType != "" {
+			m.showInfo = true
+			m.infoModel = NewSourceInfo(sourceType, m.width, m.height)
+			m.focusMode = FocusModeInfo
+			return m, nil
 		}
 		return m, nil
 
@@ -493,6 +528,19 @@ func (m *captureTabsModel) handleTextInput(key string) tea.Model {
 	return m
 }
 
+func (m *captureTabsModel) getSourceTypeForActiveTab() string {
+	switch m.activeTab {
+	case TabIndexSerial:
+		return SourceTypeSerial
+	case TabIndexTCP:
+		return SourceTypeTCP
+	case TabIndexSCPI:
+		return SourceTypeSCPI
+	default:
+		return ""
+	}
+}
+
 func (m *captureTabsModel) getMaxField() int {
 	switch m.activeTab {
 	case TabIndexSerial:
@@ -627,6 +675,10 @@ func (m *captureTabsModel) buildField(content *strings.Builder, fieldIndex int, 
 }
 
 func (m *captureTabsModel) View() string {
+	if m.showInfo && m.infoModel != nil {
+		return m.infoModel.View()
+	}
+
 	// If advanced settings is showing, render it as overlay
 	if m.showAdvanced && m.advancedModel != nil {
 		return m.advancedModel.View()
@@ -846,9 +898,11 @@ func (m *captureTabsModel) renderHelp(s *strings.Builder) {
 	case FocusModeTabs:
 		helpText = "←/→ or Tab: switch tabs • ↑/↓: enter fields • a: advanced • q: cancel"
 	case FocusModeFields:
-		helpText = "↑/↓: navigate fields • Enter: select/edit • ←/→: adjust options • a: advanced • q: cancel"
+		helpText = "↑/↓: navigate • Enter: select/edit • ←/→: adjust • i/p: info • a: advanced • q: cancel"
 	case FocusModeButtons:
 		helpText = "←/→: select button • Enter: confirm • ↑: back to fields • q: cancel"
+	case FocusModeInfo:
+		helpText = "esc/q: close info • ↑/↓: resume navigation"
 	default:
 		helpText = "Tab: switch tabs • ↑/↓: navigate • Enter: select • a: advanced • q: cancel"
 	}
