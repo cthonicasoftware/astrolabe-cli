@@ -36,9 +36,9 @@ type captureTabsModel struct {
 	tcpCursor    int // 0=host, 1=port
 	editingField bool
 
-	// File configuration
-	filePath   string
-	fileCursor int
+	// SCPI/VISA configuration (stub for future implementation)
+	scpiAddress string
+	scpiCursor  int
 
 	// Advanced settings
 	showAdvanced  bool
@@ -76,7 +76,7 @@ var (
 const (
 	TabIndexSerial = 0
 	TabIndexTCP    = 1
-	TabIndexFile   = 2
+	TabIndexSCPI   = 2
 	TabCount       = 3
 )
 
@@ -94,10 +94,10 @@ const (
 	TCPFieldCount = 2
 )
 
-// Field indices for File tab
+// Field indices for SCPI/VISA tab
 const (
-	FileFieldPath  = 0
-	FileFieldCount = 1
+	SCPIFieldAddress = 0
+	SCPIFieldCount   = 1
 )
 
 // Button indices
@@ -118,7 +118,7 @@ const (
 const (
 	SourceTypeSerial = "serial"
 	SourceTypeTCP    = "tcp"
-	SourceTypeFile   = "file"
+	SourceTypeSCPI   = "scpi"
 )
 
 // UI text constants
@@ -152,7 +152,7 @@ func NewCaptureTabs() tea.Model {
 		tabs: []string{
 			IconMenuCapture + "Serial",
 			IconMenuTCP + "TCP",
-			IconMenuNewFile + "File",
+			IconMenuConnection + "SCPI/VISA",
 		},
 		tabContent:     make([]string, TabCount),
 		activeTab:      TabIndexSerial,
@@ -167,8 +167,8 @@ func NewCaptureTabs() tea.Model {
 		tcpHost:        "localhost",
 		tcpPort:        "9000",
 		tcpCursor:      TCPFieldHost,
-		filePath:       "",
-		fileCursor:     FileFieldPath,
+		scpiAddress:    "",
+		scpiCursor:     SCPIFieldAddress,
 	}
 
 	// Initialize tab content
@@ -427,8 +427,10 @@ func (m *captureTabsModel) handleEnter() (tea.Model, tea.Cmd) {
 				m.serialConfig.Baud = m.baudRates[m.baudCursor]
 			case TabIndexTCP:
 				m.selectedSource = SourceTypeTCP
-			case TabIndexFile:
-				m.selectedSource = SourceTypeFile
+			case TabIndexSCPI:
+				// SCPI/VISA not implemented yet - do nothing
+				// User will stay on this tab and can navigate away
+				return m, nil
 			}
 			return m, tea.Quit
 		} else {
@@ -497,8 +499,8 @@ func (m *captureTabsModel) getMaxField() int {
 		return SerialFieldCount - 1 // Return max index, not count
 	case TabIndexTCP:
 		return TCPFieldCount - 1 // Return max index, not count
-	case TabIndexFile:
-		return FileFieldCount - 1 // Return max index, not count
+	case TabIndexSCPI:
+		return SCPIFieldCount - 1 // Return max index, not count
 	}
 	return 0
 }
@@ -513,8 +515,8 @@ func (m *captureTabsModel) resetCurrentTab() {
 	case TabIndexTCP:
 		m.tcpHost = "localhost"
 		m.tcpPort = "9000"
-	case TabIndexFile:
-		m.filePath = ""
+	case TabIndexSCPI:
+		m.scpiAddress = ""
 	}
 	m.updateTabContent()
 }
@@ -524,7 +526,7 @@ func (m *captureTabsModel) resetCurrentTab() {
 func (m *captureTabsModel) updateTabContent() {
 	m.tabContent[TabIndexSerial] = m.buildSerialContent()
 	m.tabContent[TabIndexTCP] = m.buildTCPContent()
-	m.tabContent[TabIndexFile] = m.buildFileContent()
+	m.tabContent[TabIndexSCPI] = m.buildSCPIContent()
 }
 
 // buildSerialContent generates the serial tab content.
@@ -578,21 +580,21 @@ func (m *captureTabsModel) buildTCPContent() string {
 	return content.String()
 }
 
-// buildFileContent generates the file tab content.
-func (m *captureTabsModel) buildFileContent() string {
+// buildSCPIContent generates the SCPI/VISA tab content (stub for future implementation).
+func (m *captureTabsModel) buildSCPIContent() string {
 	var content strings.Builder
 	content.WriteString("\n")
 
-	// File path field
-	pathLabel := "File Path:"
-	pathValue := m.filePath
-	if pathValue == "" {
-		pathValue = PlaceholderNotSet
-	}
-	if m.focusMode == FocusModeFields && m.focusedField == FileFieldPath && m.editingField {
-		pathValue += "_"
-	}
-	m.buildField(&content, FileFieldPath, pathLabel, pathValue, HelpEnterEditMode)
+	// Coming soon message
+	content.WriteString(StyleHeader.Render("SCPI/VISA Instrument Support"))
+	content.WriteString("\n\n")
+	content.WriteString(StyleMuted.Render("Coming soon - instrument integration via SCPI/VISA"))
+	content.WriteString("\n\n")
+	content.WriteString(StyleKey.Render("Planned features:"))
+	content.WriteString("\n")
+	content.WriteString("  " + StyleIcon.Render(IconStatusInfo) + " DMM (Digital Multimeter)\n")
+	content.WriteString("  " + StyleIcon.Render(IconStatusInfo) + " Oscilloscope\n")
+	content.WriteString("  " + StyleIcon.Render(IconStatusInfo) + " Signal Generator\n")
 	content.WriteString("\n")
 
 	return content.String()
@@ -695,7 +697,7 @@ func (m *captureTabsModel) renderTabContent(content *strings.Builder, innerWidth
 	case 1:
 		m.renderTCPTab(content, innerWidth)
 	case 2:
-		m.renderFileTab(content, innerWidth)
+		m.renderSCPITab(content, innerWidth)
 	}
 }
 
@@ -738,22 +740,29 @@ func (m *captureTabsModel) renderTCPTab(content *strings.Builder, innerWidth int
 	content.WriteString("\n")
 }
 
-func (m *captureTabsModel) renderFileTab(content *strings.Builder, innerWidth int) {
-	// File path input
+func (m *captureTabsModel) renderSCPITab(content *strings.Builder, innerWidth int) {
+	// SCPI/VISA stub - show coming soon message
+	message := StyleHeader.Render("SCPI/VISA Instrument Support")
+	content.WriteString(lipgloss.PlaceHorizontal(innerWidth, lipgloss.Center, message))
+	content.WriteString("\n\n")
 
-	pathLabel := "File Path:"
-	pathValue := m.filePath
-	if pathValue == "" {
-		pathValue = "(not set)"
-	}
-	if m.focusMode == "fields" && m.focusedField == 0 && m.editingField {
-		pathValue += "_"
-	}
-	m.renderField(content, 0, pathLabel, pathValue, HelpEnterEditMode, innerWidth)
+	comingSoon := StyleMuted.Render("Coming soon - instrument integration via SCPI/VISA")
+	content.WriteString(lipgloss.PlaceHorizontal(innerWidth, lipgloss.Center, comingSoon))
+	content.WriteString("\n\n")
 
-	//TODO: replace with extra field if needed
+	features := StyleKey.Render("Planned features:")
+	content.WriteString(lipgloss.PlaceHorizontal(innerWidth, lipgloss.Left, features))
 	content.WriteString("\n")
 
+	items := []string{
+		"  " + StyleIcon.Render(IconStatusInfo) + " DMM (Digital Multimeter)",
+		"  " + StyleIcon.Render(IconStatusInfo) + " Oscilloscope",
+		"  " + StyleIcon.Render(IconStatusInfo) + " Signal Generator",
+	}
+	for _, item := range items {
+		content.WriteString(lipgloss.PlaceHorizontal(innerWidth, lipgloss.Left, item))
+		content.WriteString("\n")
+	}
 	content.WriteString("\n")
 }
 
@@ -872,8 +881,8 @@ func RunCaptureTabs() (*CaptureConfig, error) {
 	case SourceTypeTCP:
 		config.TCPHost = model.tcpHost
 		config.TCPPort = model.tcpPort
-	case SourceTypeFile:
-		config.FilePath = model.filePath
+	case SourceTypeSCPI:
+		config.SCPIAddress = model.scpiAddress
 	}
 
 	return config, nil
@@ -881,9 +890,9 @@ func RunCaptureTabs() (*CaptureConfig, error) {
 
 // CaptureConfig holds the configuration for any capture source
 type CaptureConfig struct {
-	SourceType   string // SourceTypeSerial, SourceTypeTCP, or SourceTypeFile
+	SourceType   string // SourceTypeSerial, SourceTypeTCP, or SourceTypeSCPI
 	SerialConfig *sources.Config
 	TCPHost      string
 	TCPPort      string
-	FilePath     string
+	SCPIAddress  string // For future SCPI/VISA implementation
 }
