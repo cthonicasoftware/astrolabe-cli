@@ -14,6 +14,10 @@ var rootCmd = &cobra.Command{
 	Use:   "astrolabe",
 	Short: "Standardized capture & upload of QA artifacts",
 	Long:  "Astrolabe captures, normalizes, caches, and uploads QA test run data.",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// If no subcommand provided, launch TUI
+		return tuiCmd.RunE(cmd, args)
+	},
 }
 
 func init() {

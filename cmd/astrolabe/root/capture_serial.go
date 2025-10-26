@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/capture"
+	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/cliout"
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/config"
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/normalize"
@@ -101,8 +102,13 @@ var captureSerialCmd = &cobra.Command{
 			serialCfg = &defaults
 		}
 
-		fmt.Printf("Starting serial capture: port=%s baud=%d parity=%s data=%d stop=%s flow=%s name=%s tui=%v\n",
-			serialCfg.Port, serialCfg.Baud, serialCfg.Parity, serialCfg.DataBits, serialCfg.StopBits, serialCfg.FlowControl, serialName, launchTUI)
+		// Create styled printer (check for --json flag from root command)
+		jsonMode, _ := cmd.Flags().GetBool("json")
+		out := cliout.DefaultPrinter(jsonMode)
+
+		if !launchTUI {
+			out.Step(fmt.Sprintf("Starting serial capture: %s @ %d baud", serialCfg.Port, serialCfg.Baud))
+		}
 
 		serial := sources.NewSerialWithConfig(*serialCfg)
 
@@ -247,7 +253,9 @@ var captureSerialCmd = &cobra.Command{
 			cancel()
 
 			if tuiApp.SaveRequested() {
-				fmt.Println("\nSaving capture data...")
+				out.Blank()
+				out.Step("Saving capture data...")
+
 				run := <-pipelineResultCh
 				runErr := <-pipelineErrCh
 
@@ -262,14 +270,15 @@ var captureSerialCmd = &cobra.Command{
 					return fmt.Errorf("finalize run artifacts: %w", err)
 				}
 
-				fmt.Printf("Capture saved. Records: %d\n", run.RecordsCount)
-				fmt.Printf("Run ID: %s\n", run.ID)
-				fmt.Printf("Cache dir: %s\n", appCfg.OfflineCache)
-				for _, artifact := range run.Artifacts {
-					fmt.Printf(" - %s (%s)\n", artifact.Path, artifact.Role)
-				}
+				out.Success("Serial capture saved")
+				out.KeyValue("Run ID", run.ID)
+				out.KeyValue("Records", fmt.Sprintf("%d", run.RecordsCount))
+				out.KeyValue("Location", filepath.Join(appCfg.OfflineCache, run.ID))
+				out.Blank()
+				out.Muted("Run 'astrolabe upload' to upload to server.")
 			} else {
-				fmt.Println("\nExited without saving.")
+				out.Blank()
+				out.Muted("Exited without saving.")
 				// Wait for pipeline to finish but discard results
 				run := <-pipelineResultCh
 				runErr := <-pipelineErrCh
@@ -333,7 +342,9 @@ var captureSerialCmd = &cobra.Command{
 				}
 			}()
 
-			fmt.Println("Press Ctrl+C to stop capture and flush artifacts.")
+			out.Info("Capturing... (press Ctrl+C to stop)")
+			out.Blank()
+
 			run, runErr := pipeline.Run(ctx)
 			if runErr != nil && !errors.Is(runErr, context.Canceled) {
 				return fmt.Errorf("capture pipeline: %w", runErr)
@@ -341,17 +352,18 @@ var captureSerialCmd = &cobra.Command{
 			if run == nil {
 				return fmt.Errorf("capture pipeline: run not returned")
 			}
-			if runErr == nil {
-				fmt.Printf("Capture complete. Records: %d\n", run.RecordsCount)
-			} else {
-				fmt.Printf("Capture interrupted. Partial run saved. Records: %d\n", run.RecordsCount)
-			}
 
-			fmt.Printf("Run ID: %s\n", run.ID)
-			fmt.Printf("Cache dir: %s\n", appCfg.OfflineCache)
-			for _, artifact := range run.Artifacts {
-				fmt.Printf(" - %s (%s)\n", artifact.Path, artifact.Role)
+			out.Blank()
+			if runErr == nil {
+				out.Success("Serial capture complete")
+			} else {
+				out.Warning("Serial capture interrupted (partial run saved)")
 			}
+			out.KeyValue("Run ID", run.ID)
+			out.KeyValue("Records", fmt.Sprintf("%d", run.RecordsCount))
+			out.KeyValue("Location", filepath.Join(appCfg.OfflineCache, run.ID))
+			out.Blank()
+			out.Muted("Run 'astrolabe upload' to upload to server.")
 		}
 		return nil
 	},

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/cliout"
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/config"
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/tui"
@@ -25,6 +26,10 @@ var uploadCmd = &cobra.Command{
 	Use:   "upload",
 	Short: "Upload cached runs to the server",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Create styled printer
+		jsonMode, _ := cmd.Flags().GetBool("json")
+		out := cliout.DefaultPrinter(jsonMode)
+
 		cfg := config.Load()
 
 		// Validate configuration
@@ -66,11 +71,13 @@ var uploadCmd = &cobra.Command{
 					return fmt.Errorf("upload run: %w", err)
 				}
 			} else {
-				fmt.Printf("Uploading run %s...\n", uploadRunID)
+				out.Step(fmt.Sprintf("Uploading run: %s", uploadRunID))
 				if err := client.UploadRun(ctx, uploadRunID); err != nil {
 					return fmt.Errorf("upload run: %w", err)
 				}
-				fmt.Printf("✓ Successfully uploaded run %s\n", uploadRunID)
+				out.Blank()
+				out.Success("Run uploaded successfully")
+				out.KeyValue("Run ID", uploadRunID)
 			}
 		} else {
 			// Upload all pending runs
@@ -80,7 +87,9 @@ var uploadCmd = &cobra.Command{
 			}
 
 			if len(runs) == 0 {
-				fmt.Println("No pending runs to upload")
+				out.Info("No pending runs to upload")
+				out.Blank()
+				out.Muted("Capture data with 'astrolabe capture' commands to create runs.")
 				return nil
 			}
 
@@ -91,23 +100,27 @@ var uploadCmd = &cobra.Command{
 				}
 			} else {
 				// Use text output for non-interactive (CI/scripts)
-				fmt.Printf("Found %d pending run(s) to upload\n", len(runs))
+				out.Step(fmt.Sprintf("Found %d pending run(s) to upload", len(runs)))
+				out.Blank()
+
 				succeeded := 0
 				failed := 0
 
 				for i, runID := range runs {
-					fmt.Printf("[%d/%d] Uploading %s...\n", i+1, len(runs), runID)
+					out.Step(fmt.Sprintf("[%d/%d] Uploading %s", i+1, len(runs), runID))
 					if err := client.UploadRun(ctx, runID); err != nil {
-						fmt.Fprintf(os.Stderr, "  ✗ Failed: %v\n", err)
+						out.Error(fmt.Sprintf("Failed: %v", err))
 						failed++
 					} else {
-						fmt.Printf("  ✓ Success\n")
-						succeeded++
+						out.Success("Uploaded successfully")
 					}
 				}
 
-				fmt.Printf("\nUpload complete: %d succeeded, %d failed\n", succeeded, failed)
-				if failed > 0 {
+				out.Blank()
+				if failed == 0 {
+					out.Success(fmt.Sprintf("All %d run(s) uploaded successfully", succeeded))
+				} else {
+					out.Warning(fmt.Sprintf("Upload complete: %d succeeded, %d failed", succeeded, failed))
 					return fmt.Errorf("%d run(s) failed to upload", failed)
 				}
 			}
