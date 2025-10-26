@@ -209,7 +209,7 @@ func (m *runsViewModel) View() string {
 			"Loading runs...",
 			StyleHelp.Render("Press q to return"),
 		}
-		return strings.Join(content, "\n")
+		return m.centerContent(strings.Join(content, "\n"))
 	}
 
 	if m.err != nil {
@@ -219,7 +219,7 @@ func (m *runsViewModel) View() string {
 			StyleError.Render(fmt.Sprintf("Failed to load runs: %v", m.err)),
 			StyleHelp.Render("Press r to retry • q to return"),
 		}
-		return strings.Join(content, "\n")
+		return m.centerContent(strings.Join(content, "\n"))
 	}
 
 	var sections []string
@@ -229,11 +229,11 @@ func (m *runsViewModel) View() string {
 	case modeDetail:
 		sections = append(sections, renderRunDetails(m.detailSummary))
 		sections = append(sections, StyleHelp.Render("d: view data • esc/q: back"))
-		return strings.Join(sections, "\n\n")
+		return m.centerContent(strings.Join(sections, "\n\n"))
 	case modePayload:
 		sections = append(sections, m.renderPayloadView())
 		sections = append(sections, StyleHelp.Render("↑/↓ scroll • pgup/pgdn • home/end • r: reload • esc/q: back"))
-		return strings.Join(sections, "\n\n")
+		return m.centerContent(strings.Join(sections, "\n\n"))
 	}
 
 	tableView := runsTableContainerStyle.Render(m.table.View())
@@ -254,7 +254,7 @@ func (m *runsViewModel) View() string {
 		sections = append(sections, StyleHelp.Render("↑/↓ navigate • enter: details • r refresh • q: return"))
 	}
 
-	return strings.Join(sections, "\n\n")
+	return m.centerContent(strings.Join(sections, "\n\n"))
 }
 
 func (m *runsViewModel) handleRunsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -456,6 +456,17 @@ func payloadCandidates(summary runs.Summary) []string {
 		candidates = add(candidates, filepath.Join(summary.RunDir, "data.jsonl"), seen)
 	}
 	return candidates
+}
+
+func (m *runsViewModel) centerContent(content string) string {
+	if m.width == 0 || m.height == 0 {
+		return content
+	}
+	return lipgloss.PlaceVertical(
+		m.height,
+		lipgloss.Center,
+		lipgloss.PlaceHorizontal(m.width, lipgloss.Center, content),
+	)
 }
 
 func loadPayload(summary runs.Summary) tea.Cmd {
