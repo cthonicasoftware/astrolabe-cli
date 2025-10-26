@@ -1,15 +1,9 @@
 # Astrolabe Project TODOs
 
-## Create a `mise run` like interface for CLI
-
-- Unify CLI to this interface
-- Use Colors from TUI, keeping app consistent
-
 ## Improve Live Capture TUI
 
 - Tie errors from TCP to status bar.
 - Tie ui context based on capture source.
-- Does a live tui capture for a file make sense?
 
 ## Improve menu navigation
 
