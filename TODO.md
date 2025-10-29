@@ -1,10 +1,5 @@
 # Astrolabe Project TODOs
 
-## Improve Live Capture TUI
-
-- Tie errors from TCP to status bar.
-- Tie ui context based on capture source.
-
 ## Improve menu navigation
 
 - Add scroll wrapping.

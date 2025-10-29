@@ -17,6 +17,8 @@ coverage.*
 *.coverprofile
 profile.cov
 
+.bin/
+
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
@@ -29,7 +31,7 @@ go.work.sum
 
 # Editor/IDE
 # .idea/
-# .vscode/
+.vscode/
 .gocache
 qa-agent
 astrolabe

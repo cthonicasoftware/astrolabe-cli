@@ -102,7 +102,6 @@ var (
 			Foreground(ColorMuted).
 			MarginTop(marginSize).
 			Italic(true)
-
 	// Key-value display
 	StyleKey = lipgloss.NewStyle().
 			Foreground(ColorMuted)
@@ -116,6 +115,8 @@ var (
 			Foreground(ColorPrimary).
 			Bold(true)
 )
+
+const helpNavigateChange = "↑/↓: navigate • ←/→/Space/Enter: change • Esc: cancel"
 
 // Icon Palette - Nerd Font glyphs
 // Update these values as needed
