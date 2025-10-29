@@ -244,8 +244,7 @@ func (m *advancedSettingsModel) View() string {
 	// Help text
 	var help strings.Builder
 	help.WriteString("\n\n")
-	//TODO: Centralize help navigation strings
-	help.WriteString(StyleHelp.Render("↑/↓: navigate • ←/→/Space/Enter: change • Esc: cancel"))
+	help.WriteString(StyleHelp.Render(helpNavigateChange))
 
 	// Combine box and help
 	var s strings.Builder
