@@ -48,10 +48,6 @@ type captureTabsModel struct {
 	showInfo  bool
 	infoModel *sourceInfoModel
 
-	// Buttons
-	buttonConfirm string
-	buttonCancel  string
-
 	// Result
 	confirmed      bool
 	selectedSource string
