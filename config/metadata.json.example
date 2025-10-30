@@ -1,0 +1,60 @@
+{
+  "_comment": "Astrolabe Metadata Configuration - Copy to ~/.astrolabe/metadata.json",
+  "_description": "Default metadata stamped on every capture run. Override with CLI flags.",
+
+  "operator": {
+    "_comment": "Person or system performing the capture",
+    "name": "",
+    "email": "",
+    "id": ""
+  },
+
+  "location": {
+    "_comment": "Physical location of test bench or device",
+    "site": "",
+    "building": "",
+    "room": "",
+    "bench_id": ""
+  },
+
+  "device": {
+    "_comment": "Device under test information",
+    "id": "",
+    "serial_number": "",
+    "model": "",
+    "hardware_version": "",
+    "firmware_version": "",
+    "firmware_hash": ""
+  },
+
+  "test": {
+    "_comment": "Test execution information",
+    "plan": "",
+    "plan_version": "",
+    "variant": "",
+    "run_number": "",
+    "environment": ""
+  },
+
+  "capture": {
+    "_comment": "Default capture settings (can be overridden per source)",
+    "sample_rate_hz": 1000,
+    "duration_seconds": null,
+    "buffer_size": 4096
+  },
+
+  "tags": {
+    "_comment": "Freeform tags for categorization",
+    "_examples": ["calibration", "production", "debug", "regression"],
+    "tags": []
+  },
+
+  "attributes": {
+    "_comment": "Custom key-value pairs for additional metadata",
+    "_examples": {
+      "temperature_c": "25",
+      "humidity_percent": "45",
+      "test_station": "alpha-01"
+    }
+  }
+}
