@@ -92,11 +92,12 @@ func (m *advancedSettingsModel) Update(msg tea.Msg) (*advancedSettingsModel, tea
 			return m, nil
 
 		case "up", "k":
-			if m.focusMode == "fields" {
+			switch m.focusMode {
+			case "fields":
 				if m.focusedField > 0 {
 					m.focusedField--
 				}
-			} else if m.focusMode == "buttons" {
+			case "buttons":
 				// Switch back to fields
 				m.focusMode = "fields"
 				m.focusedField = 3 // Last field
@@ -115,27 +116,30 @@ func (m *advancedSettingsModel) Update(msg tea.Msg) (*advancedSettingsModel, tea
 			}
 
 		case "left", "h":
-			if m.focusMode == "buttons" {
+			switch m.focusMode {
+			case "buttons":
 				if m.focusedButton > 0 {
 					m.focusedButton--
 				}
-			} else if m.focusMode == "fields" {
+			case "fields":
 				// Cycle option left
 				m.cycleOption(-1)
 			}
 
 		case "right", "l", " ":
-			if m.focusMode == "buttons" {
+			switch m.focusMode {
+			case "buttons":
 				if m.focusedButton < 1 {
 					m.focusedButton++
 				}
-			} else if m.focusMode == "fields" {
+			case "fields":
 				// Cycle option right
 				m.cycleOption(1)
 			}
 
 		case "enter":
-			if m.focusMode == "buttons" {
+			switch m.focusMode {
+			case "buttons":
 				if m.focusedButton == 0 {
 					// Apply
 					m.applied = true
@@ -147,7 +151,7 @@ func (m *advancedSettingsModel) Update(msg tea.Msg) (*advancedSettingsModel, tea
 					m.shouldClose = true
 					return m, nil
 				}
-			} else if m.focusMode == "fields" {
+			case "fields":
 				// Cycle option right
 				m.cycleOption(1)
 			}

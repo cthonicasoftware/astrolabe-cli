@@ -513,10 +513,11 @@ func (m *captureTabsModel) handleTextInput(key string) tea.Model {
 		}
 	default:
 		if len(key) == 1 {
-			if m.tcpCursor == TCPFieldHost {
+			switch m.tcpCursor {
+			case TCPFieldHost:
 				m.tcpHost += key
 				m.updateTabContent()
-			} else if m.tcpCursor == TCPFieldPort {
+			case TCPFieldPort:
 				// Only allow digits for port
 				if key >= "0" && key <= "9" {
 					m.tcpPort += key
