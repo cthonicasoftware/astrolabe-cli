@@ -57,7 +57,8 @@ internal/testutil/   # Test helpers and mock implementations
 
 **Run**: Capture session envelope
 - Links source metadata, manifest, settings, artifacts, and upload state
-- Identified by `run_id` (UUID)
+- Identified by `run_id` (ULID - Universally Unique Lexicographically Sortable Identifier)
+- ULID properties: 26 characters, time-sortable, globally unique, compatible with backend expectations
 - Immutable once created; state changes tracked in `UploadState`
 
 **Manifest**: Operator-supplied metadata
@@ -360,8 +361,13 @@ type Normalizer interface {
 - Support for token refresh (future)
 - Fail clearly on 401/403 errors
 
+**Idempotency**:
+- `Idempotency-Key` header uses local run.ID (ULID) for safe retries
+- Backend can deduplicate create requests based on this key
+- Enables reliable retry logic without creating duplicate runs
+
 **Endpoints**:
-- `POST /api/runs/` - Create run record
+- `POST /api/runs/` - Create run record (with Idempotency-Key header)
 - `GET /api/runs/{id}/upload-urls` - Get presigned URLs
 - `POST /api/runs/{id}/complete` - Finalize upload
 

@@ -2,6 +2,7 @@ package capture
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/normalize"
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/storage"
+	"github.com/oklog/ulid/v2"
 )
 
 // Source represents an ingest source capable of streaming byte frames along with metadata.
@@ -164,6 +166,12 @@ func primaryDataArtifact(artifacts []core.Artifact) *core.Artifact {
 }
 
 func defaultRunID() string {
-	now := time.Now().UTC()
-	return fmt.Sprintf("run-%s", now.Format("20060102-150405"))
+	// Generate a monotonic ULID with current timestamp
+	// ULIDs are:
+	// - 26 characters (Crockford Base32)
+	// - Lexicographically sortable by time
+	// - Globally unique
+	// - Compatible with backend's ULID expectations
+	entropy := ulid.Monotonic(rand.Reader, 0)
+	return ulid.MustNew(ulid.Timestamp(time.Now()), entropy).String()
 }

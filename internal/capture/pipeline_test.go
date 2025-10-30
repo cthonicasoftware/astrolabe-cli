@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/normalize"
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/storage"
+	"github.com/oklog/ulid/v2"
 )
 
 type sliceSource struct {
@@ -185,5 +188,80 @@ func TestPipelineFinalizeOnContextCancel(t *testing.T) {
 	}
 	if !store.finalized {
 		t.Fatalf("store finalize not called on cancellation")
+	}
+}
+
+// TestDefaultRunID_ULID_Format verifies that generated run IDs are valid ULIDs
+func TestDefaultRunID_ULID_Format(t *testing.T) {
+	id := defaultRunID()
+
+	// ULID must be exactly 26 characters
+	if len(id) != 26 {
+		t.Errorf("ULID length: got %d, want 26 (got: %s)", len(id), id)
+	}
+
+	// ULID must be valid Crockford Base32
+	// Valid characters: 0-9, A-Z (excluding I, L, O, U)
+	validChars := "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+	for i, ch := range id {
+		if !strings.ContainsRune(validChars, ch) {
+			t.Errorf("invalid ULID character at position %d: %c", i, ch)
+		}
+	}
+
+	// Parse as ULID to verify it's valid
+	parsed, err := ulid.Parse(id)
+	if err != nil {
+		t.Fatalf("failed to parse as ULID: %v", err)
+	}
+
+	// Verify timestamp is reasonable (within last minute)
+	timestamp := ulid.Time(parsed.Time())
+	now := time.Now()
+	if timestamp.After(now) || timestamp.Before(now.Add(-1*time.Minute)) {
+		t.Errorf("ULID timestamp out of reasonable range: %v", timestamp)
+	}
+}
+
+// TestDefaultRunID_Uniqueness verifies that multiple calls generate unique IDs
+func TestDefaultRunID_Uniqueness(t *testing.T) {
+	const iterations = 100
+	ids := make(map[string]bool, iterations)
+
+	for i := 0; i < iterations; i++ {
+		id := defaultRunID()
+		if ids[id] {
+			t.Fatalf("duplicate ULID generated: %s", id)
+		}
+		ids[id] = true
+	}
+
+	if len(ids) != iterations {
+		t.Errorf("expected %d unique IDs, got %d", iterations, len(ids))
+	}
+}
+
+// TestDefaultRunID_Sortability verifies that ULIDs are lexicographically sortable by time
+func TestDefaultRunID_Sortability(t *testing.T) {
+	// Generate IDs with small delays to ensure different timestamps
+	id1 := defaultRunID()
+	time.Sleep(2 * time.Millisecond)
+	id2 := defaultRunID()
+	time.Sleep(2 * time.Millisecond)
+	id3 := defaultRunID()
+
+	// Verify lexicographic ordering matches time ordering
+	if !(id1 < id2 && id2 < id3) {
+		t.Errorf("ULIDs not sorted by time: %s, %s, %s", id1, id2, id3)
+	}
+
+	// Parse and verify timestamps are actually increasing
+	t1, _ := ulid.Parse(id1)
+	t2, _ := ulid.Parse(id2)
+	t3, _ := ulid.Parse(id3)
+
+	if !(t1.Time() < t2.Time() && t2.Time() < t3.Time()) {
+		t.Errorf("ULID timestamps not increasing: %d, %d, %d",
+			t1.Time(), t2.Time(), t3.Time())
 	}
 }
