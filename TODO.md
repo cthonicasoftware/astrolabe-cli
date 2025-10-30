@@ -32,7 +32,7 @@ This TODO list is organized by priority based on the Astrolabe MVP completion ro
 ## 🟡 MEDIUM PRIORITY - Deployment & Usability
 
 ### Create Install & Uninstall Script
-**Status**: Unix Complete (Linux/macOS) ✅
+**Status**: Complete ✅ (Linux/macOS/Windows)
 **Required for**: Field deployment
 
 - [x] Create installation script that adds astrolabe to PATH
@@ -40,15 +40,33 @@ This TODO list is organized by priority based on the Astrolabe MVP completion ro
 - [x] Support Linux, macOS installation paths
 - [x] Create uninstall script with cleanup of config/cache (optional)
 - [x] Test installation on fresh systems (dry-run validated)
-- [ ] Create Windows PowerShell install script (install.ps1)
-- [ ] Create Windows PowerShell uninstall script (uninstall.ps1)
-- [ ] Test on fresh Windows system
+- [x] Create Windows PowerShell install script (install.ps1)
+- [x] Create Windows PowerShell uninstall script (uninstall.ps1)
+- [ ] Test on fresh Windows system (ready for testing)
 
 **Files created:**
 - `scripts/install.sh` - Bash installer for Linux/macOS
 - `scripts/uninstall.sh` - Bash uninstaller for Linux/macOS
+- `scripts/install.ps1` - PowerShell installer for Windows
+- `scripts/uninstall.ps1` - PowerShell uninstaller for Windows
 - `config/connection.yml.example` - Sample connection config
 - `config/metadata.json.example` - Sample metadata config
+- `scripts/README.md` - Comprehensive installation documentation
+
+**Features:**
+- User-local and system-wide installation options
+- PATH configuration (persistent via registry on Windows)
+- Shell completion for bash/zsh/fish/PowerShell
+- Safe uninstallation with data protection
+- Interactive cache/config cleanup
+- Dry-run mode for all scripts
+- Cross-platform compatibility
+
+**Next Steps:**
+- Test PowerShell scripts on Windows system
+- Verify installation and uninstallation flow
+- Test both user-local and system-wide installations
+- Validate PowerShell completion works correctly
 
 ### Binary Packaging for Distribution
 **Status**: Not Started

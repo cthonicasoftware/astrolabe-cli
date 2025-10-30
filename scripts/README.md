@@ -17,6 +17,19 @@ sudo ./scripts/install.sh --system-wide
 ./scripts/install.sh --dry-run
 ```
 
+### Installation (Windows)
+
+```powershell
+# Default installation (recommended)
+.\scripts\install.ps1
+
+# System-wide installation (requires Administrator)
+.\scripts\install.ps1 -SystemWide
+
+# Preview what will be done
+.\scripts\install.ps1 -DryRun
+```
+
 ### Uninstallation (Linux/macOS)
 
 ```bash
@@ -28,6 +41,19 @@ sudo ./scripts/install.sh --system-wide
 
 # Keep cached run data
 ./scripts/uninstall.sh --keep-cache
+```
+
+### Uninstallation (Windows)
+
+```powershell
+# Interactive uninstallation (asks about each item)
+.\scripts\uninstall.ps1
+
+# Complete removal (including cache and configs)
+.\scripts\uninstall.ps1 -Complete
+
+# Keep cached run data
+.\scripts\uninstall.ps1 -KeepCache
 ```
 
 ## Scripts
@@ -111,6 +137,93 @@ Removes Astrolabe and optionally cleans up configuration and cache.
 2. **Remove configs only** - Keeps cached run data in `~/.astrolabe/runs/`
 3. **Complete removal** - Deletes everything (requires confirmation)
 
+### `install.ps1` - Windows Installation
+
+Installs the Astrolabe binary and sets up the Windows environment.
+
+**Features:**
+- Checks PowerShell version (5.1+ required)
+- Detects Windows version and architecture
+- Validates Administrator rights (for system-wide install)
+- Installs binary to `%LOCALAPPDATA%\Programs\Astrolabe\` (user) or `C:\Program Files\Astrolabe\` (system)
+- Updates PATH persistently via registry
+- Installs PowerShell completion
+- Creates configuration directory (`%USERPROFILE%\.astrolabe\`)
+- Displays available COM ports
+- Validates installation
+
+**Parameters:**
+- `-SystemWide` - Install to Program Files (requires Administrator)
+- `-NoCompletion` - Skip PowerShell completion installation
+- `-DryRun` - Preview installation without making changes
+- `-Help` - Show help message
+
+**Examples:**
+```powershell
+# User-local installation (no admin required)
+.\scripts\install.ps1
+
+# System-wide installation
+.\scripts\install.ps1 -SystemWide
+
+# Skip PowerShell completion
+.\scripts\install.ps1 -NoCompletion
+
+# Preview installation
+.\scripts\install.ps1 -DryRun
+
+# Get detailed help
+Get-Help .\scripts\install.ps1 -Detailed
+```
+
+**Installation Locations:**
+- Binary (user): `%LOCALAPPDATA%\Programs\Astrolabe\astrolabe.exe` (~\AppData\Local\Programs\Astrolabe\)
+- Binary (system): `C:\Program Files\Astrolabe\astrolabe.exe`
+- Config: `%USERPROFILE%\.astrolabe\` (~\.astrolabe\)
+- Completion: `%USERPROFILE%\.astrolabe\astrolabe-completion.ps1`
+
+### `uninstall.ps1` - Windows Uninstallation
+
+Removes Astrolabe and optionally cleans up configuration and cache.
+
+**Features:**
+- Locates binary (user or system installation)
+- Checks Administrator rights (if needed)
+- Removes binary and installation directory
+- Removes from PATH (registry modification)
+- Removes PowerShell completion from profile
+- Interactive cache/config cleanup
+- Display summary of removed items
+
+**Parameters:**
+- `-Complete` - Remove everything including cache
+- `-KeepCache` - Remove binary and configs, preserve cache
+- `-DryRun` - Preview uninstallation without making changes
+- `-Help` - Show help message
+
+**Examples:**
+```powershell
+# Interactive uninstallation (asks what to keep)
+.\scripts\uninstall.ps1
+
+# Complete removal (WARNING: deletes all data)
+.\scripts\uninstall.ps1 -Complete
+
+# Keep cached run data
+.\scripts\uninstall.ps1 -KeepCache
+
+# Preview uninstallation
+.\scripts\uninstall.ps1 -DryRun
+
+# Get detailed help
+Get-Help .\scripts\uninstall.ps1 -Detailed
+```
+
+**Cleanup Options:**
+1. **Keep everything** - Only removes binary and completion
+2. **Remove configs only** - Keeps cached run data in `%USERPROFILE%\.astrolabe\runs\`
+3. **Complete removal** - Deletes everything (requires confirmation)
+
 ## Configuration Templates
 
 Sample configuration files are provided in the `config/` directory:
@@ -153,21 +266,33 @@ Template for default metadata stamped on captures. Copy to `~/.astrolabe/metadat
 - **Note**: Serial port drivers may need to be installed separately
 
 ### Windows
-- **Status**: PowerShell scripts not yet implemented
-- **Planned**: `install.ps1` and `uninstall.ps1` for Windows support
-- **WSL**: Use Linux scripts in Windows Subsystem for Linux
+- **Supported**: Windows 10, Windows 11, Windows Server 2019+
+- **Architecture**: x64 (AMD64)
+- **PowerShell**: 5.1 or later (PowerShell 7+ also supported)
+- **Shells**: PowerShell (completion supported)
+- **Serial Ports**: COM1, COM2, etc. (standard Windows COM ports)
+- **Notes**:
+  - User-local installation requires no admin rights
+  - System-wide installation requires Administrator privileges
+  - PATH changes are persistent via registry
+  - USB-to-Serial drivers (FTDI, CH340, etc.) must be installed separately
+  - **WSL**: Use Linux scripts in Windows Subsystem for Linux (WSL mode)
 
 ## Requirements
 
-### Prerequisites
+### Prerequisites (All Platforms)
 1. **Binary must be built first**
    ```bash
-   # From project root
+   # Linux/macOS/WSL
    mise run build
    # OR
    go build ./cmd/astrolabe
+
+   # Windows (PowerShell)
+   go build -o astrolabe.exe ./cmd/astrolabe
    ```
 
+### Linux/macOS Specific
 2. **Scripts must be executable**
    ```bash
    chmod +x scripts/install.sh scripts/uninstall.sh
@@ -182,22 +307,45 @@ Template for default metadata stamped on captures. Copy to `~/.astrolabe/metadat
    - Command: `sudo usermod -a -G dialout $USER`
    - Requires logout/login to take effect
 
-### Optional
-- Shell completion requires bash 4.0+, zsh 5.0+, or fish 3.0+
-- Colored output requires terminal with ANSI support
+### Windows Specific
+2. **PowerShell Execution Policy**
+   - May need to allow script execution:
+     ```powershell
+     # For current session only (safest)
+     Set-ExecutionPolicy Bypass -Scope Process
+
+     # For current user (persistent)
+     Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+     ```
+
+3. **For system-wide installation**
+   - Requires Administrator privileges
+   - Right-click PowerShell → "Run as Administrator"
+   - Must have write permissions to `C:\Program Files`
+
+4. **For serial port access**
+   - Install appropriate USB-to-Serial drivers (FTDI, CH340, etc.)
+   - COM ports appear as `COM1`, `COM2`, etc.
+   - Check Device Manager for available COM ports
+
+### Optional (All Platforms)
+- Shell completion requires bash 4.0+, zsh 5.0+, fish 3.0+, or PowerShell 5.1+
+- Colored output requires terminal with ANSI support (Windows Terminal recommended on Windows)
 
 ## Troubleshooting
 
-### Binary not found
+### Binary not found (All Platforms)
 ```bash
-# Check if binary exists
+# Linux/macOS
 ls -la ./astrolabe
-
-# If not, build it
 mise run build
+
+# Windows
+dir astrolabe.exe
+go build -o astrolabe.exe ./cmd/astrolabe
 ```
 
-### Permission denied
+### Permission denied (Linux/macOS)
 ```bash
 # For user-local installation (recommended)
 ./scripts/install.sh
@@ -206,7 +354,40 @@ mise run build
 sudo ./scripts/install.sh --system-wide
 ```
 
-### Binary not in PATH
+### PowerShell Execution Policy Error (Windows)
+```
+File cannot be loaded because running scripts is disabled on this system.
+```
+
+**Solution:**
+```powershell
+# Option 1: Bypass for current session only (safest)
+Set-ExecutionPolicy Bypass -Scope Process
+.\scripts\install.ps1
+
+# Option 2: Allow signed scripts for current user
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+# Check current policy
+Get-ExecutionPolicy -List
+```
+
+### Administrator Rights Required (Windows)
+```
+Access to the path 'C:\Program Files' is denied.
+```
+
+**Solution:**
+```powershell
+# Option 1: Use user-local installation (no admin needed)
+.\scripts\install.ps1
+
+# Option 2: Run PowerShell as Administrator
+# Right-click PowerShell → "Run as Administrator"
+.\scripts\install.ps1 -SystemWide
+```
+
+### Binary not in PATH (Linux/macOS)
 ```bash
 # Check PATH
 echo $PATH | grep .local/bin
@@ -220,7 +401,19 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
-### Shell completion not working
+### Binary not in PATH (Windows)
+```powershell
+# Check PATH
+$env:Path -split ';' | Select-String "Astrolabe"
+
+# Add to User PATH manually
+$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+[Environment]::SetEnvironmentVariable("Path", "$userPath;$env:LOCALAPPDATA\Programs\Astrolabe", "User")
+
+# Restart PowerShell to pick up changes
+```
+
+### Shell completion not working (Linux/macOS)
 ```bash
 # Bash: Source completion file
 source ~/.local/share/bash-completion/completions/astrolabe
@@ -230,6 +423,20 @@ rm -f ~/.zcompdump && compinit
 
 # Fish: Restart fish shell
 exec fish
+```
+
+### PowerShell completion not working (Windows)
+```powershell
+# Check if profile exists
+Test-Path $PROFILE
+
+# Check if completion is in profile
+Get-Content $PROFILE | Select-String "astrolabe"
+
+# Manually source completion
+. "$env:USERPROFILE\.astrolabe\astrolabe-completion.ps1"
+
+# Restart PowerShell
 ```
 
 ### Serial port access denied (Linux)
@@ -243,6 +450,28 @@ sudo usermod -a -G dialout $USER
 # IMPORTANT: Log out and log back in
 # Verify group membership
 groups | grep dialout
+```
+
+### COM port not found (Windows)
+```powershell
+# List all COM ports
+Get-WmiObject Win32_PnPEntity | Where-Object { $_.Caption -match "COM\d+" } | Select-Object Caption
+
+# Check Device Manager
+devmgmt.msc
+
+# Install drivers if needed (FTDI, CH340, etc.)
+```
+
+### Windows Terminal Color Issues
+If colors don't display correctly in PowerShell:
+```powershell
+# Use Windows Terminal (recommended)
+# Download from Microsoft Store
+
+# Or disable colors
+$env:NO_COLOR = "1"
+.\scripts\install.ps1
 ```
 
 ## Development
