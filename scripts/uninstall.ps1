@@ -77,12 +77,13 @@ function Write-ColorOutput {
         [string]$Level
     )
 
+    # Use simple ASCII characters that work across all terminals
     $icon = switch ($Level) {
-        "Info"    { "ℹ" }
-        "Success" { "✓" }
-        "Warning" { "⚠" }
-        "Error"   { "✗" }
-        "Step"    { "→" }
+        "Info"    { "[i]" }
+        "Success" { "[+]" }
+        "Warning" { "[!]" }
+        "Error"   { "[x]" }
+        "Step"    { ">>>" }
         "Header"  { "" }
     }
 
@@ -481,7 +482,7 @@ function Show-Summary {
     Write-Host "Removed items:" -ForegroundColor White
     Write-Host ""
     foreach ($item in $RemovedItems) {
-        Write-Host "  ✓ $item" -ForegroundColor Green
+        Write-Host "  [+] $item" -ForegroundColor Green
     }
     Write-Host ""
 

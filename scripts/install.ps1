@@ -73,12 +73,13 @@ function Write-ColorOutput {
         [string]$Level
     )
 
+    # Use simple ASCII characters that work across all terminals
     $icon = switch ($Level) {
-        "Info"    { "ℹ" }
-        "Success" { "✓" }
-        "Warning" { "⚠" }
-        "Error"   { "✗" }
-        "Step"    { "→" }
+        "Info"    { "[i]" }
+        "Success" { "[+]" }
+        "Warning" { "[!]" }
+        "Error"   { "[x]" }
+        "Step"    { ">>>" }
         "Header"  { "" }
     }
 
@@ -393,10 +394,10 @@ function Test-Installation {
 function Show-Summary {
     Write-ColorOutput "Installation Complete!" -Level Header
 
-    Write-Host "✓ Astrolabe v$Version installed to: " -ForegroundColor Green -NoNewline
+    Write-Host "[+] Astrolabe v$Version installed to: " -ForegroundColor Green -NoNewline
     Write-Host $InstallDir -ForegroundColor Cyan
 
-    Write-Host "✓ Configuration directory: " -ForegroundColor Green -NoNewline
+    Write-Host "[+] Configuration directory: " -ForegroundColor Green -NoNewline
     Write-Host $ConfigDir -ForegroundColor Cyan
 
     Write-Host ""
