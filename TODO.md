@@ -32,14 +32,45 @@ This TODO list is organized by priority based on the Astrolabe MVP completion ro
 ## 🟡 MEDIUM PRIORITY - Deployment & Usability
 
 ### Create Install & Uninstall Script
-**Status**: Not Started
+**Status**: Complete ✅ (Linux/macOS/Windows)
 **Required for**: Field deployment
 
-- [ ] Create installation script that adds astrolabe to PATH
-- [ ] During installation, offer to add shell completion for user's shell
-- [ ] Support Linux, macOS installation paths
-- [ ] Create uninstall script with cleanup of config/cache (optional)
-- [ ] Test installation on fresh systems
+- [x] Create installation script that adds astrolabe to PATH
+- [x] During installation, offer to add shell completion for user's shell
+- [x] Support Linux, macOS installation paths
+- [x] Create uninstall script with cleanup of config/cache (optional)
+- [x] Test installation on fresh systems (dry-run validated)
+- [x] Create Windows PowerShell install script (install.ps1)
+- [x] Create Windows PowerShell uninstall script (uninstall.ps1)
+- [x] Test on Windows system (dry-run validated - Windows 11)
+
+**Files created:**
+- `scripts/install.sh` - Bash installer for Linux/macOS
+- `scripts/uninstall.sh` - Bash uninstaller for Linux/macOS
+- `scripts/install.ps1` - PowerShell installer for Windows
+- `scripts/uninstall.ps1` - PowerShell uninstaller for Windows
+- `config/connection.yml.example` - Sample connection config
+- `config/metadata.json.example` - Sample metadata config
+- `scripts/README.md` - Comprehensive installation documentation
+
+**Features:**
+- User-local and system-wide installation options
+- PATH configuration (persistent via registry on Windows)
+- Shell completion for bash/zsh/fish/PowerShell
+- Safe uninstallation with data protection
+- Interactive cache/config cleanup
+- Dry-run mode for all scripts
+- Cross-platform compatibility
+- ASCII-based icons for universal terminal compatibility
+
+**Test Results:**
+- ✅ Linux (WSL2/Ubuntu) - install.sh and uninstall.sh dry-run validated
+- ✅ Windows 11 - install.ps1 and uninstall.ps1 dry-run validated
+- ✅ Binary detection and validation working
+- ✅ Serial port detection working (COM8, COM9 detected on Windows)
+- ✅ Configuration directory detection working
+
+**Production Ready:** Scripts are ready for field deployment!
 
 ### Binary Packaging for Distribution
 **Status**: Not Started

@@ -1,0 +1,62 @@
+# Astrolabe Connection Configuration
+# Copy this file to ~/.astrolabe/connection.yml and customize
+
+# Backend API endpoint
+api_url: "https://qa.example.com"
+
+# Project identifier from your QA system
+project_id: ""
+
+# Authentication token (keep secure!)
+# Obtain from your QA admin or API settings
+auth_token: ""
+
+# Local cache directory for offline storage
+# Runs are stored here before upload
+offline_cache: "$HOME/.astrolabe/runs"
+
+# Upload settings
+upload:
+  # Maximum number of retry attempts for failed uploads
+  max_retries: 3
+
+  # Batch size for concurrent uploads (bytes)
+  batch_bytes: 10485760  # 10 MB
+
+  # Retry backoff strategy (seconds)
+  retry_backoff_seconds: [1, 2, 4, 8, 16]
+
+# Optional: Timeout settings
+timeout:
+  # Connection timeout for API requests (seconds)
+  connect: 30
+
+  # Overall request timeout (seconds)
+  request: 300
+
+# Optional: TLS/SSL settings
+tls:
+  # Skip TLS verification (NOT recommended for production)
+  insecure_skip_verify: false
+
+  # Custom CA certificate path (if using self-signed certs)
+  ca_cert: ""
+
+# Optional: Logging configuration
+logging:
+  # Log level: debug, info, warn, error
+  level: "info"
+
+  # Log format: json, console
+  format: "console"
+
+  # Log output: stdout, stderr, or file path
+  output: "stdout"
+
+# Optional: Telemetry settings
+telemetry:
+  # Enable metrics collection
+  enabled: false
+
+  # Metrics endpoint (for Prometheus scraping)
+  port: 9090
