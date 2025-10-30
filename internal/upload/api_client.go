@@ -74,6 +74,9 @@ func (c *APIClient) CreateRun(ctx context.Context, run *core.Run) (string, error
 
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.authToken)
+	// Use the local run.ID (ULID) as the idempotency key for safe retries
+	// Backend can use this to deduplicate create requests
+	httpReq.Header.Set("Idempotency-Key", run.ID)
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
