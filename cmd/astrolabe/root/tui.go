@@ -107,6 +107,7 @@ var tuiCmd = &cobra.Command{
 					pipelineOpts.Source = pipelineSource
 					pipeline, err = capture.NewPipeline(pipelineOpts)
 					if err != nil {
+						cancel()
 						return fmt.Errorf("rebuild pipeline with wrapper source: %w", err)
 					}
 					go func() {
