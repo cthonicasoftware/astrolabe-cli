@@ -34,4 +34,3 @@ go.work.sum
 .vscode/
 .gocache
 qa-agent
-astrolabe
