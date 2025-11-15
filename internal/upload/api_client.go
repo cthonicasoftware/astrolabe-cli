@@ -35,13 +35,13 @@ func NewAPIClient(baseURL, authToken, projectID string) *APIClient {
 
 // CreateRunRequest is sent to the backend to initialize a new run record.
 type CreateRunRequest struct {
-	ProjectID  string              `json:"project_id"`
-	Manifest   core.Manifest       `json:"manifest"`
-	Source     core.SourceMeta     `json:"source"`
-	Capture    core.CaptureSettings `json:"capture"`
-	StartedAt  time.Time           `json:"started_at"`
-	Completed  *time.Time          `json:"completed_at,omitempty"`
-	RecordsCount uint64            `json:"records_count"`
+	ProjectID    string               `json:"project_id"`
+	Manifest     core.Manifest        `json:"manifest"`
+	Source       core.SourceMeta      `json:"source"`
+	Capture      core.CaptureSettings `json:"capture"`
+	StartedAt    time.Time            `json:"started_at"`
+	Completed    *time.Time           `json:"completed_at,omitempty"`
+	RecordsCount uint64               `json:"records_count"`
 }
 
 // CreateRunResponse contains the server-assigned run ID.
@@ -67,7 +67,7 @@ func (c *APIClient) CreateRun(ctx context.Context, run *core.Run) (string, error
 	}
 
 	// Build HTTP request to create run endpoint
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v1/runs", bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v1/runs/", bytes.NewReader(body))
 	if err != nil {
 		return "", fmt.Errorf("build create run request: %w", err)
 	}
@@ -99,16 +99,16 @@ func (c *APIClient) CreateRun(ctx context.Context, run *core.Run) (string, error
 
 // PresignedURLRequest asks the server for a presigned URL to upload a specific artifact.
 type PresignedURLRequest struct {
-	FileName     string `json:"file_name"`
-	ContentType  string `json:"content_type"`
-	SizeBytes    int64  `json:"size_bytes"`
+	FileName       string `json:"file_name"`
+	ContentType    string `json:"content_type"`
+	SizeBytes      int64  `json:"size_bytes"`
 	ChecksumSHA256 string `json:"checksum_sha256"`
 }
 
 // PresignedURLResponse contains the URL and any additional upload fields.
 type PresignedURLResponse struct {
-	URL    string            `json:"url"`
-	Method string            `json:"method"` // Usually "PUT"
+	URL     string            `json:"url"`
+	Method  string            `json:"method"`            // Usually "PUT"
 	Headers map[string]string `json:"headers,omitempty"` // Additional headers required
 }
 
@@ -156,8 +156,8 @@ func (c *APIClient) GetPresignedURL(ctx context.Context, remoteRunID string, art
 
 // ConfirmUploadRequest notifies the backend that an artifact upload completed successfully.
 type ConfirmUploadRequest struct {
-	FileName       string `json:"file_name"`
-	ChecksumSHA256 string `json:"checksum_sha256"`
+	FileName       string    `json:"file_name"`
+	ChecksumSHA256 string    `json:"checksum_sha256"`
 	UploadedAt     time.Time `json:"uploaded_at"`
 }
 
