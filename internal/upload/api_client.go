@@ -97,28 +97,51 @@ func (c *APIClient) CreateRun(ctx context.Context, run *core.Run) (string, error
 	return createResp.RunID, nil
 }
 
-// PresignedURLRequest asks the server for a presigned URL to upload a specific artifact.
-type PresignedURLRequest struct {
-	FileName       string `json:"file_name"`
+// ArtifactPresignRequest represents a single artifact in the presign request.
+type ArtifactPresignRequest struct {
+	Filename       string `json:"filename"`        // Changed from file_name to match backend
+	Role           string `json:"role"`            // Required by backend (manifest, data, log, etc.)
 	ContentType    string `json:"content_type"`
 	SizeBytes      int64  `json:"size_bytes"`
 	ChecksumSHA256 string `json:"checksum_sha256"`
+	Source         string `json:"source,omitempty"` // Optional, defaults to "cli"
 }
 
-// PresignedURLResponse contains the URL and any additional upload fields.
+// PresignedURLRequest asks the server for presigned URLs (batch format).
+type PresignedURLRequest struct {
+	Artifacts []ArtifactPresignRequest `json:"artifacts"`
+}
+
+// ArtifactPresignResponse represents a single artifact in the presign response.
+type ArtifactPresignResponse struct {
+	ArtifactID string            `json:"artifact_id"`          // Backend-assigned ULID
+	URL        string            `json:"url,omitempty"`        // Presigned URL (empty if existing)
+	Method     string            `json:"method,omitempty"`     // Usually "PUT"
+	Headers    map[string]string `json:"headers,omitempty"`    // Additional headers required
+	ExpiresAt  string            `json:"expires_at,omitempty"` // ISO timestamp
+	Status     string            `json:"status,omitempty"`     // "existing" if artifact already uploaded
+}
+
+// PresignedURLResponse contains the batch response from the backend.
 type PresignedURLResponse struct {
-	URL     string            `json:"url"`
-	Method  string            `json:"method"`            // Usually "PUT"
-	Headers map[string]string `json:"headers,omitempty"` // Additional headers required
+	Artifacts []ArtifactPresignResponse `json:"artifacts"`
 }
 
 // GetPresignedURL requests a presigned URL for uploading a single artifact.
-func (c *APIClient) GetPresignedURL(ctx context.Context, remoteRunID string, artifact core.Artifact) (*PresignedURLResponse, error) {
+// Note: Backend expects batch format, so we wrap the single artifact in an array.
+func (c *APIClient) GetPresignedURL(ctx context.Context, remoteRunID string, artifact core.Artifact) (*ArtifactPresignResponse, error) {
+	// Wrap single artifact in batch request
 	req := PresignedURLRequest{
-		FileName:       artifact.Name,
-		ContentType:    artifact.MediaType,
-		SizeBytes:      artifact.SizeBytes,
-		ChecksumSHA256: artifact.Checksum.Value,
+		Artifacts: []ArtifactPresignRequest{
+			{
+				Filename:       artifact.Name,
+				Role:           string(artifact.Role),
+				ContentType:    artifact.MediaType,
+				SizeBytes:      artifact.SizeBytes,
+				ChecksumSHA256: artifact.Checksum.Value,
+				Source:         "cli",
+			},
+		},
 	}
 
 	body, err := json.Marshal(req)
@@ -151,22 +174,45 @@ func (c *APIClient) GetPresignedURL(ctx context.Context, remoteRunID string, art
 		return nil, fmt.Errorf("decode presigned url response: %w", err)
 	}
 
-	return &presignResp, nil
+	// Extract first (and only) artifact from batch response
+	if len(presignResp.Artifacts) == 0 {
+		return nil, fmt.Errorf("backend returned empty artifacts array")
+	}
+
+	return &presignResp.Artifacts[0], nil
 }
 
-// ConfirmUploadRequest notifies the backend that an artifact upload completed successfully.
-type ConfirmUploadRequest struct {
-	FileName       string    `json:"file_name"`
+// ArtifactConfirmRequest represents a single artifact in the confirm request.
+type ArtifactConfirmRequest struct {
+	ArtifactID     string    `json:"artifact_id"`      // Backend-assigned ULID (required!)
+	Filename       string    `json:"filename"`         // Changed from file_name to match backend
 	ChecksumSHA256 string    `json:"checksum_sha256"`
 	UploadedAt     time.Time `json:"uploaded_at"`
 }
 
+// ConfirmUploadRequest notifies the backend that artifact uploads completed (batch format).
+type ConfirmUploadRequest struct {
+	Artifacts []ArtifactConfirmRequest `json:"artifacts"`
+}
+
 // ConfirmUpload tells the backend that an artifact was successfully uploaded.
+// Note: Backend expects batch format, so we wrap the single artifact in an array.
 func (c *APIClient) ConfirmUpload(ctx context.Context, remoteRunID string, artifact core.Artifact) error {
+	// Validate that we have the remote artifact ID (required by backend)
+	if artifact.RemoteArtifactID == "" {
+		return fmt.Errorf("artifact missing remote_artifact_id (must call GetPresignedURL first)")
+	}
+
+	// Wrap single artifact in batch request
 	req := ConfirmUploadRequest{
-		FileName:       artifact.Name,
-		ChecksumSHA256: artifact.Checksum.Value,
-		UploadedAt:     time.Now(),
+		Artifacts: []ArtifactConfirmRequest{
+			{
+				ArtifactID:     artifact.RemoteArtifactID,
+				Filename:       artifact.Name,
+				ChecksumSHA256: artifact.Checksum.Value,
+				UploadedAt:     time.Now(),
+			},
+		},
 	}
 
 	body, err := json.Marshal(req)

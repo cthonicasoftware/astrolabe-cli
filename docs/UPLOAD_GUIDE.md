@@ -172,7 +172,9 @@ Response:
 }
 ```
 
-### 2. Get Presigned URL
+### 2. Get Presigned URL (Batch Format)
+
+**Note**: The backend expects a batch format (array of artifacts), even for single files. This allows for future optimization of multi-file uploads.
 
 ```
 POST /api/v1/runs/<run_id>/artifacts/presign
@@ -180,23 +182,43 @@ Authorization: Bearer <token>
 Content-Type: application/json
 
 {
-  "file_name": "manifest.json",
-  "content_type": "application/json",
-  "size_bytes": 1024,
-  "checksum_sha256": "abc123..."
+  "artifacts": [
+    {
+      "filename": "manifest.json",
+      "role": "manifest",
+      "content_type": "application/json",
+      "size_bytes": 1024,
+      "checksum_sha256": "abc123...",
+      "source": "cli"
+    }
+  ]
 }
 
 Response:
 {
-  "url": "https://s3.amazonaws.com/bucket/path?credentials...",
-  "method": "PUT",
-  "headers": {
-    "Content-MD5": "..."
-  }
+  "artifacts": [
+    {
+      "artifact_id": "01JARTIFACT123",
+      "url": "https://s3.amazonaws.com/bucket/path?credentials...",
+      "method": "PUT",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "expires_at": "2025-11-16T12:00:00Z",
+      "status": null
+    }
+  ]
 }
 ```
 
-### 3. Confirm Upload
+**Important Fields**:
+- `artifact_id`: Backend-assigned ULID for this artifact (save this for confirmation!)
+- `role`: Required field - one of: `manifest`, `data`, `log`, `attachment`, `raw`
+- `status`: If `"existing"`, the artifact is already uploaded (deduplication), skip upload step
+
+### 3. Confirm Upload (Batch Format)
+
+**Note**: Uses the `artifact_id` returned from the presign endpoint.
 
 ```
 POST /api/v1/runs/<run_id>/artifacts/confirm
@@ -204,13 +226,20 @@ Authorization: Bearer <token>
 Content-Type: application/json
 
 {
-  "file_name": "manifest.json",
-  "checksum_sha256": "abc123...",
-  "uploaded_at": "2024-01-15T10:30:00Z"
+  "artifacts": [
+    {
+      "artifact_id": "01JARTIFACT123",
+      "filename": "manifest.json",
+      "checksum_sha256": "abc123...",
+      "uploaded_at": "2025-11-16T11:55:00Z"
+    }
+  ]
 }
 
-Response: 200 OK or 204 No Content
+Response: 204 No Content
 ```
+
+**Important**: The CLI automatically stores the `artifact_id` from step 2 and includes it in the confirmation request.
 
 ## File Structure
 
@@ -231,24 +260,34 @@ The upload system has three main components:
 ### 1. `APIClient` (api_client.go)
 
 Handles HTTP communication with the QA backend:
-- Creates run records
-- Requests presigned URLs
-- Confirms successful uploads
+- Creates run records (with idempotency key from run ULID)
+- Requests presigned URLs in batch format
+- Stores backend-assigned `artifact_id` for each artifact
+- Confirms successful uploads using `artifact_id`
+
+**Key Implementation Details**:
+- All requests use batch format (arrays) even for single artifacts
+- Extracts `artifact_id` from presign response for confirmation step
+- Validates `artifact_id` exists before confirming upload
+- Handles deduplication when backend returns `status: "existing"`
 
 ### 2. `Uploader` (uploader.go)
 
 Handles actual file uploads:
-- Uploads to presigned URLs
-- Implements retry logic
+- Uploads to presigned URLs using PUT method
+- Implements retry logic with exponential backoff
 - Tracks upload attempts
+- Skips upload if artifact already exists (deduplication)
 
 ### 3. `Client` (client.go)
 
 Orchestrates the full process:
 - Loads run metadata from disk
-- Manages upload state
+- Manages upload state persistence (`upload_state.json`)
 - Coordinates API calls and file uploads
-- Persists state for resume capability
+- Stores `artifact_id` from presign response in local artifact metadata
+- Handles deduplication flow (skip upload when `status: "existing"`)
+- Ensures `artifact_id` is available for confirmation step
 
 ## Testing
 

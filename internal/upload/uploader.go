@@ -39,7 +39,7 @@ type UploadResult struct {
 
 // Upload uploads a single file to a presigned URL with automatic retry and exponential backoff.
 // This is where the "resilience" happens - network failures are expected and handled gracefully.
-func (u *Uploader) Upload(ctx context.Context, artifact core.Artifact, presignedURL *PresignedURLResponse) (*UploadResult, error) {
+func (u *Uploader) Upload(ctx context.Context, artifact core.Artifact, presignedURL *ArtifactPresignResponse) (*UploadResult, error) {
 	result := &UploadResult{
 		Artifact: artifact,
 	}
@@ -94,7 +94,7 @@ func (u *Uploader) Upload(ctx context.Context, artifact core.Artifact, presigned
 }
 
 // uploadOnce performs a single upload attempt without retries.
-func (u *Uploader) uploadOnce(ctx context.Context, artifact core.Artifact, presignedURL *PresignedURLResponse) error {
+func (u *Uploader) uploadOnce(ctx context.Context, artifact core.Artifact, presignedURL *ArtifactPresignResponse) error {
 	// Open the file
 	file, err := os.Open(artifact.Path)
 	if err != nil {

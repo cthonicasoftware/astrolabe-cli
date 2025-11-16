@@ -11,6 +11,8 @@ Astrolabe is a Go-based CLI/TUI agent that standardizes data acquisition from te
 
 **Current Implementation Status**: ✅ **MVP COMPLETE**. All MVP sources (Serial, File, TCP) are fully implemented and tested. The core capture, normalization, storage, and upload pipeline is operational. A comprehensive TUI is implemented with styled CLI output. Telemetry, testing infrastructure, and operator-friendly features are in place.
 
+**Upload System**: ✅ **Aligned with Orrery Backend Contract**. The upload client now uses batch format for presign/confirm endpoints, stores backend-assigned artifact IDs, and supports deduplication. Compatible with Orrery Phase 3 implementation.
+
 ## Core Philosophy
 
 - **Single source of truth**: Replace ad-hoc scripts with one consistent tool
@@ -75,10 +77,12 @@ internal/
 - Source-specific fields preserved
 
 **Artifact**: On-disk file belonging to a run
-- Role-based classification (manifest, data, logs, attachments)
-- Checksum for integrity validation
+- Role-based classification (manifest, data, logs, attachments, raw)
+- Checksum for integrity validation (SHA-256)
 - Media type for proper handling
 - Relative path within run directory
+- Remote artifact ID (backend-assigned ULID after presign request)
+- Upload tracking (timestamps, remote URL)
 
 **UploadState**: Backend reconciliation tracker
 - Queue status (pending, uploading, completed, failed)
@@ -276,12 +280,71 @@ Use `context.Context` for graceful shutdown on SIGTERM/SIGINT.
 1. List pending runs (query storage)
 2. For each run:
    a. Verify checksums
-   b. Request presigned URLs from backend
-   c. Upload artifacts (parallel workers)
+   b. Request presigned URLs from backend (batch format)
+      - Send artifacts array with role, filename, checksum
+      - Receive artifact_id for each artifact (store locally)
+      - Check for deduplication (status: "existing")
+   c. Upload artifacts to presigned URLs
+      - Skip if status was "existing" (already uploaded)
+      - Use PUT method with file content
+      - Apply retry logic with exponential backoff
    d. Confirm upload with backend
-   e. Update local state
+      - Send artifact_id (from step b) in batch format
+      - Backend verifies file in storage and marks as uploaded
+   e. Update local state (save upload_state.json)
 3. Retry failed uploads (exponential backoff)
 ```
+
+### Backend Contract Alignment
+
+**Presign Request** (batch format):
+```json
+{
+  "artifacts": [{
+    "filename": "manifest.json",
+    "role": "manifest",
+    "content_type": "application/json",
+    "size_bytes": 1024,
+    "checksum_sha256": "abc...",
+    "source": "cli"
+  }]
+}
+```
+
+**Presign Response**:
+```json
+{
+  "artifacts": [{
+    "artifact_id": "01JARTIFACT123",  // Store this!
+    "url": "https://...",
+    "method": "PUT",
+    "headers": {...},
+    "expires_at": "2025-11-16T12:00:00Z",
+    "status": null  // or "existing" for deduplication
+  }]
+}
+```
+
+**Confirm Request** (uses artifact_id):
+```json
+{
+  "artifacts": [{
+    "artifact_id": "01JARTIFACT123",  // From presign response
+    "filename": "manifest.json",
+    "checksum_sha256": "abc...",
+    "uploaded_at": "2025-11-16T11:55:00Z"
+  }]
+}
+```
+
+### Deduplication Support
+
+The upload system supports artifact deduplication:
+- Backend detects duplicate artifacts by checksum during presign request
+- Returns `status: "existing"` in presign response for duplicates
+- CLI skips upload step for deduplicated artifacts
+- Confirmation still required (to link artifact to current run)
+- Reduces bandwidth and storage costs for repeated uploads
 
 ### Retry Logic
 
@@ -289,6 +352,7 @@ Use `context.Context` for graceful shutdown on SIGTERM/SIGINT.
 - Backoff: [1s, 2s, 4s, 8s, 16s]
 - Jitter: ±20% to prevent thundering herd
 - Permanent failures: Mark for manual investigation
+- Retries preserve artifact_id from original presign request
 
 ### Offline Behavior
 

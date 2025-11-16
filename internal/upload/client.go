@@ -104,22 +104,32 @@ func (c *Client) UploadRun(ctx context.Context, runID string) error {
 			return fmt.Errorf("get presigned url for %s: %w", artifact.Name, err)
 		}
 
-		// Upload the file
-		result, err := c.uploader.Upload(ctx, *artifact, presignResp)
-		if err != nil {
-			run.Upload.Status = core.UploadStatusFailed
-			run.Upload.LastError = fmt.Sprintf("upload %s: %v", artifact.Name, err)
+		// Store the backend-assigned artifact ID (required for confirmation)
+		artifact.RemoteArtifactID = presignResp.ArtifactID
+
+		// Check if artifact already exists on backend (status="existing")
+		if presignResp.Status == "existing" {
+			// Artifact already uploaded, skip to confirmation
 			now := time.Now()
-			run.Upload.LastAttempt = &now
-			run.Upload.Attempts += result.Attempts
-			_ = c.saveRunState(run)
-			return fmt.Errorf("upload artifact %s: %w", artifact.Name, err)
+			artifact.UploadedAt = &now
+		} else {
+			// Upload the file
+			result, err := c.uploader.Upload(ctx, *artifact, presignResp)
+			if err != nil {
+				run.Upload.Status = core.UploadStatusFailed
+				run.Upload.LastError = fmt.Sprintf("upload %s: %v", artifact.Name, err)
+				now := time.Now()
+				run.Upload.LastAttempt = &now
+				run.Upload.Attempts += result.Attempts
+				_ = c.saveRunState(run)
+				return fmt.Errorf("upload artifact %s: %w", artifact.Name, err)
+			}
+
+			// Update artifact metadata
+			artifact.UploadedAt = result.UploadedAt
 		}
 
-		// Update artifact metadata
-		artifact.UploadedAt = result.UploadedAt
-
-		// Confirm upload with server
+		// Confirm upload with server (always needed, even for existing artifacts)
 		if err := c.apiClient.ConfirmUpload(ctx, remoteRunID, *artifact); err != nil {
 			run.Upload.Status = core.UploadStatusFailed
 			run.Upload.LastError = fmt.Sprintf("confirm upload for %s: %v", artifact.Name, err)
