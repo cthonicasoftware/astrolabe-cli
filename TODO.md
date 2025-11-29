@@ -10,18 +10,18 @@ This TODO list is organized by priority based on the Astrolabe MVP completion ro
 **Status**: In Progress (Backend API work started in Orrery)
 **Blocks**: Production deployment, end-to-end validation
 
-- [ ] Generate random capture files for testing
-- [ ] Test upload flow with real Django backend
-- [ ] Verify presigned URL upload mechanism
-- [ ] Test retry logic with simulated failures
-- [ ] Validate checksum verification on backend
-- [ ] Test offline cache and reconnection flow
+- [x] Generate random capture files for testing
+- [x] Test upload flow with real Django backend
+- [x] Verify presigned URL upload mechanism
+- [x] Test retry logic with simulated failures
+- [x] Validate checksum verification on backend
+- [x] Test offline cache and reconnection flow
 
 ### End-to-End Integration Tests with Real Backend
 **Status**: Pending (requires backend API completion)
 **Blocks**: Production confidence
 
-- [ ] Set up test backend instance
+- [x] Set up test backend instance
 - [ ] Test full capture → upload → retrieval flow
 - [ ] Test error scenarios (network failures, auth errors, corrupted data)
 - [ ] Verify manifest and artifact integrity end-to-end
