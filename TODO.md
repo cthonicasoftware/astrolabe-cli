@@ -88,7 +88,7 @@ This TODO list is organized by priority based on the Astrolabe MVP completion ro
 **Status**: Not Started
 **Required for**: Production confidence with fast devices
 
-- [ ] Test serial capture at high baud rates (921600+)
+- [x] Test serial capture at high baud rates (921600+)
 - [ ] Test TCP capture with high-frequency data streams
 - [ ] Profile memory usage during long-running captures
 - [ ] Test large file ingestion (multi-GB CSV/JSONL files)
