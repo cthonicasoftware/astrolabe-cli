@@ -1,9 +1,17 @@
 [tools]
 go = "1.25.1"
 
+[env]
+GOBIN = "{{config_root}}/.bin"
+GOCACHE = "{{config_root}}/.gocache"
+
+# =============================================================================
+# Development Tasks
+# =============================================================================
+
 [tasks.build]
-run = "go build ./cmd/astrolabe"
-description = "Build the astrolabe CLI"
+run = "go build -o astrolabe ./cmd/astrolabe"
+description = "Build the astrolabe CLI for current platform"
 
 [tasks.test]
 run = "go test ./..."
@@ -15,8 +23,181 @@ description = "Run the CLI"
 
 [tasks.tui]
 run = "go run ./cmd/astrolabe tui"
-description = "Run the Bubble Tea TUI demo (after build)"
+description = "Run the Bubble Tea TUI demo"
 
-[env]
-GOBIN = "{{config_root}}/.bin"
-GOCACHE = "{{config_root}}/.gocache"
+[tasks.fmt]
+run = "go fmt ./..."
+description = "Format all Go code"
+
+[tasks.vet]
+run = "go vet ./..."
+description = "Run Go vet static analysis"
+
+[tasks.lint]
+run = "go fmt ./... && go vet ./..."
+description = "Run formatting and static analysis"
+
+# =============================================================================
+# Release Build Tasks
+# =============================================================================
+
+[tasks.clean]
+run = "rm -rf dist/"
+description = "Clean the dist directory"
+
+[tasks."build:version"]
+run = """
+VERSION="${ASTROLABE_VERSION:-dev}"
+GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+echo "-X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.Version=${VERSION} -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.Commit=${GIT_COMMIT} -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.BuildDate=${BUILD_DATE}"
+"""
+description = "Generate ldflags for version embedding"
+
+[tasks."build:linux-amd64"]
+run = """
+mkdir -p dist
+VERSION="${ASTROLABE_VERSION:-dev}"
+GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+LDFLAGS="-s -w -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.Version=${VERSION} -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.Commit=${GIT_COMMIT} -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.BuildDate=${BUILD_DATE}"
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/astrolabe-linux-amd64 ./cmd/astrolabe
+echo "Built: dist/astrolabe-linux-amd64"
+"""
+description = "Build static binary for Linux AMD64"
+
+[tasks."build:linux-arm64"]
+run = """
+mkdir -p dist
+VERSION="${ASTROLABE_VERSION:-dev}"
+GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+LDFLAGS="-s -w -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.Version=${VERSION} -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.Commit=${GIT_COMMIT} -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.BuildDate=${BUILD_DATE}"
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o dist/astrolabe-linux-arm64 ./cmd/astrolabe
+echo "Built: dist/astrolabe-linux-arm64"
+"""
+description = "Build static binary for Linux ARM64"
+
+[tasks."build:darwin-amd64"]
+run = """
+mkdir -p dist
+VERSION="${ASTROLABE_VERSION:-dev}"
+GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+LDFLAGS="-s -w -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.Version=${VERSION} -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.Commit=${GIT_COMMIT} -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.BuildDate=${BUILD_DATE}"
+CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/astrolabe-darwin-amd64 ./cmd/astrolabe
+echo "Built: dist/astrolabe-darwin-amd64"
+"""
+description = "Build binary for macOS Intel"
+
+[tasks."build:darwin-arm64"]
+run = """
+mkdir -p dist
+VERSION="${ASTROLABE_VERSION:-dev}"
+GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+LDFLAGS="-s -w -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.Version=${VERSION} -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.Commit=${GIT_COMMIT} -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.BuildDate=${BUILD_DATE}"
+CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o dist/astrolabe-darwin-arm64 ./cmd/astrolabe
+echo "Built: dist/astrolabe-darwin-arm64"
+"""
+description = "Build binary for macOS Apple Silicon"
+
+[tasks."build:windows-amd64"]
+run = """
+mkdir -p dist
+VERSION="${ASTROLABE_VERSION:-dev}"
+GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+LDFLAGS="-s -w -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.Version=${VERSION} -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.Commit=${GIT_COMMIT} -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.BuildDate=${BUILD_DATE}"
+CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/astrolabe-windows-amd64.exe ./cmd/astrolabe
+echo "Built: dist/astrolabe-windows-amd64.exe"
+"""
+description = "Build binary for Windows AMD64"
+
+[tasks."build:all"]
+depends = ["clean"]
+run = """
+mise run build:linux-amd64
+mise run build:linux-arm64
+mise run build:darwin-amd64
+mise run build:darwin-arm64
+mise run build:windows-amd64
+echo ""
+echo "All binaries built in dist/"
+ls -lh dist/
+"""
+description = "Build binaries for all platforms"
+
+# =============================================================================
+# Archive Tasks
+# =============================================================================
+
+[tasks."archive:linux-amd64"]
+run = """
+cd dist && tar -czvf astrolabe-linux-amd64.tar.gz astrolabe-linux-amd64
+echo "Created: dist/astrolabe-linux-amd64.tar.gz"
+"""
+description = "Create tar.gz archive for Linux AMD64"
+
+[tasks."archive:linux-arm64"]
+run = """
+cd dist && tar -czvf astrolabe-linux-arm64.tar.gz astrolabe-linux-arm64
+echo "Created: dist/astrolabe-linux-arm64.tar.gz"
+"""
+description = "Create tar.gz archive for Linux ARM64"
+
+[tasks."archive:darwin-amd64"]
+run = """
+cd dist && tar -czvf astrolabe-darwin-amd64.tar.gz astrolabe-darwin-amd64
+echo "Created: dist/astrolabe-darwin-amd64.tar.gz"
+"""
+description = "Create tar.gz archive for macOS Intel"
+
+[tasks."archive:darwin-arm64"]
+run = """
+cd dist && tar -czvf astrolabe-darwin-arm64.tar.gz astrolabe-darwin-arm64
+echo "Created: dist/astrolabe-darwin-arm64.tar.gz"
+"""
+description = "Create tar.gz archive for macOS Apple Silicon"
+
+[tasks."archive:windows-amd64"]
+run = """
+cd dist && zip astrolabe-windows-amd64.zip astrolabe-windows-amd64.exe
+echo "Created: dist/astrolabe-windows-amd64.zip"
+"""
+description = "Create zip archive for Windows AMD64"
+
+[tasks."archive:all"]
+run = """
+mise run archive:linux-amd64
+mise run archive:linux-arm64
+mise run archive:darwin-amd64
+mise run archive:darwin-arm64
+mise run archive:windows-amd64
+echo ""
+echo "All archives created in dist/"
+ls -lh dist/*.tar.gz dist/*.zip 2>/dev/null || true
+"""
+description = "Create archives for all platforms"
+
+# =============================================================================
+# Release Tasks
+# =============================================================================
+
+[tasks.release]
+depends = ["build:all"]
+run = """
+mise run archive:all
+echo ""
+echo "=== Release artifacts ready ==="
+ls -lh dist/
+"""
+description = "Build all binaries and create release archives"
+
+[tasks."release:checksums"]
+run = """
+cd dist && sha256sum astrolabe-* > checksums.txt
+echo "Created: dist/checksums.txt"
+cat dist/checksums.txt
+"""
+description = "Generate SHA256 checksums for release artifacts"

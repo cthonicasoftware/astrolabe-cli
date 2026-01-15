@@ -7,7 +7,7 @@ This TODO list is organized by priority based on the Astrolabe MVP completion ro
 ## 🔴 HIGH PRIORITY - Production Readiness Blockers
 
 ### Verify Upload and Validation to API endpoint
-**Status**: In Progress (Backend API work started in Orrery)
+**Status**: Complete ✅
 **Blocks**: Production deployment, end-to-end validation
 
 - [x] Generate random capture files for testing
@@ -18,14 +18,14 @@ This TODO list is organized by priority based on the Astrolabe MVP completion ro
 - [x] Test offline cache and reconnection flow
 
 ### End-to-End Integration Tests with Real Backend
-**Status**: Pending (requires backend API completion)
+**Status**: Complete ✅
 **Blocks**: Production confidence
 
 - [x] Set up test backend instance
-- [ ] Test full capture → upload → retrieval flow
-- [ ] Test error scenarios (network failures, auth errors, corrupted data)
-- [ ] Verify manifest and artifact integrity end-to-end
-- [ ] Test batch upload functionality
+- [x] Test full capture → upload → retrieval flow
+- [x] Test error scenarios (network failures, auth errors, corrupted data)
+- [x] Verify manifest and artifact integrity end-to-end
+- [x] Test batch upload functionality
 
 ---
 
@@ -64,25 +64,46 @@ This TODO list is organized by priority based on the Astrolabe MVP completion ro
 - ASCII-based icons for universal terminal compatibility
 
 **Test Results:**
-- ✅ Linux (WSL2/Ubuntu) - install.sh and uninstall.sh dry-run validated
-- ✅ Windows 11 - install.ps1 and uninstall.ps1 dry-run validated
+- ✅ Linux - Full installation verified on desktop
+- ✅ Windows 11 - Full installation verified on laptop
+- ⚠️ macOS - Not verified (no hardware available for testing)
 - ✅ Binary detection and validation working
 - ✅ Serial port detection working (COM8, COM9 detected on Windows)
 - ✅ Configuration directory detection working
 
-**Production Ready:** Scripts are ready for field deployment!
+**Production Ready:** Scripts verified for Linux and Windows deployment. macOS untested.
 
 ### Binary Packaging for Distribution
-**Status**: Not Started
+**Status**: Complete ✅
 **Required for**: Easy deployment to test benches
 
-- [ ] Linux: Static binary (CGO_ENABLED=0)
-- [ ] macOS: Universal binary (amd64 + arm64)
-- [ ] Windows: Signed executable
-- [ ] Create `.tar.gz` archives (Linux, macOS)
-- [ ] Create `.zip` archives (Windows)
+- [x] Linux: Static binary (CGO_ENABLED=0) - AMD64 and ARM64
+- [x] macOS: Binaries for Intel (AMD64) and Apple Silicon (ARM64)
+- [x] Windows: AMD64 executable
+- [x] Create `.tar.gz` archives (Linux, macOS)
+- [x] Create `.zip` archives (Windows)
+- [x] Version embedding via ldflags
+- [x] SHA256 checksums generation
+- [ ] Optional: Windows code signing
 - [ ] Optional: `.deb` and `.rpm` packages (Linux)
 - [ ] Optional: Homebrew formula (macOS)
+
+**Build Tasks (mise.toml):**
+- `mise run build` - Build for current platform
+- `mise run build:all` - Build all platform binaries
+- `mise run release` - Build all + create archives
+- `mise run release:checksums` - Generate SHA256 checksums
+
+**GitHub Actions:**
+- `.github/workflows/ci.yml` - CI on push/PR (test + build)
+- `.github/workflows/release.yml` - Release on version tags (v*)
+
+**To create a release:**
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+# GitHub Actions automatically builds and creates release
+```
 
 ### Performance Testing with High-Throughput Sources
 **Status**: Not Started
@@ -99,24 +120,31 @@ This TODO list is organized by priority based on the Astrolabe MVP completion ro
 ## 🟢 MEDIUM PRIORITY - Documentation & Training
 
 ### Operator Training Materials
-**Status**: Not Started
+**Status**: Complete ✅
 **Required for**: Field deployment success
 
-- [ ] Create operator quickstart guide
-- [ ] Document common workflows (serial capture, file ingestion, uploads)
-- [ ] Create troubleshooting guide (serial port permissions, network issues)
-- [ ] Document metadata configuration best practices
+- [x] Create operator quickstart guide (`docs/OPERATOR_QUICKSTART.md`)
+- [x] Document common workflows (`docs/OPERATOR_WORKFLOWS.md`)
+- [x] Create troubleshooting guide (`docs/OPERATOR_TROUBLESHOOTING.md`)
+- [x] Document metadata configuration best practices (`docs/METADATA_BEST_PRACTICES.md`)
 - [ ] Create video walkthrough of TUI usage
 
+**Files created:**
+- `docs/OPERATOR_QUICKSTART.md` - 10-minute getting started guide
+- `docs/OPERATOR_WORKFLOWS.md` - Common task patterns (serial, TCP, file, batch, CI/CD)
+- `docs/OPERATOR_TROUBLESHOOTING.md` - Self-service problem resolution guide
+- `docs/METADATA_BEST_PRACTICES.md` - Effective metadata configuration guide
+- `docs/SYSTEM_REQUIREMENTS.md` - Pre-installation checklist
+
 ### Installation Documentation
-**Status**: Not Started
+**Status**: Complete ✅
 **Required for**: Field deployment
 
-- [ ] Document system requirements (OS, permissions, dependencies)
-- [ ] Create step-by-step installation guide
-- [ ] Document configuration file setup
-- [ ] Explain serial port permissions (Linux/macOS)
-- [ ] Document API authentication setup
+- [x] Document system requirements (`docs/SYSTEM_REQUIREMENTS.md`)
+- [x] Create step-by-step installation guide (`scripts/README.md`)
+- [x] Document configuration file setup (covered in quickstart and troubleshooting)
+- [x] Explain serial port permissions (covered in system requirements and troubleshooting)
+- [x] Document API authentication setup (covered in quickstart and troubleshooting)
 
 ### Production Deployment Guide
 **Status**: Not Started
@@ -141,12 +169,13 @@ This TODO list is organized by priority based on the Astrolabe MVP completion ro
 - [ ] Ensure consistent behavior across all TUI screens
 
 ### Create Temperature Calibration Demo
-**Status**: Not Started
+**Status**: Complete ✅
 **Purpose**: MVP demonstration with real hardware
 **Goal**: Demo Astrolabe MVP once backend API is online
+**Location**: `../zephyr/cthonica/`
 
-- [ ] Set up MCP9808 with [Zephyr Driver](https://docs.zephyrproject.org/latest/boards/shields/adafruit_mcp9808/doc/index.html)
-- [ ] Use [NRF9160DK](https://docs.zephyrproject.org/latest/boards/nordic/nrf9160dk/doc/index.html) or [Adafruit Board](https://docs.zephyrproject.org/latest/boards/adafruit/index.html)
+- [x] Set up MCP9808 with Zephyr Driver
+- [x] Hardware configured and ready
 - [ ] Create capture workflow for temperature data
 - [ ] Document setup and execution steps
 - [ ] Prepare demo script for stakeholders
@@ -168,19 +197,23 @@ This TODO list is organized by priority based on the Astrolabe MVP completion ro
 - [ ] Document SCPI instrument configuration
 
 ### Example Workflows Documentation
-**Status**: Not Started
+**Status**: Complete ✅
 **Purpose**: Help operators understand common patterns
 
-- [ ] Document batch file ingestion workflow
-- [ ] Document continuous monitoring setup
-- [ ] Document multi-device capture scenarios
-- [ ] Create example scripts for common tasks
+- [x] Document batch file ingestion workflow (`docs/OPERATOR_WORKFLOWS.md`)
+- [x] Document continuous monitoring setup (`docs/OPERATOR_WORKFLOWS.md`)
+- [x] Document multi-device capture scenarios (`docs/OPERATOR_WORKFLOWS.md`)
+- [x] Create example scripts for common tasks (`docs/OPERATOR_WORKFLOWS.md`)
 
 ---
 
 ## Completion Status
 
 **MVP Core**: ✅ Complete (Serial, File, TCP sources; Upload system; TUI)
-**Backend Integration**: 🚧 In Progress (Orrery Django backend)
-**Production Ready**: ❌ Pending (requires HIGH priority items)
-**Field Deployment**: ❌ Pending (requires MEDIUM priority items)
+**Backend Integration**: ✅ Complete (E2E tests passed with Orrery backend)
+**Installation Scripts**: ✅ Verified (Linux, Windows) ⚠️ Unverified (macOS)
+**Binary Packaging**: ✅ Complete (mise tasks + GitHub Actions release workflow)
+**Operator Documentation**: ✅ Complete (Quickstart, Workflows, Troubleshooting, Metadata, System Requirements)
+**Temperature Demo**: ✅ Hardware set up in `../zephyr/cthonica/`
+**Production Ready**: ✅ Core functionality ready
+**Field Deployment**: ✅ Ready (pending production deployment guide)
