@@ -127,22 +127,30 @@ func TestAPIClient_GetPresignedURL(t *testing.T) {
 					t.Errorf("expected auth header with token")
 				}
 
-				// Decode and verify request body
+				// Decode and verify request body (batch format)
 				var req PresignedURLRequest
 				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 					t.Errorf("failed to decode request: %v", err)
 				}
-				if req.FileName != "manifest.json" {
-					t.Errorf("expected file_name=manifest.json, got %s", req.FileName)
+				if len(req.Artifacts) == 0 {
+					t.Errorf("expected at least one artifact in request")
+				}
+				if req.Artifacts[0].Filename != "manifest.json" {
+					t.Errorf("expected filename=manifest.json, got %s", req.Artifacts[0].Filename)
 				}
 
-				// Send presigned URL response
+				// Send presigned URL response (batch format)
 				w.WriteHeader(http.StatusOK)
 				json.NewEncoder(w).Encode(PresignedURLResponse{
-					URL:    "https://s3.example.com/bucket/path?signature=xyz",
-					Method: "PUT",
-					Headers: map[string]string{
-						"Content-MD5": "abc123",
+					Artifacts: []ArtifactPresignResponse{
+						{
+							ArtifactID: "artifact-123",
+							URL:        "https://s3.example.com/bucket/path?signature=xyz",
+							Method:     "PUT",
+							Headers: map[string]string{
+								"Content-MD5": "abc123",
+							},
+						},
 					},
 				})
 			},
@@ -215,13 +223,19 @@ func TestAPIClient_ConfirmUpload(t *testing.T) {
 					t.Errorf("expected auth header with token")
 				}
 
-				// Decode and verify request body
+				// Decode and verify request body (batch format)
 				var req ConfirmUploadRequest
 				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 					t.Errorf("failed to decode request: %v", err)
 				}
-				if req.FileName != "manifest.json" {
-					t.Errorf("expected file_name=manifest.json, got %s", req.FileName)
+				if len(req.Artifacts) == 0 {
+					t.Errorf("expected at least one artifact in request")
+				}
+				if req.Artifacts[0].Filename != "manifest.json" {
+					t.Errorf("expected filename=manifest.json, got %s", req.Artifacts[0].Filename)
+				}
+				if req.Artifacts[0].ArtifactID != "artifact-123" {
+					t.Errorf("expected artifact_id=artifact-123, got %s", req.Artifacts[0].ArtifactID)
 				}
 
 				w.WriteHeader(http.StatusOK)
@@ -253,9 +267,10 @@ func TestAPIClient_ConfirmUpload(t *testing.T) {
 			client := NewAPIClient(server.URL, "test-token", "test-project")
 
 			artifact := core.Artifact{
-				Name:      "manifest.json",
-				MediaType: "application/json",
-				SizeBytes: 1024,
+				Name:             "manifest.json",
+				MediaType:        "application/json",
+				SizeBytes:        1024,
+				RemoteArtifactID: "artifact-123", // Required for ConfirmUpload
 				Checksum: core.Checksum{
 					Algorithm: "sha256",
 					Value:     "abc123",

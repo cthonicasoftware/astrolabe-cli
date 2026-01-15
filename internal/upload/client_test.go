@@ -3,6 +3,7 @@ package upload
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -74,7 +75,7 @@ func TestUploadRun_Integration(t *testing.T) {
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/api/v1/runs":
+		case "/api/v1/runs/":
 			// Create run endpoint
 			w.WriteHeader(http.StatusCreated)
 			json.NewEncoder(w).Encode(CreateRunResponse{
@@ -82,13 +83,25 @@ func TestUploadRun_Integration(t *testing.T) {
 			})
 
 		case "/api/v1/runs/remote-run-67890/artifacts/presign":
-			// Presigned URL endpoint
+			// Presigned URL endpoint (batch format)
 			// In a real system, this would return a URL to S3/cloud storage
 			// For testing, we return a URL to our mock server
+			var req PresignedURLRequest
+			json.NewDecoder(r.Body).Decode(&req)
+
+			// Generate artifact IDs and presigned URLs for each artifact
+			var artifacts []ArtifactPresignResponse
+			for i, art := range req.Artifacts {
+				artifacts = append(artifacts, ArtifactPresignResponse{
+					ArtifactID: fmt.Sprintf("artifact-%d-%s", i, art.Filename),
+					URL:        server.URL + "/upload",
+					Method:     "PUT",
+				})
+			}
+
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(PresignedURLResponse{
-				URL:    server.URL + "/upload",
-				Method: "PUT",
+				Artifacts: artifacts,
 			})
 
 		case "/upload":
@@ -96,10 +109,12 @@ func TestUploadRun_Integration(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 
 		case "/api/v1/runs/remote-run-67890/artifacts/confirm":
-			// Confirm upload endpoint
+			// Confirm upload endpoint (batch format)
 			var req ConfirmUploadRequest
 			json.NewDecoder(r.Body).Decode(&req)
-			uploadedArtifacts[req.FileName] = true
+			for _, art := range req.Artifacts {
+				uploadedArtifacts[art.Filename] = true
+			}
 			w.WriteHeader(http.StatusOK)
 
 		default:
