@@ -85,11 +85,17 @@ func (m *welcomeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--
+			} else {
+				// Wrap to bottom
+				m.cursor = len(m.menuItems) - 1
 			}
 
 		case "down", "j":
 			if m.cursor < len(m.menuItems)-1 {
 				m.cursor++
+			} else {
+				// Wrap to top
+				m.cursor = 0
 			}
 
 		case "enter", " ":
