@@ -7,7 +7,7 @@ This TODO list is organized by priority based on the Astrolabe MVP completion ro
 ## 🔴 HIGH PRIORITY - Production Readiness Blockers
 
 ### Verify Upload and Validation to API endpoint
-**Status**: In Progress (Backend API work started in Orrery)
+**Status**: Complete ✅
 **Blocks**: Production deployment, end-to-end validation
 
 - [x] Generate random capture files for testing
@@ -18,14 +18,14 @@ This TODO list is organized by priority based on the Astrolabe MVP completion ro
 - [x] Test offline cache and reconnection flow
 
 ### End-to-End Integration Tests with Real Backend
-**Status**: Pending (requires backend API completion)
+**Status**: Complete ✅
 **Blocks**: Production confidence
 
 - [x] Set up test backend instance
-- [ ] Test full capture → upload → retrieval flow
-- [ ] Test error scenarios (network failures, auth errors, corrupted data)
-- [ ] Verify manifest and artifact integrity end-to-end
-- [ ] Test batch upload functionality
+- [x] Test full capture → upload → retrieval flow
+- [x] Test error scenarios (network failures, auth errors, corrupted data)
+- [x] Verify manifest and artifact integrity end-to-end
+- [x] Test batch upload functionality
 
 ---
 
@@ -64,13 +64,14 @@ This TODO list is organized by priority based on the Astrolabe MVP completion ro
 - ASCII-based icons for universal terminal compatibility
 
 **Test Results:**
-- ✅ Linux (WSL2/Ubuntu) - install.sh and uninstall.sh dry-run validated
-- ✅ Windows 11 - install.ps1 and uninstall.ps1 dry-run validated
+- ✅ Linux - Full installation verified on desktop
+- ✅ Windows 11 - Full installation verified on laptop
+- ⚠️ macOS - Not verified (no hardware available for testing)
 - ✅ Binary detection and validation working
 - ✅ Serial port detection working (COM8, COM9 detected on Windows)
 - ✅ Configuration directory detection working
 
-**Production Ready:** Scripts are ready for field deployment!
+**Production Ready:** Scripts verified for Linux and Windows deployment. macOS installation untested.
 
 ### Binary Packaging for Distribution
 **Status**: Not Started
@@ -99,24 +100,31 @@ This TODO list is organized by priority based on the Astrolabe MVP completion ro
 ## 🟢 MEDIUM PRIORITY - Documentation & Training
 
 ### Operator Training Materials
-**Status**: Not Started
+**Status**: Complete ✅
 **Required for**: Field deployment success
 
-- [ ] Create operator quickstart guide
-- [ ] Document common workflows (serial capture, file ingestion, uploads)
-- [ ] Create troubleshooting guide (serial port permissions, network issues)
-- [ ] Document metadata configuration best practices
+- [x] Create operator quickstart guide (`docs/OPERATOR_QUICKSTART.md`)
+- [x] Document common workflows (`docs/OPERATOR_WORKFLOWS.md`)
+- [x] Create troubleshooting guide (`docs/OPERATOR_TROUBLESHOOTING.md`)
+- [x] Document metadata configuration best practices (`docs/METADATA_BEST_PRACTICES.md`)
 - [ ] Create video walkthrough of TUI usage
 
+**Files created:**
+- `docs/OPERATOR_QUICKSTART.md` - 10-minute getting started guide
+- `docs/OPERATOR_WORKFLOWS.md` - Common task patterns (serial, TCP, file, batch, CI/CD)
+- `docs/OPERATOR_TROUBLESHOOTING.md` - Self-service problem resolution guide
+- `docs/METADATA_BEST_PRACTICES.md` - Effective metadata configuration guide
+- `docs/SYSTEM_REQUIREMENTS.md` - Pre-installation checklist
+
 ### Installation Documentation
-**Status**: Not Started
+**Status**: Complete ✅
 **Required for**: Field deployment
 
-- [ ] Document system requirements (OS, permissions, dependencies)
-- [ ] Create step-by-step installation guide
-- [ ] Document configuration file setup
-- [ ] Explain serial port permissions (Linux/macOS)
-- [ ] Document API authentication setup
+- [x] Document system requirements (`docs/SYSTEM_REQUIREMENTS.md`)
+- [x] Create step-by-step installation guide (`scripts/README.md`)
+- [x] Document configuration file setup (covered in quickstart and troubleshooting)
+- [x] Explain serial port permissions (covered in system requirements and troubleshooting)
+- [x] Document API authentication setup (covered in quickstart and troubleshooting)
 
 ### Production Deployment Guide
 **Status**: Not Started
@@ -168,19 +176,21 @@ This TODO list is organized by priority based on the Astrolabe MVP completion ro
 - [ ] Document SCPI instrument configuration
 
 ### Example Workflows Documentation
-**Status**: Not Started
+**Status**: Complete ✅
 **Purpose**: Help operators understand common patterns
 
-- [ ] Document batch file ingestion workflow
-- [ ] Document continuous monitoring setup
-- [ ] Document multi-device capture scenarios
-- [ ] Create example scripts for common tasks
+- [x] Document batch file ingestion workflow (`docs/OPERATOR_WORKFLOWS.md`)
+- [x] Document continuous monitoring setup (`docs/OPERATOR_WORKFLOWS.md`)
+- [x] Document multi-device capture scenarios (`docs/OPERATOR_WORKFLOWS.md`)
+- [x] Create example scripts for common tasks (`docs/OPERATOR_WORKFLOWS.md`)
 
 ---
 
 ## Completion Status
 
 **MVP Core**: ✅ Complete (Serial, File, TCP sources; Upload system; TUI)
-**Backend Integration**: 🚧 In Progress (Orrery Django backend)
-**Production Ready**: ❌ Pending (requires HIGH priority items)
-**Field Deployment**: ❌ Pending (requires MEDIUM priority items)
+**Backend Integration**: ✅ Complete (E2E tests passed with Orrery backend)
+**Installation Scripts**: ✅ Verified (Linux, Windows) ⚠️ Unverified (macOS)
+**Operator Documentation**: ✅ Complete (Quickstart, Workflows, Troubleshooting, Metadata, System Requirements)
+**Production Ready**: ✅ Core functionality ready
+**Field Deployment**: 🚧 Pending (binary packaging, production deployment guide)
