@@ -293,11 +293,11 @@ func (m *captureTabsModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "tab", "shift+tab":
-		// Navigate tabs
+		// Navigate tabs with wrapping
 		if msg.String() == "tab" {
-			m.activeTab = min(m.activeTab+1, len(m.tabs)-1)
+			m.activeTab = (m.activeTab + 1) % len(m.tabs)
 		} else {
-			m.activeTab = max(m.activeTab-1, 0)
+			m.activeTab = (m.activeTab - 1 + len(m.tabs)) % len(m.tabs)
 		}
 		// Reset field focus when switching tabs
 		m.focusMode = FocusModeTabs
@@ -326,11 +326,17 @@ func (m *captureTabsModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *captureTabsModel) handleLeft() tea.Model {
 	switch m.focusMode {
 	case FocusModeTabs:
-		m.activeTab = max(m.activeTab-1, 0)
+		// Wrap tab navigation
+		m.activeTab = (m.activeTab - 1 + len(m.tabs)) % len(m.tabs)
 	case FocusModeFields:
 		m.handleFieldLeft()
 	case FocusModeButtons:
-		m.focusedButton = max(m.focusedButton-1, ButtonIndexConfirm)
+		// Wrap button navigation
+		if m.focusedButton == ButtonIndexConfirm {
+			m.focusedButton = ButtonIndexReset
+		} else {
+			m.focusedButton = ButtonIndexConfirm
+		}
 	}
 	return m
 }
@@ -338,11 +344,17 @@ func (m *captureTabsModel) handleLeft() tea.Model {
 func (m *captureTabsModel) handleRight() tea.Model {
 	switch m.focusMode {
 	case FocusModeTabs:
-		m.activeTab = min(m.activeTab+1, len(m.tabs)-1)
+		// Wrap tab navigation
+		m.activeTab = (m.activeTab + 1) % len(m.tabs)
 	case FocusModeFields:
 		m.handleFieldRight()
 	case FocusModeButtons:
-		m.focusedButton = min(m.focusedButton+1, ButtonIndexReset)
+		// Wrap button navigation
+		if m.focusedButton == ButtonIndexReset {
+			m.focusedButton = ButtonIndexConfirm
+		} else {
+			m.focusedButton = ButtonIndexReset
+		}
 	}
 	return m
 }

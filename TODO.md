@@ -71,19 +71,39 @@ This TODO list is organized by priority based on the Astrolabe MVP completion ro
 - ✅ Serial port detection working (COM8, COM9 detected on Windows)
 - ✅ Configuration directory detection working
 
-**Production Ready:** Scripts verified for Linux and Windows deployment. macOS installation untested.
+**Production Ready:** Scripts verified for Linux and Windows deployment. macOS untested.
 
 ### Binary Packaging for Distribution
-**Status**: Not Started
+**Status**: Complete ✅
 **Required for**: Easy deployment to test benches
 
-- [ ] Linux: Static binary (CGO_ENABLED=0)
-- [ ] macOS: Universal binary (amd64 + arm64)
-- [ ] Windows: Signed executable
-- [ ] Create `.tar.gz` archives (Linux, macOS)
-- [ ] Create `.zip` archives (Windows)
+- [x] Linux: Static binary (CGO_ENABLED=0) - AMD64 and ARM64
+- [x] macOS: Binaries for Intel (AMD64) and Apple Silicon (ARM64)
+- [x] Windows: AMD64 executable
+- [x] Create `.tar.gz` archives (Linux, macOS)
+- [x] Create `.zip` archives (Windows)
+- [x] Version embedding via ldflags
+- [x] SHA256 checksums generation
+- [ ] Optional: Windows code signing
 - [ ] Optional: `.deb` and `.rpm` packages (Linux)
 - [ ] Optional: Homebrew formula (macOS)
+
+**Build Tasks (mise.toml):**
+- `mise run build` - Build for current platform
+- `mise run build:all` - Build all platform binaries
+- `mise run release` - Build all + create archives
+- `mise run release:checksums` - Generate SHA256 checksums
+
+**GitHub Actions:**
+- `.github/workflows/ci.yml` - CI on push/PR (test + build)
+- `.github/workflows/release.yml` - Release on version tags (v*)
+
+**To create a release:**
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+# GitHub Actions automatically builds and creates release
+```
 
 ### Performance Testing with High-Throughput Sources
 **Status**: Not Started
@@ -149,12 +169,13 @@ This TODO list is organized by priority based on the Astrolabe MVP completion ro
 - [ ] Ensure consistent behavior across all TUI screens
 
 ### Create Temperature Calibration Demo
-**Status**: Not Started
+**Status**: Complete ✅
 **Purpose**: MVP demonstration with real hardware
 **Goal**: Demo Astrolabe MVP once backend API is online
+**Location**: `../zephyr/cthonica/`
 
-- [ ] Set up MCP9808 with [Zephyr Driver](https://docs.zephyrproject.org/latest/boards/shields/adafruit_mcp9808/doc/index.html)
-- [ ] Use [NRF9160DK](https://docs.zephyrproject.org/latest/boards/nordic/nrf9160dk/doc/index.html) or [Adafruit Board](https://docs.zephyrproject.org/latest/boards/adafruit/index.html)
+- [x] Set up MCP9808 with Zephyr Driver
+- [x] Hardware configured and ready
 - [ ] Create capture workflow for temperature data
 - [ ] Document setup and execution steps
 - [ ] Prepare demo script for stakeholders
@@ -191,6 +212,8 @@ This TODO list is organized by priority based on the Astrolabe MVP completion ro
 **MVP Core**: ✅ Complete (Serial, File, TCP sources; Upload system; TUI)
 **Backend Integration**: ✅ Complete (E2E tests passed with Orrery backend)
 **Installation Scripts**: ✅ Verified (Linux, Windows) ⚠️ Unverified (macOS)
+**Binary Packaging**: ✅ Complete (mise tasks + GitHub Actions release workflow)
 **Operator Documentation**: ✅ Complete (Quickstart, Workflows, Troubleshooting, Metadata, System Requirements)
+**Temperature Demo**: ✅ Hardware set up in `../zephyr/cthonica/`
 **Production Ready**: ✅ Core functionality ready
-**Field Deployment**: 🚧 Pending (binary packaging, production deployment guide)
+**Field Deployment**: ✅ Ready (pending production deployment guide)

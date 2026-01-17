@@ -49,9 +49,10 @@ func TestUploader_Upload_Success(t *testing.T) {
 		},
 	}
 
-	presignedURL := &PresignedURLResponse{
-		URL:    server.URL,
-		Method: "PUT",
+	presignedURL := &ArtifactPresignResponse{
+		ArtifactID: "artifact-123",
+		URL:        server.URL,
+		Method:     "PUT",
 	}
 
 	result, err := uploader.Upload(context.Background(), artifact, presignedURL)
@@ -103,9 +104,10 @@ func TestUploader_Upload_RetryOnFailure(t *testing.T) {
 		Checksum:  core.Checksum{Algorithm: "sha256", Value: "abc123"},
 	}
 
-	presignedURL := &PresignedURLResponse{
-		URL:    server.URL,
-		Method: "PUT",
+	presignedURL := &ArtifactPresignResponse{
+		ArtifactID: "artifact-123",
+		URL:        server.URL,
+		Method:     "PUT",
 	}
 
 	startTime := time.Now()
@@ -154,9 +156,10 @@ func TestUploader_Upload_MaxRetriesExceeded(t *testing.T) {
 		Checksum:  core.Checksum{Algorithm: "sha256", Value: "abc123"},
 	}
 
-	presignedURL := &PresignedURLResponse{
-		URL:    server.URL,
-		Method: "PUT",
+	presignedURL := &ArtifactPresignResponse{
+		ArtifactID: "artifact-123",
+		URL:        server.URL,
+		Method:     "PUT",
 	}
 
 	result, err := uploader.Upload(context.Background(), artifact, presignedURL)
@@ -200,9 +203,10 @@ func TestUploader_Upload_ContextCancellation(t *testing.T) {
 		Checksum:  core.Checksum{Algorithm: "sha256", Value: "abc123"},
 	}
 
-	presignedURL := &PresignedURLResponse{
-		URL:    server.URL,
-		Method: "PUT",
+	presignedURL := &ArtifactPresignResponse{
+		ArtifactID: "artifact-123",
+		URL:        server.URL,
+		Method:     "PUT",
 	}
 
 	// Cancel context after a short delay
@@ -229,9 +233,10 @@ func TestUploader_Upload_FileNotFound(t *testing.T) {
 		Checksum:  core.Checksum{Algorithm: "sha256", Value: "abc123"},
 	}
 
-	presignedURL := &PresignedURLResponse{
-		URL:    "http://example.com/upload",
-		Method: "PUT",
+	presignedURL := &ArtifactPresignResponse{
+		ArtifactID: "artifact-123",
+		URL:        "http://example.com/upload",
+		Method:     "PUT",
 	}
 
 	result, err := uploader.Upload(context.Background(), artifact, presignedURL)
@@ -271,9 +276,10 @@ func TestUploader_ExponentialBackoff(t *testing.T) {
 		Checksum:  core.Checksum{Algorithm: "sha256", Value: "abc123"},
 	}
 
-	presignedURL := &PresignedURLResponse{
-		URL:    server.URL,
-		Method: "PUT",
+	presignedURL := &ArtifactPresignResponse{
+		ArtifactID: "artifact-123",
+		URL:        server.URL,
+		Method:     "PUT",
 	}
 
 	uploader.Upload(context.Background(), artifact, presignedURL)
