@@ -164,9 +164,9 @@ git push origin v1.0.0
 **Status**: Not Started
 **Impact**: UX polish
 
-- [ ] Add scroll wrapping in TUI menus
-- [ ] Test with keyboard navigation
-- [ ] Ensure consistent behavior across all TUI screens
+- [x] Add scroll wrapping in TUI menus
+- [x] Test with keyboard navigation
+- [x] Ensure consistent behavior across all TUI screens
 
 ### Create Temperature Calibration Demo
 **Status**: Complete ✅
