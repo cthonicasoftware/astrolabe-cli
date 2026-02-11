@@ -16,12 +16,12 @@ import (
 // ============================================================================
 
 // startHighThroughputServer starts a TCP server that sends data as fast as possible
-func startHighThroughputServer(b *testing.B, messageSize int, messageCount int) (int, func()) {
-	b.Helper()
+func startHighThroughputServer(tb testing.TB, messageSize int, messageCount int) (int, func()) {
+	tb.Helper()
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		b.Fatalf("Failed to start test server: %v", err)
+		tb.Fatalf("Failed to start test server: %v", err)
 	}
 
 	port := listener.Addr().(*net.TCPAddr).Port
@@ -199,7 +199,7 @@ func TestTCP_MemoryUsage_LongRunning(t *testing.T) {
 	const msgSize = 256
 	const msgCount = 50000
 
-	port, cleanup := startHighThroughputServer(nil, msgSize, msgCount)
+	port, cleanup := startHighThroughputServer(t, msgSize, msgCount)
 	defer cleanup()
 
 	// Get baseline memory
@@ -238,13 +238,13 @@ func TestTCP_MemoryUsage_LongRunning(t *testing.T) {
 	runtime.GC()
 	runtime.ReadMemStats(&memAfter)
 
-	heapGrowth := memAfter.HeapAlloc - memBefore.HeapAlloc
+	heapGrowth := int64(memAfter.HeapAlloc) - int64(memBefore.HeapAlloc)
 	t.Logf("Messages received: %d", count)
 	t.Logf("Heap growth: %d bytes (%.2f MB)", heapGrowth, float64(heapGrowth)/(1024*1024))
 	t.Logf("Total allocs: %d", memAfter.TotalAlloc-memBefore.TotalAlloc)
 
 	// Check for excessive memory growth (allow 50MB for 50k messages)
-	maxHeapGrowth := uint64(50 * 1024 * 1024)
+	var maxHeapGrowth int64 = 50 * 1024 * 1024
 	if heapGrowth > maxHeapGrowth {
 		t.Errorf("Excessive heap growth: %d bytes (max allowed: %d)", heapGrowth, maxHeapGrowth)
 	}
@@ -273,7 +273,7 @@ func TestTCP_Throughput(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			port, cleanup := startHighThroughputServer(nil, tc.msgSize, tc.msgCount)
+			port, cleanup := startHighThroughputServer(t, tc.msgSize, tc.msgCount)
 			defer cleanup()
 
 			tcp, err := NewTCPWithConfig(TCPConfig{
@@ -613,12 +613,12 @@ func TestFile_MemoryUsage_LargeFile(t *testing.T) {
 	runtime.GC()
 	runtime.ReadMemStats(&memAfter)
 
-	heapGrowth := memAfter.HeapAlloc - memBefore.HeapAlloc
+	heapGrowth := int64(memAfter.HeapAlloc) - int64(memBefore.HeapAlloc)
 	t.Logf("Lines read: %d", count)
 	t.Logf("Heap growth: %d bytes (%.2f MB)", heapGrowth, float64(heapGrowth)/(1024*1024))
 
 	// Should not grow more than 20MB for streaming a 50MB file
-	maxHeapGrowth := uint64(20 * 1024 * 1024)
+	var maxHeapGrowth int64 = 20 * 1024 * 1024
 	if heapGrowth > maxHeapGrowth {
 		t.Errorf("Excessive heap growth: %d bytes (max: %d)", heapGrowth, maxHeapGrowth)
 	}

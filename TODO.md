@@ -110,7 +110,7 @@ git push origin v1.0.0
 **Required for**: Production confidence with fast devices
 
 - [x] Test serial capture at high baud rates (921600+)
-- [ ] Test TCP capture with high-frequency data streams
+- [x] Test TCP capture with high-frequency data streams
 - [ ] Profile memory usage during long-running captures
 - [ ] Test large file ingestion (multi-GB CSV/JSONL files)
 - [ ] Identify and fix performance bottlenecks

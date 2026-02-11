@@ -2,8 +2,11 @@ package sources
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
 	"net"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -415,6 +418,422 @@ func TestTCP_ReconnectAfterClose(t *testing.T) {
 		t.Fatalf("Second Open failed: %v", err)
 	}
 	defer tcp2.Close()
+}
+
+// ============================================================================
+// High-Frequency Data Stream Tests
+// ============================================================================
+
+// startSequencedTCPServer sends numbered messages at high speed with no inter-message delay.
+// Each message is: 4-byte big-endian sequence number + payload padded to msgSize, terminated by '\n'.
+// Returns port, total bytes sent per connection, and cleanup func.
+func startSequencedTCPServer(t *testing.T, msgSize int, msgCount int) (port int, bytesPerConn int, cleanup func()) {
+	t.Helper()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to start sequenced server: %v", err)
+	}
+
+	port = listener.Addr().(*net.TCPAddr).Port
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer c.Close()
+				buf := make([]byte, msgSize)
+				for i := 0; i < msgCount; i++ {
+					// Embed sequence number in first 4 bytes
+					binary.BigEndian.PutUint32(buf[0:4], uint32(i))
+					// Fill rest with deterministic pattern
+					for j := 4; j < msgSize-1; j++ {
+						buf[j] = byte('A' + (j % 26))
+					}
+					buf[msgSize-1] = '\n'
+					if _, err := c.Write(buf); err != nil {
+						return
+					}
+				}
+			}(conn)
+		}
+	}()
+
+	bytesPerConn = msgSize * msgCount
+	cleanup = func() {
+		listener.Close()
+		<-done
+	}
+	return
+}
+
+// TestTCP_HighFrequency_NoDataLoss verifies that all bytes arrive intact when a server
+// blasts data with zero delay between writes (simulating a high-frequency test bench).
+func TestTCP_HighFrequency_NoDataLoss(t *testing.T) {
+	const msgSize = 128  // bytes per message
+	const msgCount = 5000 // total messages
+
+	port, expectedBytes, cleanup := startSequencedTCPServer(t, msgSize, msgCount)
+	defer cleanup()
+
+	tcp, err := NewTCPWithConfig(TCPConfig{
+		Host:           "127.0.0.1",
+		Port:           port,
+		ConnectTimeout: 5 * time.Second,
+		BufferSize:     65536,
+	})
+	if err != nil {
+		t.Fatalf("NewTCPWithConfig: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := tcp.Open(ctx); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer tcp.Close()
+
+	var received []byte
+	timeout := time.After(5 * time.Second)
+
+loop:
+	for {
+		select {
+		case frame, ok := <-tcp.Frames():
+			if !ok {
+				break loop
+			}
+			received = append(received, frame...)
+			if len(received) >= expectedBytes {
+				break loop
+			}
+		case <-timeout:
+			break loop
+		}
+	}
+
+	if len(received) != expectedBytes {
+		t.Fatalf("byte count mismatch: got %d, want %d", len(received), expectedBytes)
+	}
+
+	// Verify every sequence number is present and in order
+	for i := 0; i < msgCount; i++ {
+		offset := i * msgSize
+		seq := binary.BigEndian.Uint32(received[offset : offset+4])
+		if int(seq) != i {
+			t.Fatalf("sequence mismatch at message %d: got seq %d", i, seq)
+		}
+	}
+}
+
+// TestTCP_HighFrequency_Integrity hashes the sent and received streams
+// to confirm bit-perfect transfer under sustained load.
+func TestTCP_HighFrequency_Integrity(t *testing.T) {
+	const msgSize = 256
+	const msgCount = 3000
+
+	// Pre-compute expected hash of the full stream
+	expectedHash := sha256.New()
+	buf := make([]byte, msgSize)
+	for i := 0; i < msgCount; i++ {
+		binary.BigEndian.PutUint32(buf[0:4], uint32(i))
+		for j := 4; j < msgSize-1; j++ {
+			buf[j] = byte('A' + (j % 26))
+		}
+		buf[msgSize-1] = '\n'
+		expectedHash.Write(buf)
+	}
+	want := expectedHash.Sum(nil)
+
+	port, expectedBytes, cleanup := startSequencedTCPServer(t, msgSize, msgCount)
+	defer cleanup()
+
+	tcp, err := NewTCPWithConfig(TCPConfig{
+		Host:           "127.0.0.1",
+		Port:           port,
+		ConnectTimeout: 5 * time.Second,
+		BufferSize:     65536,
+	})
+	if err != nil {
+		t.Fatalf("NewTCPWithConfig: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := tcp.Open(ctx); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer tcp.Close()
+
+	gotHash := sha256.New()
+	totalBytes := 0
+	timeout := time.After(5 * time.Second)
+
+loop:
+	for {
+		select {
+		case frame, ok := <-tcp.Frames():
+			if !ok {
+				break loop
+			}
+			gotHash.Write(frame)
+			totalBytes += len(frame)
+			if totalBytes >= expectedBytes {
+				break loop
+			}
+		case <-timeout:
+			break loop
+		}
+	}
+
+	if totalBytes != expectedBytes {
+		t.Fatalf("byte count mismatch: got %d, want %d", totalBytes, expectedBytes)
+	}
+
+	got := gotHash.Sum(nil)
+	if fmt.Sprintf("%x", got) != fmt.Sprintf("%x", want) {
+		t.Fatalf("SHA-256 mismatch:\n  got  %x\n  want %x", got, want)
+	}
+}
+
+// TestTCP_HighFrequency_ChannelBackpressure verifies that a slow consumer
+// doesn't cause the TCP source to lose data (channel has buffer of 16).
+func TestTCP_HighFrequency_ChannelBackpressure(t *testing.T) {
+	const msgSize = 64
+	const msgCount = 500
+
+	port, expectedBytes, cleanup := startSequencedTCPServer(t, msgSize, msgCount)
+	defer cleanup()
+
+	tcp, err := NewTCPWithConfig(TCPConfig{
+		Host:           "127.0.0.1",
+		Port:           port,
+		ConnectTimeout: 5 * time.Second,
+		BufferSize:     4096, // Small buffer to stress backpressure path
+	})
+	if err != nil {
+		t.Fatalf("NewTCPWithConfig: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	if err := tcp.Open(ctx); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer tcp.Close()
+
+	var received []byte
+	timeout := time.After(10 * time.Second)
+
+loop:
+	for {
+		select {
+		case frame, ok := <-tcp.Frames():
+			if !ok {
+				break loop
+			}
+			received = append(received, frame...)
+			// Simulate slow consumer — sleep every 50 frames
+			if len(received)/(msgSize) > 0 && (len(received)/msgSize)%50 == 0 {
+				time.Sleep(5 * time.Millisecond)
+			}
+			if len(received) >= expectedBytes {
+				break loop
+			}
+		case <-timeout:
+			break loop
+		}
+	}
+
+	if len(received) != expectedBytes {
+		t.Fatalf("slow consumer lost data: got %d bytes, want %d", len(received), expectedBytes)
+	}
+}
+
+// TestTCP_HighFrequency_ServerCloseMidStream verifies graceful handling when
+// the server disconnects partway through a high-frequency stream.
+func TestTCP_HighFrequency_ServerCloseMidStream(t *testing.T) {
+	const msgSize = 64
+	const totalMsgs = 2000
+
+	// Server that closes connection after sending half the messages
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+
+	var serverSent atomic.Int64
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+
+		buf := make([]byte, msgSize)
+		for j := 4; j < msgSize-1; j++ {
+			buf[j] = byte('A' + (j % 26))
+		}
+		buf[msgSize-1] = '\n'
+
+		for i := 0; i < totalMsgs/2; i++ {
+			binary.BigEndian.PutUint32(buf[0:4], uint32(i))
+			n, err := conn.Write(buf)
+			if err != nil {
+				return
+			}
+			serverSent.Add(int64(n))
+		}
+		// Abrupt close after half the messages
+	}()
+
+	defer func() {
+		listener.Close()
+		<-done
+	}()
+
+	tcp, err := NewTCP("127.0.0.1", port)
+	if err != nil {
+		t.Fatalf("NewTCP: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := tcp.Open(ctx); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer tcp.Close()
+
+	var totalReceived int
+	for frame := range tcp.Frames() {
+		totalReceived += len(frame)
+	}
+
+	sent := int(serverSent.Load())
+	if totalReceived != sent {
+		t.Fatalf("after server close: got %d bytes, server sent %d", totalReceived, sent)
+	}
+	t.Logf("server sent %d/%d messages then closed; client received all %d bytes",
+		totalMsgs/2, totalMsgs, totalReceived)
+}
+
+// TestTCP_HighFrequency_BurstPattern simulates bursty traffic: rapid bursts
+// separated by pauses, typical of real test-bench data acquisition.
+func TestTCP_HighFrequency_BurstPattern(t *testing.T) {
+	const msgSize = 128
+	const burstSize = 100  // messages per burst
+	const burstCount = 10
+	const burstPause = 50 * time.Millisecond
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	totalMsgs := burstSize * burstCount
+	expectedBytes := msgSize * totalMsgs
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+
+		buf := make([]byte, msgSize)
+		for j := 4; j < msgSize-1; j++ {
+			buf[j] = byte('A' + (j % 26))
+		}
+		buf[msgSize-1] = '\n'
+
+		seq := 0
+		for b := 0; b < burstCount; b++ {
+			// Send burst with no delay
+			for i := 0; i < burstSize; i++ {
+				binary.BigEndian.PutUint32(buf[0:4], uint32(seq))
+				if _, err := conn.Write(buf); err != nil {
+					return
+				}
+				seq++
+			}
+			// Pause between bursts
+			if b < burstCount-1 {
+				time.Sleep(burstPause)
+			}
+		}
+	}()
+
+	defer func() {
+		listener.Close()
+		<-done
+	}()
+
+	tcp, err := NewTCPWithConfig(TCPConfig{
+		Host:           "127.0.0.1",
+		Port:           port,
+		ConnectTimeout: 5 * time.Second,
+		BufferSize:     32768,
+	})
+	if err != nil {
+		t.Fatalf("NewTCPWithConfig: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := tcp.Open(ctx); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer tcp.Close()
+
+	var received []byte
+	timeout := time.After(8 * time.Second)
+
+loop:
+	for {
+		select {
+		case frame, ok := <-tcp.Frames():
+			if !ok {
+				break loop
+			}
+			received = append(received, frame...)
+			if len(received) >= expectedBytes {
+				break loop
+			}
+		case <-timeout:
+			break loop
+		}
+	}
+
+	if len(received) != expectedBytes {
+		t.Fatalf("burst pattern: got %d bytes, want %d", len(received), expectedBytes)
+	}
+
+	// Verify sequence continuity across bursts
+	for i := 0; i < totalMsgs; i++ {
+		offset := i * msgSize
+		seq := binary.BigEndian.Uint32(received[offset : offset+4])
+		if int(seq) != i {
+			t.Fatalf("burst sequence break at msg %d: got seq %d", i, seq)
+		}
+	}
+
+	t.Logf("received %d messages across %d bursts with no drops", totalMsgs, burstCount)
 }
 
 // Benchmark TCP reading performance
