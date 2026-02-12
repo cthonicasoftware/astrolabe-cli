@@ -51,3 +51,40 @@ func TestKeyValueJSONIncludesObjectData(t *testing.T) {
 		t.Fatalf("data.run_id = %v, want abc-123", data["run_id"])
 	}
 }
+
+func TestJSONModeMutedAndBlankAreNoop(t *testing.T) {
+	var buf bytes.Buffer
+	p := NewPrinter(&buf, true)
+
+	p.Muted("hidden")
+	p.Blank()
+
+	if buf.Len() != 0 {
+		t.Fatalf("expected no output, got %q", buf.String())
+	}
+}
+
+func TestSuccessPlainRespectsNoColorAndNoIcons(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	t.Setenv("NO_ICONS", "1")
+
+	var buf bytes.Buffer
+	p := NewPrinter(&buf, false)
+	p.Success("done")
+
+	if got := buf.String(); got != "done\n" {
+		t.Fatalf("output = %q, want %q", got, "done\n")
+	}
+}
+
+func TestKeyValuePlainFormatting(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+
+	var buf bytes.Buffer
+	p := NewPrinter(&buf, false)
+	p.KeyValue("Run ID", "01ABC")
+
+	if got := buf.String(); got != "  Run ID: 01ABC\n" {
+		t.Fatalf("output = %q, want %q", got, "  Run ID: 01ABC\n")
+	}
+}
