@@ -1,6 +1,7 @@
 package cliout
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -159,10 +160,15 @@ func (p *Printer) Println(msg string) {
 
 // printJSON outputs structured JSON for machine consumption
 func (p *Printer) printJSON(level, message string, data interface{}) {
-	// Simple JSON output - can be enhanced with proper JSON encoding
-	if data != nil {
-		fmt.Fprintf(p.writer, `{"level":"%s","message":"%s","data":%v}`+"\n", level, message, data)
-	} else {
-		fmt.Fprintf(p.writer, `{"level":"%s","message":"%s"}`+"\n", level, message)
+	evt := struct {
+		Level   string      `json:"level"`
+		Message string      `json:"message"`
+		Data    interface{} `json:"data,omitempty"`
+	}{
+		Level:   level,
+		Message: message,
+		Data:    data,
 	}
+
+	_ = json.NewEncoder(p.writer).Encode(evt)
 }
