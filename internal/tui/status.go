@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"math"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -77,10 +76,10 @@ func (m *StatusMessage) Render(width int) string {
 
 	if body != "" {
 		// Split body by newlines and render each line separately to preserve formatting
-		bodyLines := strings.Split(body, "\n")
-		for _, line := range bodyLines {
+		bodyLines := strings.SplitSeq(body, "\n")
+		for line := range bodyLines {
 			if line != "" {
-				lines = append(lines, statusBodyStyle.Copy().MaxWidth(available-4).Render(line))
+				lines = append(lines, statusBodyStyle.MaxWidth(available-4).Render(line))
 			} else {
 				lines = append(lines, "") // Preserve empty lines
 			}
@@ -88,15 +87,10 @@ func (m *StatusMessage) Render(width int) string {
 	}
 
 	content := strings.Join(lines, "\n")
-	box := statusBoxStyle.Copy().
+	box := statusBoxStyle.
 		BorderForeground(palette.border).
 		MaxWidth(available).
 		Render(content)
 
 	return box
-}
-
-// TODO: Move to utils.go
-func clamp(val, minVal, maxVal int) int {
-	return int(math.Max(float64(minVal), math.Min(float64(maxVal), float64(val))))
 }
