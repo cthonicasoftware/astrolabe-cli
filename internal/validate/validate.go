@@ -247,6 +247,7 @@ func (v *Validator) checkDataNDJSON() {
 	}
 	defer file.Close()
 
+	//TODO: check if file size >= 64KiB
 	scanner := bufio.NewScanner(file)
 	lineNum := 0
 	for scanner.Scan() {
@@ -306,6 +307,8 @@ func (v *Validator) checkRecordsCount() {
 	defer file.Close()
 
 	var lineCount uint64
+
+	//TODO: check if file size >= 64KiB
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		if len(scanner.Bytes()) > 0 {
