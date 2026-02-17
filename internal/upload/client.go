@@ -23,9 +23,9 @@ import (
 // 5. Confirm successful uploads
 // 6. Update local state
 type Client struct {
-	apiClient  *APIClient
-	uploader   *Uploader
-	cacheRoot  string
+	apiClient *APIClient
+	uploader  *Uploader
+	cacheRoot string
 }
 
 // Config holds the settings needed to create an upload client.
@@ -45,9 +45,9 @@ func NewClient(cfg Config) *Client {
 	}
 
 	return &Client{
-		apiClient:  NewAPIClient(cfg.APIURL, cfg.AuthToken, cfg.ProjectID),
-		uploader:   NewUploader(maxRetries),
-		cacheRoot:  cfg.CacheRoot,
+		apiClient: NewAPIClient(cfg.APIURL, cfg.AuthToken, cfg.ProjectID),
+		uploader:  NewUploader(maxRetries),
+		cacheRoot: cfg.CacheRoot,
 	}
 }
 
@@ -171,6 +171,8 @@ func (c *Client) loadRun(runID string) (*core.Run, error) {
 	// Load upload state if it exists
 	uploadStatePath := filepath.Join(runDir, "upload_state.json")
 	var uploadState core.UploadState
+
+	//TODO: refactor to handle potential unmarshalling errors
 	if stateData, err := os.ReadFile(uploadStatePath); err == nil {
 		_ = json.Unmarshal(stateData, &uploadState)
 	} else {

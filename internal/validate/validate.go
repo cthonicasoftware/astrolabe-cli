@@ -248,6 +248,17 @@ func (v *Validator) checkDataNDJSON() {
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
+
+	info, err := file.Stat()
+	if err != nil {
+		v.addCheck("data_ndjson", StatusFailed, fmt.Sprintf("cannot stat data file: %v", err))
+		return
+	}
+
+	if info.Size() >= 64*1024 {
+		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	}
+
 	lineNum := 0
 	for scanner.Scan() {
 		lineNum++
@@ -306,7 +317,20 @@ func (v *Validator) checkRecordsCount() {
 	defer file.Close()
 
 	var lineCount uint64
+
 	scanner := bufio.NewScanner(file)
+
+	info, err := file.Stat()
+
+	if err != nil {
+		v.addCheck("records_count", StatusFailed, fmt.Sprintf("cannot stat data file: %v", err))
+		return
+	}
+
+	if info.Size() >= 64*1024 {
+		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	}
+
 	for scanner.Scan() {
 		if len(scanner.Bytes()) > 0 {
 			lineCount++

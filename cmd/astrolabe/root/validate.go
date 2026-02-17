@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/cliout"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/tui"
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/validate"
 	"github.com/spf13/cobra"
 )
@@ -77,19 +76,12 @@ func outputStyled(result validate.Result) error {
 }
 
 func printCheck(out *cliout.Printer, check validate.Check) {
-	var icon, label string
-
 	switch check.Status {
 	case validate.StatusPassed:
-		icon = tui.StyleSuccess.Render(tui.IconStatusSuccess)
-		label = check.Name
+		out.Success(check.Name)
 	case validate.StatusFailed:
-		icon = tui.StyleError.Render(tui.IconStatusError)
-		label = fmt.Sprintf("%s: %s", check.Name, check.Error)
+		out.Error(fmt.Sprintf("%s: %s", check.Name, check.Error))
 	case validate.StatusSkipped:
-		icon = tui.StyleMuted.Render("·")
-		label = tui.StyleMuted.Render(fmt.Sprintf("%s (skipped)", check.Name))
+		out.Muted(fmt.Sprintf("%s (skipped)", check.Name))
 	}
-
-	out.Println(fmt.Sprintf("%s %s", icon, label))
 }

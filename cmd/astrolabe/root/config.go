@@ -74,7 +74,11 @@ var configGetCmd = &cobra.Command{
 		if val != nil {
 			out.KeyValue(key, fmt.Sprintf("%v", val))
 		} else {
-			out.Muted(fmt.Sprintf("Config key '%s' not set", key))
+			if jsonMode {
+				out.Info(fmt.Sprintf("Config key '%s' not set", key))
+			} else {
+				out.Muted(fmt.Sprintf("Config key '%s' not set", key))
+			}
 		}
 		return nil
 	},

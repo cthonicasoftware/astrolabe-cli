@@ -10,11 +10,8 @@ import (
 
 func TestSaveAndLoadMetadata(t *testing.T) {
 	tmp := t.TempDir()
-	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", tmp)
-	if origHome == "" {
-		t.Setenv("USERPROFILE", tmp) // for Windows compatibility
-	}
+	t.Setenv("USERPROFILE", tmp) // for Windows compatibility
 
 	meta := Metadata{
 		Operator: "alice",
@@ -92,6 +89,7 @@ func TestMetadataValidate(t *testing.T) {
 func TestMetadataFilePathUsesHome(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
+	t.Setenv("USERPROFILE", tmp)
 	path, err := metadataFilePath()
 	if err != nil {
 		t.Fatalf("metadataFilePath: %v", err)
