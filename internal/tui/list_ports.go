@@ -131,44 +131,64 @@ func searchUSBIDs(filepath, vid, pid string) string {
 }
 
 type listPortsModel struct {
-	ports  []*portDetail
-	width  int
-	height int
-	err    error
+	ports   []*portDetail
+	width   int
+	height  int
+	err     error
+	loading bool
+}
+
+type listPortsLoadedMsg struct {
+	ports []*portDetail
+	err   error
 }
 
 func NewListPorts() tea.Model {
-	// Use enumerator to get detailed port information
-	portDetails, err := enumerator.GetDetailedPortsList()
-	if err != nil {
-		return &listPortsModel{err: err}
-	}
-
-	// Convert to our internal format
-	var ports []*portDetail
-	for _, p := range portDetails {
-		detail := &portDetail{
-			Name:         p.Name,
-			IsUSB:        p.IsUSB,
-			VID:          p.VID,
-			PID:          p.PID,
-			SerialNumber: p.SerialNumber,
-			Product:      p.Product,
-		}
-		ports = append(ports, detail)
-	}
-
 	return &listPortsModel{
-		ports: ports,
+		loading: true,
+	}
+}
+
+func loadListPortsCmd() tea.Cmd {
+	return func() tea.Msg {
+		// Use enumerator to get detailed port information
+		portDetails, err := enumerator.GetDetailedPortsList()
+		if err != nil {
+			return listPortsLoadedMsg{err: err}
+		}
+
+		// Convert to our internal format
+		var ports []*portDetail
+		for _, p := range portDetails {
+			detail := &portDetail{
+				Name:         p.Name,
+				IsUSB:        p.IsUSB,
+				VID:          p.VID,
+				PID:          p.PID,
+				SerialNumber: p.SerialNumber,
+				Product:      p.Product,
+			}
+			ports = append(ports, detail)
+		}
+
+		return listPortsLoadedMsg{
+			ports: ports,
+		}
 	}
 }
 
 func (m *listPortsModel) Init() tea.Cmd {
-	return nil
+	return loadListPortsCmd()
 }
 
 func (m *listPortsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case listPortsLoadedMsg:
+		m.loading = false
+		m.ports = msg.ports
+		m.err = msg.err
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -190,6 +210,15 @@ func (m *listPortsModel) View() string {
 	// Title
 	s.WriteString(StyleTitle.Render(fmt.Sprintf("%s Available Serial Ports", IconTitlePorts)))
 	s.WriteString("\n\n")
+
+	if m.loading {
+		s.WriteString(StyleMuted.Render("Loading serial port details..."))
+		s.WriteString("\n\n")
+		s.WriteString(StyleHelp.Render("Press q or esc to close"))
+		content := s.String()
+		return lipgloss.PlaceVertical(m.height, lipgloss.Center,
+			lipgloss.PlaceHorizontal(m.width, lipgloss.Center, content))
+	}
 
 	if m.err != nil {
 		s.WriteString(StyleError.Render("✗ Error: " + m.err.Error()))

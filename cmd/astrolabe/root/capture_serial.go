@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -50,6 +51,10 @@ var captureSerialCmd = &cobra.Command{
 	Short: "Capture from a serial port",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Create styled printer (check for --json flag from root command)
+		jsonMode, _ := cmd.Flags().GetBool("json")
+		out := cliout.DefaultPrinter(jsonMode)
+
 		// Check if we should run in interactive mode
 		// Interactive mode runs when:
 		// 1. We have a TTY (not in CI/pipe)
@@ -62,7 +67,7 @@ var captureSerialCmd = &cobra.Command{
 			metaErr       error
 		)
 		if savedMetadata, metaErr = config.LoadMetadata(); metaErr != nil {
-			fmt.Fprintf(os.Stderr, "warning: failed to load metadata: %v\n", metaErr)
+			out.Warning(fmt.Sprintf("Failed to load metadata: %v", metaErr))
 		}
 
 		var (
@@ -102,10 +107,6 @@ var captureSerialCmd = &cobra.Command{
 			defaults.Baud = serialBaud
 			serialCfg = &defaults
 		}
-
-		// Create styled printer (check for --json flag from root command)
-		jsonMode, _ := cmd.Flags().GetBool("json")
-		out := cliout.DefaultPrinter(jsonMode)
 
 		if !launchTUI {
 			out.Step(fmt.Sprintf("Starting serial capture: %s @ %d baud", serialCfg.Port, serialCfg.Baud))
@@ -182,7 +183,7 @@ var captureSerialCmd = &cobra.Command{
 			}
 			defer func() {
 				if err := serial.Close(); err != nil {
-					fmt.Fprintf(os.Stderr, "warning: failed to close serial port: %v\n", err)
+					out.Warning(fmt.Sprintf("Failed to close serial port: %v", err))
 				}
 			}()
 
@@ -284,7 +285,7 @@ var captureSerialCmd = &cobra.Command{
 				run := <-pipelineResultCh
 				runErr := <-pipelineErrCh
 				if runErr != nil && !errors.Is(runErr, context.Canceled) {
-					fmt.Fprintf(os.Stderr, "capture pipeline error: %v\n", runErr)
+					out.Error(fmt.Sprintf("Capture pipeline error: %v", runErr))
 				}
 				if run != nil {
 					runDir := filepath.Join(tempRoot, run.ID)
@@ -339,7 +340,7 @@ var captureSerialCmd = &cobra.Command{
 			}
 			defer func() {
 				if err := serial.Close(); err != nil {
-					fmt.Fprintf(os.Stderr, "warning: failed to close serial port: %v\n", err)
+					out.Warning(fmt.Sprintf("Failed to close serial port: %v", err))
 				}
 			}()
 
@@ -515,7 +516,7 @@ func parseAttributeFlags(values map[string]string) (map[string]string, error) {
 			b.WriteRune('\n')
 		}
 		first = false
-		b.WriteString(fmt.Sprintf("%s=%s", k, v))
+		fmt.Fprintf(&b, "%s=%s", k, v)
 	}
 	return config.ParseAttributes(b.String())
 }
@@ -574,9 +575,7 @@ func cloneStringMap(src map[string]string) map[string]string {
 		return nil
 	}
 	dst := make(map[string]string, len(src))
-	for k, v := range src {
-		dst[k] = v
-	}
+	maps.Copy(dst, src)
 	return dst
 }
 

@@ -55,6 +55,10 @@ type captureTabsModel struct {
 	height         int
 }
 
+type serialPortsLoadedMsg struct {
+	ports []string
+}
+
 func tabBorderWithBottom(left, middle, right string) lipgloss.Border {
 	border := lipgloss.RoundedBorder()
 	border.BottomLeft = left
@@ -139,13 +143,6 @@ const (
 )
 
 func NewCaptureTabs() tea.Model {
-	// Get available serial ports
-	ports, err := serial.GetPortsList()
-	if err != nil || len(ports) == 0 {
-		ports = []string{WarnNoPortsFound}
-	}
-	sort.Strings(ports)
-
 	// Initialize with defaults
 	defaultCfg := sources.DefaultConfig()
 
@@ -161,7 +158,7 @@ func NewCaptureTabs() tea.Model {
 		focusedField:   0,
 		focusedButton:  ButtonIndexConfirm,
 		serialConfig:   defaultCfg,
-		availablePorts: ports,
+		availablePorts: []string{WarnNoPortsFound},
 		baudRates:      append([]int(nil), sources.CommonBaudRates...),
 		portCursor:     SerialFieldPort,
 		baudCursor:     findBaudIndex(sources.CommonBaudRates, defaultCfg.Baud),
@@ -188,7 +185,18 @@ func findBaudIndex(baudRates []int, targetBaud int) int {
 }
 
 func (m *captureTabsModel) Init() tea.Cmd {
-	return nil
+	return loadSerialPortsCmd()
+}
+
+func loadSerialPortsCmd() tea.Cmd {
+	return func() tea.Msg {
+		ports, err := serial.GetPortsList()
+		if err != nil || len(ports) == 0 {
+			return serialPortsLoadedMsg{ports: []string{WarnNoPortsFound}}
+		}
+		sort.Strings(ports)
+		return serialPortsLoadedMsg{ports: ports}
+	}
 }
 
 func (m *captureTabsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -228,6 +236,17 @@ func (m *captureTabsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case serialPortsLoadedMsg:
+		m.availablePorts = msg.ports
+		if len(m.availablePorts) == 0 {
+			m.availablePorts = []string{WarnNoPortsFound}
+		}
+		if m.portCursor >= len(m.availablePorts) {
+			m.portCursor = 0
+		}
+		m.updateTabContent()
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -288,7 +307,7 @@ func (m *captureTabsModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.showInfo = true
 			m.infoModel = NewSourceInfo(sourceType, m.width, m.height)
 			m.focusMode = FocusModeInfo
-			return m, nil
+			return m, m.infoModel.Init()
 		}
 		return m, nil
 

@@ -123,6 +123,7 @@ func (m *runsViewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.resizeTable()
 		m.resizePayloadViewport()
 		return m, nil
 
@@ -145,6 +146,7 @@ func (m *runsViewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.table = tbl
+		m.resizeTable()
 
 		if m.mode == modeDetail || m.mode == modePayload {
 			if summary := findSummaryByID(msg.result.Runs, m.detailSummary.ID); summary != nil {
@@ -332,6 +334,25 @@ func (m *runsViewModel) resizePayloadViewport() {
 	if m.payloadViewport.Height != height {
 		m.payloadViewport.Height = height
 	}
+}
+
+func (m *runsViewModel) resizeTable() {
+	if m.width == 0 || m.height == 0 {
+		return
+	}
+
+	tableWidth := m.width - 6
+	if tableWidth < 60 {
+		tableWidth = 60
+	}
+
+	tableHeight := m.height - 14
+	if tableHeight < 6 {
+		tableHeight = 6
+	}
+
+	m.table.SetWidth(tableWidth)
+	m.table.SetHeight(tableHeight)
 }
 
 func (m *runsViewModel) openPayloadView() tea.Cmd {

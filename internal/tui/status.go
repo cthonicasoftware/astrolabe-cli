@@ -46,10 +46,10 @@ var statusPalette = map[StatusKind]struct {
 	border lipgloss.Color
 	icon   string
 }{
-	StatusInfo:    {ColorPrimary, "\uf05a"},
-	StatusSuccess: {ColorSuccess, "\uf058"},
-	StatusWarning: {ColorWarning, "\uf071"},
-	StatusError:   {ColorError, "\uebfb"},
+	StatusInfo:    {ColorPrimary, IconStatusInfo},
+	StatusSuccess: {ColorSuccess, IconStatusSuccess},
+	StatusWarning: {ColorWarning, IconStatusWarning},
+	StatusError:   {ColorError, IconStatusError},
 }
 
 // Render draws the status message within the provided width.
@@ -69,7 +69,7 @@ func (m *StatusMessage) Render(width int) string {
 
 	var lines []string
 	if title != "" {
-		icon := palette.icon
+		icon := strings.TrimSpace(palette.icon)
 		titleLine := fmt.Sprintf("%s %s", icon, title)
 		lines = append(lines, statusTitleStyle.Foreground(palette.border).Render(titleLine))
 	}

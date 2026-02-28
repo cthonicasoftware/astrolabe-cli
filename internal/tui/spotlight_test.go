@@ -213,6 +213,47 @@ func TestSpotlightEffect_ANSIColorPreservation(t *testing.T) {
 			t.Error("ANSI escape sequences were removed")
 		}
 	})
+
+	t.Run("reapplies faint after reset sequences", func(t *testing.T) {
+		midIntensity := NewSpotlightEffectCustom(SpotlightMinIntensity, 0.8)
+		line := "\x1b[31mERR\x1b[0m normal \x1b[32mOK\x1b[0m"
+		content := strings.Join([]string{"focus", "line2", line, "line4", "line5"}, "\n")
+		scroll := ScrollInfo{
+			ScrollPercent: 0.0,
+			AtTop:         true,
+			AtBottom:      false,
+		}
+
+		result := midIntensity.ApplyFade(content, scroll)
+		lines := strings.Split(result, "\n")
+		if len(lines) != 5 || !strings.Contains(lines[2], "\x1b[0;2m") {
+			t.Error("expected faint to be reapplied after ANSI reset codes")
+		}
+	})
+
+	t.Run("uses grayscale for low-intensity ANSI lines", func(t *testing.T) {
+		ansiLine := "\x1b[31merror\x1b[0m details"
+		content := strings.Join([]string{"focus", "middle", ansiLine}, "\n")
+		scroll := ScrollInfo{
+			ScrollPercent: 0.0,
+			AtTop:         true,
+			AtBottom:      false,
+		}
+
+		result := s.ApplyFade(content, scroll)
+		lines := strings.Split(result, "\n")
+		if len(lines) != 3 {
+			t.Fatalf("expected 3 lines, got %d", len(lines))
+		}
+
+		last := lines[2]
+		if !strings.Contains(last, "\x1b[38;5;") {
+			t.Error("expected grayscale coloring for low-intensity ANSI line")
+		}
+		if strings.Contains(last, "\x1b[31m") {
+			t.Error("expected ANSI color controls to be stripped in low-intensity mode")
+		}
+	})
 }
 
 func TestSpotlightEffect_PlainTextColoring(t *testing.T) {

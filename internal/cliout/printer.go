@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/tui"
 )
@@ -45,6 +46,33 @@ func (p *Printer) render(text string, styleFn func(...string) string) string {
 		return text
 	}
 	return styleFn(text)
+}
+
+// StyledHeader returns header-styled text while honoring color settings.
+func (p *Printer) StyledHeader(text string) string {
+	return p.render(text, tui.StyleHeader.Render)
+}
+
+// StyledMuted returns muted-styled text while honoring color settings.
+func (p *Printer) StyledMuted(text string) string {
+	return p.render(text, tui.StyleMuted.Render)
+}
+
+// StyledItem returns emphasized item-styled text while honoring color settings.
+func (p *Printer) StyledItem(text string) string {
+	return p.render(text, tui.StyleWarning.Render)
+}
+
+// StyledIcon returns an icon string that honors color and icon toggles.
+func (p *Printer) StyledIcon(icon string) string {
+	if !p.enableIcons {
+		return ""
+	}
+	icon = strings.TrimSpace(icon)
+	if icon == "" {
+		return ""
+	}
+	return p.render(icon, tui.StyleIcon.Render)
 }
 
 // Info prints an informational message

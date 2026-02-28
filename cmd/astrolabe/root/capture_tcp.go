@@ -54,6 +54,10 @@ var captureTCPCmd = &cobra.Command{
 	Short: "Capture from a TCP network source",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Create styled printer (check for --json flag from root command)
+		jsonMode, _ := cmd.Flags().GetBool("json")
+		out := cliout.DefaultPrinter(jsonMode)
+
 		// Check if we should run in interactive mode
 		// Interactive mode runs when:
 		// 1. We have a TTY (not in CI/pipe)
@@ -65,9 +69,9 @@ var captureTCPCmd = &cobra.Command{
 			savedMetadata config.Metadata
 			metaErr       error
 		)
-		if savedMetadata, metaErr = config.LoadMetadata(); metaErr != nil {
-			fmt.Fprintf(os.Stderr, "warning: failed to load metadata: %v\n", metaErr)
-		}
+			if savedMetadata, metaErr = config.LoadMetadata(); metaErr != nil {
+				out.Warning(fmt.Sprintf("Failed to load metadata: %v", metaErr))
+			}
 
 		var (
 			tcpCfg    sources.TCPConfig
@@ -122,10 +126,6 @@ var captureTCPCmd = &cobra.Command{
 				BufferSize:     tcpBufferSize,
 			}
 		}
-
-		// Create styled printer (check for --json flag from root command)
-		jsonMode, _ := cmd.Flags().GetBool("json")
-		out := cliout.DefaultPrinter(jsonMode)
 
 		if !launchTUI {
 			out.Step(fmt.Sprintf("Starting TCP capture: %s:%d", tcpCfg.Host, tcpCfg.Port))
@@ -203,11 +203,11 @@ var captureTCPCmd = &cobra.Command{
 			if err := tcp.Open(ctx); err != nil {
 				return fmt.Errorf("failed to open TCP connection to %s:%d: %w", tcpCfg.Host, tcpCfg.Port, err)
 			}
-			defer func() {
-				if err := tcp.Close(); err != nil {
-					fmt.Fprintf(os.Stderr, "warning: failed to close TCP connection: %v\n", err)
-				}
-			}()
+				defer func() {
+					if err := tcp.Close(); err != nil {
+						out.Warning(fmt.Sprintf("Failed to close TCP connection: %v", err))
+					}
+				}()
 
 			// Create channels for TUI display and pipeline data
 			stringCh := make(chan string, 16)
@@ -304,11 +304,11 @@ var captureTCPCmd = &cobra.Command{
 				out.Blank()
 				out.Muted("Exited without saving.")
 				// Wait for pipeline to finish but discard results
-				run := <-pipelineResultCh
-				runErr := <-pipelineErrCh
-				if runErr != nil && !errors.Is(runErr, context.Canceled) {
-					fmt.Fprintf(os.Stderr, "capture pipeline error: %v\n", runErr)
-				}
+					run := <-pipelineResultCh
+					runErr := <-pipelineErrCh
+					if runErr != nil && !errors.Is(runErr, context.Canceled) {
+						out.Error(fmt.Sprintf("Capture pipeline error: %v", runErr))
+					}
 				if run != nil {
 					runDir := filepath.Join(tempRoot, run.ID)
 					_ = os.RemoveAll(runDir)
@@ -362,7 +362,7 @@ var captureTCPCmd = &cobra.Command{
 			}
 			defer func() {
 				if err := tcp.Close(); err != nil {
-					fmt.Fprintf(os.Stderr, "warning: failed to close TCP connection: %v\n", err)
+					out.Warning(fmt.Sprintf("Failed to close TCP connection: %v", err))
 				}
 			}()
 
