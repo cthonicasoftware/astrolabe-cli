@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
@@ -102,7 +101,6 @@ func TestPrometheusMetrics_RecordError(t *testing.T) {
 func TestPrometheusMetrics_Snapshot(t *testing.T) {
 	m := NewPrometheusMetrics()
 
-	// Record various metrics
 	m.RecordCapture("serial")
 	m.RecordBytes("ingested", 1024)
 	m.RecordUpload(true, 100)
@@ -110,7 +108,6 @@ func TestPrometheusMetrics_Snapshot(t *testing.T) {
 
 	snapshot := m.Snapshot()
 
-	// Verify structure
 	if snapshot == nil {
 		t.Fatal("Snapshot() returned nil")
 	}
@@ -161,137 +158,99 @@ func TestPrometheusMetrics_ConcurrentAccess(t *testing.T) {
 	}
 }
 
-// TestPrometheusMetrics_ActualMetrics verifies that actual Prometheus metrics are being recorded.
-func TestPrometheusMetrics_ActualMetrics(t *testing.T) {
-	// Create a new registry to isolate this test
-	registry := prometheus.NewRegistry()
+// TestPrometheusMetrics_CaptureCounterPrometheus verifies the actual Prometheus counter
+// is updated through the production code path.
+func TestPrometheusMetrics_CaptureCounterPrometheus(t *testing.T) {
+	m := NewPrometheusMetrics()
 
-	// Create new metrics for this test
-	testCaptureCounter := prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "test_astrolabe_captures_total",
-			Help: "Test counter for captures",
-		},
-		[]string{"source_kind"},
-	)
-	registry.MustRegister(testCaptureCounter)
+	m.RecordCapture("serial")
+	m.RecordCapture("serial")
+	m.RecordCapture("tcp")
 
-	// Increment the counter
-	testCaptureCounter.WithLabelValues("serial").Inc()
-	testCaptureCounter.WithLabelValues("serial").Inc()
-	testCaptureCounter.WithLabelValues("tcp").Inc()
-
-	// Verify the metric values
-	expected := `
-		# HELP test_astrolabe_captures_total Test counter for captures
-		# TYPE test_astrolabe_captures_total counter
-		test_astrolabe_captures_total{source_kind="serial"} 2
-		test_astrolabe_captures_total{source_kind="tcp"} 1
-	`
-
-	err := testutil.CollectAndCompare(testCaptureCounter, strings.NewReader(expected))
-	if err != nil {
-		t.Errorf("Prometheus metric mismatch: %v", err)
+	if got := testutil.ToFloat64(m.captureCounter.WithLabelValues("serial")); got != 2 {
+		t.Errorf("prometheus serial captures = %v, want 2", got)
+	}
+	if got := testutil.ToFloat64(m.captureCounter.WithLabelValues("tcp")); got != 1 {
+		t.Errorf("prometheus tcp captures = %v, want 1", got)
 	}
 }
 
-// TestPrometheusMetrics_BytesCounter verifies the bytes counter metric.
-func TestPrometheusMetrics_BytesCounter(t *testing.T) {
-	// Create a new registry to isolate this test
-	registry := prometheus.NewRegistry()
+// TestPrometheusMetrics_BytesCounterPrometheus verifies the bytes counter metric.
+func TestPrometheusMetrics_BytesCounterPrometheus(t *testing.T) {
+	m := NewPrometheusMetrics()
 
-	testBytesCounter := prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "test_astrolabe_bytes_total",
-			Help: "Test counter for bytes",
-		},
-		[]string{"stage"},
-	)
-	registry.MustRegister(testBytesCounter)
+	m.RecordBytes("ingested", 1024)
+	m.RecordBytes("normalized", 512)
+	m.RecordBytes("uploaded", 256)
 
-	// Record bytes
-	testBytesCounter.WithLabelValues("ingested").Add(1024)
-	testBytesCounter.WithLabelValues("normalized").Add(512)
-	testBytesCounter.WithLabelValues("uploaded").Add(256)
-
-	// Verify the metric values
-	expected := `
-		# HELP test_astrolabe_bytes_total Test counter for bytes
-		# TYPE test_astrolabe_bytes_total counter
-		test_astrolabe_bytes_total{stage="ingested"} 1024
-		test_astrolabe_bytes_total{stage="normalized"} 512
-		test_astrolabe_bytes_total{stage="uploaded"} 256
-	`
-
-	err := testutil.CollectAndCompare(testBytesCounter, strings.NewReader(expected))
-	if err != nil {
-		t.Errorf("Prometheus metric mismatch: %v", err)
+	if got := testutil.ToFloat64(m.bytesCounter.WithLabelValues("ingested")); got != 1024 {
+		t.Errorf("prometheus ingested bytes = %v, want 1024", got)
+	}
+	if got := testutil.ToFloat64(m.bytesCounter.WithLabelValues("normalized")); got != 512 {
+		t.Errorf("prometheus normalized bytes = %v, want 512", got)
+	}
+	if got := testutil.ToFloat64(m.bytesCounter.WithLabelValues("uploaded")); got != 256 {
+		t.Errorf("prometheus uploaded bytes = %v, want 256", got)
 	}
 }
 
-// TestPrometheusMetrics_UploadMetrics verifies upload counter and histogram.
-func TestPrometheusMetrics_UploadMetrics(t *testing.T) {
-	// Create a new registry to isolate this test
-	registry := prometheus.NewRegistry()
+// TestPrometheusMetrics_UploadCounterPrometheus verifies upload counter and histogram.
+func TestPrometheusMetrics_UploadCounterPrometheus(t *testing.T) {
+	m := NewPrometheusMetrics()
 
-	testUploadCounter := prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "test_astrolabe_uploads_total",
-			Help: "Test counter for uploads",
-		},
-		[]string{"status"},
-	)
-	registry.MustRegister(testUploadCounter)
+	m.RecordUpload(true, 100)
+	m.RecordUpload(true, 150)
+	m.RecordUpload(false, 200)
 
-	// Record uploads
-	testUploadCounter.WithLabelValues("success").Inc()
-	testUploadCounter.WithLabelValues("success").Inc()
-	testUploadCounter.WithLabelValues("failure").Inc()
-
-	// Verify the metric values
-	expected := `
-		# HELP test_astrolabe_uploads_total Test counter for uploads
-		# TYPE test_astrolabe_uploads_total counter
-		test_astrolabe_uploads_total{status="success"} 2
-		test_astrolabe_uploads_total{status="failure"} 1
-	`
-
-	err := testutil.CollectAndCompare(testUploadCounter, strings.NewReader(expected))
-	if err != nil {
-		t.Errorf("Prometheus metric mismatch: %v", err)
+	if got := testutil.ToFloat64(m.uploadCounter.WithLabelValues("success")); got != 2 {
+		t.Errorf("prometheus upload success = %v, want 2", got)
+	}
+	if got := testutil.ToFloat64(m.uploadCounter.WithLabelValues("failure")); got != 1 {
+		t.Errorf("prometheus upload failure = %v, want 1", got)
 	}
 }
 
-// TestPrometheusMetrics_ErrorCounter verifies the error counter metric.
-func TestPrometheusMetrics_ErrorCounter(t *testing.T) {
-	// Create a new registry to isolate this test
-	registry := prometheus.NewRegistry()
+// TestPrometheusMetrics_ErrorCounterPrometheus verifies the error counter metric.
+func TestPrometheusMetrics_ErrorCounterPrometheus(t *testing.T) {
+	m := NewPrometheusMetrics()
 
-	testErrorCounter := prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "test_astrolabe_errors_total",
-			Help: "Test counter for errors",
-		},
-		[]string{"category"},
-	)
-	registry.MustRegister(testErrorCounter)
+	m.RecordError("network_timeout")
+	m.RecordError("network_timeout")
+	m.RecordError("parse_error")
 
-	// Record errors
-	testErrorCounter.WithLabelValues("network_timeout").Inc()
-	testErrorCounter.WithLabelValues("network_timeout").Inc()
-	testErrorCounter.WithLabelValues("parse_error").Inc()
+	if got := testutil.ToFloat64(m.errorCounter.WithLabelValues("network_timeout")); got != 2 {
+		t.Errorf("prometheus network_timeout errors = %v, want 2", got)
+	}
+	if got := testutil.ToFloat64(m.errorCounter.WithLabelValues("parse_error")); got != 1 {
+		t.Errorf("prometheus parse_error errors = %v, want 1", got)
+	}
+}
 
-	// Verify the metric values
-	expected := `
-		# HELP test_astrolabe_errors_total Test counter for errors
-		# TYPE test_astrolabe_errors_total counter
-		test_astrolabe_errors_total{category="network_timeout"} 2
-		test_astrolabe_errors_total{category="parse_error"} 1
-	`
+// TestPrometheusMetrics_InstanceIsolation verifies two instances don't share counters.
+func TestPrometheusMetrics_InstanceIsolation(t *testing.T) {
+	m1 := NewPrometheusMetrics()
+	m2 := NewPrometheusMetrics()
 
-	err := testutil.CollectAndCompare(testErrorCounter, strings.NewReader(expected))
-	if err != nil {
-		t.Errorf("Prometheus metric mismatch: %v", err)
+	m1.RecordCapture("serial")
+	m1.RecordCapture("serial")
+	m2.RecordCapture("serial")
+
+	if got := testutil.ToFloat64(m1.captureCounter.WithLabelValues("serial")); got != 2 {
+		t.Errorf("m1 prometheus serial captures = %v, want 2", got)
+	}
+	if got := testutil.ToFloat64(m2.captureCounter.WithLabelValues("serial")); got != 1 {
+		t.Errorf("m2 prometheus serial captures = %v, want 1", got)
+	}
+
+	snap1 := m1.Snapshot()
+	snap2 := m2.Snapshot()
+	c1 := snap1["captures"].(map[string]any)["total"].(int64)
+	c2 := snap2["captures"].(map[string]any)["total"].(int64)
+	if c1 != 2 {
+		t.Errorf("m1 snapshot total = %v, want 2", c1)
+	}
+	if c2 != 1 {
+		t.Errorf("m2 snapshot total = %v, want 1", c2)
 	}
 }
 
@@ -299,21 +258,17 @@ func TestPrometheusMetrics_ErrorCounter(t *testing.T) {
 func TestPrometheusMetrics_Handler(t *testing.T) {
 	m := NewPrometheusMetrics()
 
-	// Record some metrics
 	m.RecordCapture("test")
 	m.RecordBytes("ingested", 100)
 	m.RecordUpload(true, 50)
 	m.RecordError("test_error")
 
-	// Create a test HTTP server
 	handler := m.Handler()
 	req := httptest.NewRequest("GET", "/metrics", nil)
 	w := httptest.NewRecorder()
 
-	// Serve the request
 	handler.ServeHTTP(w, req)
 
-	// Check response
 	resp := w.Result()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Handler returned status %v, want %v", resp.StatusCode, http.StatusOK)
@@ -326,7 +281,6 @@ func TestPrometheusMetrics_Handler(t *testing.T) {
 
 	bodyStr := string(body)
 
-	// Verify the response contains Prometheus metrics
 	expectedMetrics := []string{
 		"astrolabe_captures_total",
 		"astrolabe_bytes_total",
@@ -341,10 +295,9 @@ func TestPrometheusMetrics_Handler(t *testing.T) {
 		}
 	}
 
-	// Verify content type
-	contentType := resp.Header.Get("Content-Type")
-	if !strings.Contains(contentType, "text/plain") {
-		t.Errorf("Handler returned content-type %v, want text/plain", contentType)
+	// Per-instance handler should NOT contain go runtime metrics from the default registry
+	if strings.Contains(bodyStr, "go_goroutines") {
+		t.Error("Handler should only expose instance metrics, not default registry metrics")
 	}
 }
 
@@ -352,15 +305,12 @@ func TestPrometheusMetrics_Handler(t *testing.T) {
 func TestPrometheusMetrics_HandlerFormat(t *testing.T) {
 	m := NewPrometheusMetrics()
 
-	// Record a specific metric
 	m.RecordCapture("serial")
 
-	// Create a test HTTP server
 	handler := m.Handler()
 	req := httptest.NewRequest("GET", "/metrics", nil)
 	w := httptest.NewRecorder()
 
-	// Serve the request
 	handler.ServeHTTP(w, req)
 
 	body, err := io.ReadAll(w.Result().Body)
@@ -370,16 +320,12 @@ func TestPrometheusMetrics_HandlerFormat(t *testing.T) {
 
 	bodyStr := string(body)
 
-	// Verify Prometheus format elements
-	// Should contain TYPE and HELP comments
 	if !strings.Contains(bodyStr, "# TYPE") {
 		t.Error("Response missing # TYPE comments")
 	}
 	if !strings.Contains(bodyStr, "# HELP") {
 		t.Error("Response missing # HELP comments")
 	}
-
-	// Should contain the metric with labels
 	if !strings.Contains(bodyStr, "astrolabe_captures_total{") {
 		t.Error("Response missing labeled metric")
 	}
