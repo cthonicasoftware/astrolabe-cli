@@ -8,7 +8,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
@@ -22,7 +21,6 @@ import (
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/tui"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 	"golang.org/x/term"
 )
 
@@ -161,7 +159,7 @@ var captureTCPCmd = &cobra.Command{
 			store := storage.NewFS(tempRoot)
 			normalizer := normalize.NewLineJSON()
 
-			meta := tcpManifestOptions{
+			meta := core.ManifestOptions{
 				Operator: tcpOperator,
 				Location: tcpLocation,
 				Device: core.DeviceInfo{
@@ -180,7 +178,7 @@ var captureTCPCmd = &cobra.Command{
 				Attributes: cloneStringMap(flagAttrs),
 			}
 			if metaErr == nil {
-				applyTCPMetadataDefaults(&meta, savedMetadata, cmd.Flags())
+				applyMetadataDefaults(&meta, savedMetadata, cmd.Flags())
 			}
 
 			pipelineOpts := capture.Options{
@@ -319,7 +317,7 @@ var captureTCPCmd = &cobra.Command{
 			store := storage.NewFS(appCfg.OfflineCache)
 			normalizer := normalize.NewLineJSON()
 
-			meta := tcpManifestOptions{
+			meta := core.ManifestOptions{
 				Operator: tcpOperator,
 				Location: tcpLocation,
 				Device: core.DeviceInfo{
@@ -338,7 +336,7 @@ var captureTCPCmd = &cobra.Command{
 				Attributes: cloneStringMap(flagAttrs),
 			}
 			if metaErr == nil {
-				applyTCPMetadataDefaults(&meta, savedMetadata, cmd.Flags())
+				applyMetadataDefaults(&meta, savedMetadata, cmd.Flags())
 			}
 
 			opts := capture.Options{
@@ -416,7 +414,7 @@ func init() {
 	captureTCPCmd.Flags().StringVar(&tcpDeviceSerial, "device-serial", "", "device serial number")
 	captureTCPCmd.Flags().StringVar(&tcpDeviceFirmware, "device-firmware", "", "device firmware version")
 	captureTCPCmd.Flags().StringVar(&tcpDeviceFWHash, "device-firmware-hash", "", "device firmware hash or build id")
-	captureTCPCmd.Flags().StringVar(&tcpDeviceHWVersion, "device-hw", "", "device hardware revision")
+	captureTCPCmd.Flags().StringVar(&tcpDeviceHWVersion, "device-hardware-version", "", "device hardware revision")
 
 	// Test metadata flags
 	captureTCPCmd.Flags().StringVar(&tcpTestPlan, "test-plan", "unspecified", "test plan identifier")
@@ -430,16 +428,7 @@ func init() {
 
 const tcpSchemaVersion = "v1alpha1"
 
-type tcpManifestOptions struct {
-	Operator   string
-	Location   string
-	Device     core.DeviceInfo
-	Test       core.TestInfo
-	Tags       []string
-	Attributes map[string]string
-}
-
-func buildTCPManifest(cfg sources.TCPConfig, name string, opts tcpManifestOptions) core.Manifest {
+func buildTCPManifest(cfg sources.TCPConfig, name string, opts core.ManifestOptions) core.Manifest {
 	attrs := map[string]string{
 		"source_kind":      "tcp",
 		"host":             cfg.Host,
@@ -486,54 +475,3 @@ func buildTCPCaptureSettings(cfg sources.TCPConfig) core.CaptureSettings {
 	}
 }
 
-func applyTCPMetadataDefaults(opts *tcpManifestOptions, saved config.Metadata, flags *pflag.FlagSet) {
-	isChanged := func(name string) bool {
-		if flags == nil {
-			return false
-		}
-		return flags.Changed(name)
-	}
-
-	if saved.Operator != "" && !isChanged("operator") && opts.Operator == "" {
-		opts.Operator = saved.Operator
-	}
-	if saved.Location != "" && !isChanged("location") && opts.Location == "" {
-		opts.Location = saved.Location
-	}
-
-	if saved.Device.ID != "" && !isChanged("device-id") && opts.Device.ID == "" {
-		opts.Device.ID = saved.Device.ID
-	}
-	if saved.Device.Serial != "" && !isChanged("device-serial") && opts.Device.Serial == "" {
-		opts.Device.Serial = saved.Device.Serial
-	}
-	if saved.Device.Firmware != "" && !isChanged("device-firmware") && opts.Device.Firmware == "" {
-		opts.Device.Firmware = saved.Device.Firmware
-	}
-	if saved.Device.FirmwareHash != "" && !isChanged("device-firmware-hash") && opts.Device.FirmwareHash == "" {
-		opts.Device.FirmwareHash = saved.Device.FirmwareHash
-	}
-	if saved.Device.HardwareVersion != "" && !isChanged("device-hw") && opts.Device.HardwareVersion == "" {
-		opts.Device.HardwareVersion = saved.Device.HardwareVersion
-	}
-
-	if saved.Test.Plan != "" && !isChanged("test-plan") {
-		current := strings.TrimSpace(opts.Test.Plan)
-		if current == "" || strings.EqualFold(current, "unspecified") {
-			opts.Test.Plan = saved.Test.Plan
-		}
-	}
-	if saved.Test.Variant != "" && !isChanged("test-variant") && opts.Test.Variant == "" {
-		opts.Test.Variant = saved.Test.Variant
-	}
-	if saved.Test.Run != "" && !isChanged("test-run") && opts.Test.Run == "" {
-		opts.Test.Run = saved.Test.Run
-	}
-
-	if len(saved.Tags) > 0 && !isChanged("tag") && len(opts.Tags) == 0 {
-		opts.Tags = append([]string(nil), saved.Tags...)
-	}
-	if len(saved.Attributes) > 0 && !isChanged("attr") && len(opts.Attributes) == 0 {
-		opts.Attributes = cloneStringMap(saved.Attributes)
-	}
-}

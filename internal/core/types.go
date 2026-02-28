@@ -41,6 +41,16 @@ type CaptureSettings struct {
 	Notes        string   `json:"notes,omitempty"`
 }
 
+// ManifestOptions holds the user-supplied metadata flags shared across all capture subcommands.
+type ManifestOptions struct {
+	Operator   string
+	Location   string
+	Device     DeviceInfo
+	Test       TestInfo
+	Tags       []string
+	Attributes map[string]string
+}
+
 type Checksum struct {
 	Algorithm string `json:"algorithm"`
 	Value     string `json:"value"`
