@@ -1,122 +1,108 @@
-## Astrolabe CLI Outline
+# Astrolabe CLI
 
-### 1) Purpose & scope
+Astrolabe is a command-line tool for capturing QA run data from serial devices, TCP sources, and existing files, then validating and uploading those runs to your backend.
 
-- Standardize data acquisition from test benches, devices, and instruments.  
-- Provide reliable capture, normalization, and upload of test artifacts into the QA app.  
-- Replace ad-hoc scripts with a single, consistent tool that engineers can trust.
+## Installation
 
-### 2) End-to-end flow
+### Prerequisites
+- Go 1.25.1 (or use `mise` with the included `mise.toml`)
 
-1. User/CI invokes `astrolabe capture …`  
-2. Agent connects to source (serial, TCP, file, or instrument plugin).  
-3. Data is normalized into JSONL + manifest.  
-4. Artifacts are stored locally with metadata.  
-5. Upload job posts artifacts + metadata to the QA app.  
-6. If offline, artifacts remain cached until connection is restored.
+### Option 1: Build from source
+```bash
+git clone <your-repo-url>
+cd astrolabe
+go build -o astrolabe ./cmastrolabe
+```
 
-### 3) Core commands
-
-- `astrolabe capture` – start a capture from a port/device.  
-- `astrolabe upload` – send cached runs to server.  
-- `astrolabe config` – manage API tokens, defaults (baud, port).  
-- `astrolabe validate` – check file/manifest consistency before upload.  
-- `astrolabe version` – report agent + schema versions.
-
-### 4) Configuration
-
-- Connection settings stored in `~/.astrolabe/connection.yml`.
-- Metadata defaults stored in `~/.astrolabe/metadata.json`.
-- Fields: API URL, project ID, auth token, capture defaults (baud, port, sample rate), offline cache path.
-- Environment variables override config (e.g., `ASTROLABE_TOKEN`).
-- Configurable retry/backoff and upload batch size.
-
-### 5) Supported sources (MVP)
-
-- **Serial ports** (USB-UART, RS-485, etc.) ✅ Implemented
-- **Files** (CSV, JSONL, logs) for retroactive ingestion ✅ Implemented
-- **TCP sockets** (simple streaming sources) ✅ Implemented
-- Future: USB (via libusb), SCPI instruments (DMM, scope)
-
-### 6) Normalization & metadata
-
-- Capture saved with:
-  - Run manifest: device ID, firmware hash, test plan, operator, timestamp.  
-  - Data file: JSONL or chunked binary with sidecar metadata.  
-  - Checksums for integrity.  
-- Schema version stamped in every run.
-
-### 7) Offline & resilience
-
-- Local cache directory holds artifacts until uploaded.  
-- Auto-retry with exponential backoff.  
-- Resume partial uploads.  
-- CLI flags for `--offline` and `--force-upload`.
-
-### 8) Integration with QA app
-
-- Uses presigned URLs or API tokens for upload.  
-- All artifacts tied to a `run_id` created in the Django backend.  
-- Agent reports parser version + capture conditions.  
-- Server treats agent uploads just like manual file uploads.
-
-### 9) Implementation notes
-
-- Language: Go (static binary, cross-platform)  
-- Logging: structured JSON logs for CI parsing.  
-- Packaging: prebuilt binaries for Linux/macOS/Windows.  
-- Tests: simulate serial/TCP streams, offline caches, and upload failures.
-
-### 10) Success criteria (v0)
-- Reliable serial capture → local JSONL + manifest.  
-- Upload works with API token + presigned URLs.  
-- Offline cache + retry proven in tests.  
-- Deterministic schema versioning.  
-- Command help/docs are self-contained (`astrolabe --help`).  
-
-
-## Project Setup
-A stylish, operator-friendly CLI agent skeleton for standardized capture and upload of QA artifacts.
-
-### Requirements
-- [mise](https://mise.jdx.dev/) (to install tool versions)
-- Go 1.25.1 (pinned via `mise.toml`)
-
-### Quick start
-```sh
-# activate toolchain
+### Option 2: Use mise tasks
+```bash
 mise trust
 mise install
-mise activate
-
-# build
 mise run build
-
-# run
-mise run tui
-mise run cli <command>
-```
-- Go tool invocations use a project-local cache (`.gocache`) so builds/tests work even in sandboxed environments.
-
-### Project layout
-```
-cmd/astrolabe/       # Cobra commands entrypoints
-internal/core/       # Core domain models (Run, Record, SourceMeta)
-internal/config/     # Config loader (file + env + flags)
-internal/logging/    # Logging helpers
-internal/sources/    # Source interfaces & (future) implementations
-internal/normalize/  # Normalizers (bytes → records)
-internal/storage/    # Filesystem storage (manifest + JSONL)
-internal/upload/     # Upload client (presigned URLs / token)
-internal/tui/        # TUI (bubbletea)
 ```
 
-### Data model primitives
-- `Run`: capture session envelope that links the source, manifest, capture settings, artifacts, and upload lifecycle.
-- `Manifest`: operator-supplied metadata stamped on every run; nests `DeviceInfo` (id, firmware, hardware rev) and `TestInfo` (plan, variant, run number) plus optional tags/attributes.
-- `CaptureSettings`: normalized view of how the stream was acquired (sample rate, duration hint, channel list).
-- `Record`: single normalized datum emitted by a source; ordered via `seq` and timestamped.
-- `Artifact`: on-disk payload belonging to the run (manifest JSON, JSONL data, device logs, attachments) with checksum + media type; `ArtifactRole` distinguishes core data vs. extras.
-- `UploadState`: tracks reconciliation with the QA backend (queue status, attempts, timestamps, remote run id).
+This creates the binary as `astrolabe`.
 
-Supporting types (`SourceMeta`, `Checksum`, etc.) live in `internal/core/types.go` and are intended to be shared across packages.
+### First-time configuration
+Astrolabe reads config from `~/.astrolabe/connection.yml` and environment variables.
+
+Common environment variables:
+- `ASTROLABE_API_URL`
+- `ASTROLABE_PROJECT_ID`
+- `ASTROLABE_AUTH_TOKEN`
+
+You can also set metadata defaults:
+```bash
+astrolabe config set operator "Jane Doe"
+astrolabe config set location "Bench A"
+astrolabe config set device-id "dev-001"
+astrolabe config get operator
+```
+
+## Features
+
+- Capture from multiple sources:
+  - Serial (`astrolabe capture serial`)
+  - TCP (`astrolabe capture tcp`)
+  - Files: CSV, JSONL, raw logs (`astrolabe capture file`)
+- Interactive workflows via TUI (`astrolabe tui`, `astrolabe config edit`)
+- Local offline run cache (defaults to `~/.astrolabe/runs`)
+- Run validation before upload (`astrolabe validate <run_dir>`)
+- Upload one run or all pending cached runs (`astrolabe upload`)
+- JSON output mode for automation (`--json`)
+
+## Examples
+
+### Show help
+```bash
+astrolabe help
+```
+
+### Capture from serial
+```bash
+astrolabe capture serial --port /dev/ttyUSB0 --baud 115200 --test-plan smoke --tag lab
+```
+
+### Capture from TCP
+```bash
+astrolabe capture tcp --host 192.168.1.50 --port 9000 --test-plan burnin --attr station=west
+```
+
+### Ingest an existing file
+```bash
+astrolabe capture file ./data/results.csv --format csv --operator "Jane Doe" --location "Bench A"
+```
+
+### Validate a run before upload
+```bash
+astrolabe validate ~/.astrolabe/runs/<run-id>
+```
+
+### Upload runs
+```bash
+# upload all pending runs
+astrolabe upload
+
+# upload a specific run
+astrolabe upload --run-id <run-id>
+```
+
+### Machine-readable output
+```bash
+astrolabe validate ~/.astrolabe/runs/<run-id> --json
+```
+
+## Documentation
+
+Detailed guides are in [`docs/`](docs):
+
+- [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md)
+- [`docs/OPERATOR_QUICKSTART.md`](docs/OPERATOR_QUICKSTART.md)
+- [`docs/OPERATOR_WORKFLOWS.md`](docs/OPERATOR_WORKFLOWS.md)
+- [`docs/OPERATOR_TROUBLESHOOTING.md`](docs/OPERATOR_TROUBLESHOOTING.md)
+- [`docs/UPLOAD_GUIDE.md`](docs/UPLOAD_GUIDE.md)
+- [`docs/FILE_INGESTION.md`](docs/FILE_INGESTION.md)
+- [`docs/TCP_CAPTURE.md`](docs/TCP_CAPTURE.md)
+- [`docs/CONFIG_TUI.md`](docs/CONFIG_TUI.md)
+- [`docs/TUI_WORKFLOW.md`](docs/TUI_WORKFLOW.md)
+- [`docs/SYSTEM_REQUIREMENTS.md`](docs/SYSTEM_REQUIREMENTS.md)
