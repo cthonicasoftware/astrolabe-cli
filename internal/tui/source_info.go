@@ -8,6 +8,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"go.bug.st/serial"
@@ -24,6 +25,8 @@ type sourceInfoModel struct {
 	width       int
 	height      int
 	shouldClose bool
+	loading     bool
+	spinner     spinner.Model
 
 	// Serial-specific info
 	serialPorts []serialPortInfo
@@ -32,6 +35,13 @@ type sourceInfoModel struct {
 	networkInterfaces []networkInterfaceInfo
 
 	loadErr error
+}
+
+type sourceInfoLoadedMsg struct {
+	sourceType        string
+	serialPorts       []serialPortInfo
+	networkInterfaces []networkInterfaceInfo
+	err               error
 }
 
 type serialPortInfo struct {
@@ -49,27 +59,41 @@ type networkInterfaceInfo struct {
 
 // NewSourceInfo builds the contextual diagnostics dialog for the given source type.
 func NewSourceInfo(sourceType string, width, height int) *sourceInfoModel {
-	m := &sourceInfoModel{
+	return &sourceInfoModel{
 		sourceType: sourceType,
 		width:      width,
 		height:     height,
+		loading:    true,
+		spinner:    NewDefaultSpinner(),
 	}
-
-	m.loadData()
-	return m
 }
 
-func (m *sourceInfoModel) loadData() {
-	switch sourceType := m.sourceType; sourceType {
+func loadSourceInfoData(sourceType string) sourceInfoLoadedMsg {
+	msg := sourceInfoLoadedMsg{sourceType: sourceType}
+	switch sourceType {
 	case SourceTypeSerial:
-		m.serialPorts, m.loadErr = collectSerialPorts()
+		msg.serialPorts, msg.err = collectSerialPorts()
 	case SourceTypeTCP:
-		m.networkInterfaces, m.loadErr = collectNetworkInterfaces()
+		msg.networkInterfaces, msg.err = collectNetworkInterfaces()
 	case SourceTypeSCPI:
 		// No data yet – reserved for future implementation.
 	default:
-		m.loadErr = fmt.Errorf("unsupported source type: %s", sourceType)
+		msg.err = fmt.Errorf("unsupported source type: %s", sourceType)
 	}
+	return msg
+}
+
+func loadSourceInfoCmd(sourceType string) tea.Cmd {
+	return func() tea.Msg {
+		return loadSourceInfoData(sourceType)
+	}
+}
+
+func (m *sourceInfoModel) Init() tea.Cmd {
+	return tea.Batch(
+		loadSourceInfoCmd(m.sourceType),
+		m.spinner.Tick,
+	)
 }
 
 func collectSerialPorts() ([]serialPortInfo, error) {
@@ -221,6 +245,24 @@ func (m *sourceInfoModel) Update(msg tea.Msg) (*sourceInfoModel, tea.Cmd) {
 		m.height = msg.Height
 		return m, nil
 
+	case sourceInfoLoadedMsg:
+		if msg.sourceType != m.sourceType {
+			return m, nil
+		}
+		m.loading = false
+		m.loadErr = msg.err
+		m.serialPorts = msg.serialPorts
+		m.networkInterfaces = msg.networkInterfaces
+		return m, nil
+
+	case spinner.TickMsg:
+		if !m.loading {
+			return m, nil
+		}
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "esc", "q":
@@ -241,6 +283,13 @@ func (m *sourceInfoModel) View() string {
 	title := m.title()
 	body.WriteString(StyleTitle.Render(title))
 	body.WriteString("\n\n")
+
+	if m.loading {
+		body.WriteString(fmt.Sprintf("%s Loading diagnostics...", m.spinner.View()))
+		body.WriteString("\n\n")
+		body.WriteString(StyleHelp.Render("esc/q: close"))
+		return m.wrap(body.String())
+	}
 
 	if m.loadErr != nil {
 		body.WriteString(StyleError.Render(fmt.Sprintf("Unable to load diagnostics: %v", m.loadErr)))

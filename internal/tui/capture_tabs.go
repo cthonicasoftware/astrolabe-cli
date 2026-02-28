@@ -288,7 +288,7 @@ func (m *captureTabsModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.showInfo = true
 			m.infoModel = NewSourceInfo(sourceType, m.width, m.height)
 			m.focusMode = FocusModeInfo
-			return m, nil
+			return m, m.infoModel.Init()
 		}
 		return m, nil
 
