@@ -44,6 +44,11 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 
 	rootCmd.SetHelpFunc(renderStyledHelp)
+	rootCmd.SilenceErrors = true
+	rootCmd.SilenceUsage = true
+	rootCmd.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
+		return fmt.Errorf("invalid arguments: %w (run '%s --help')", err, cmd.CommandPath())
+	})
 }
 
 func initConfig() {
@@ -63,7 +68,15 @@ func initConfig() {
 }
 
 func Execute() error {
-	return rootCmd.Execute()
+	err := rootCmd.Execute()
+	if err != nil {
+		out := cliout.DefaultPrinter(viper.GetBool("json"))
+		// Validation flow already renders detailed styled errors before returning a sentinel.
+		if err != errValidationFailed {
+			out.Error(err.Error())
+		}
+	}
+	return err
 }
 
 type helpRenderer struct {
