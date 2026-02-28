@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -65,9 +66,9 @@ var captureSerialCmd = &cobra.Command{
 			savedMetadata config.Metadata
 			metaErr       error
 		)
-			if savedMetadata, metaErr = config.LoadMetadata(); metaErr != nil {
-				out.Warning(fmt.Sprintf("Failed to load metadata: %v", metaErr))
-			}
+		if savedMetadata, metaErr = config.LoadMetadata(); metaErr != nil {
+			out.Warning(fmt.Sprintf("Failed to load metadata: %v", metaErr))
+		}
 
 		var (
 			serialCfg *sources.Config
@@ -180,11 +181,11 @@ var captureSerialCmd = &cobra.Command{
 			if err := serial.Open(ctx); err != nil {
 				return fmt.Errorf("failed to open serial port: %w", err)
 			}
-				defer func() {
-					if err := serial.Close(); err != nil {
-						out.Warning(fmt.Sprintf("Failed to close serial port: %v", err))
-					}
-				}()
+			defer func() {
+				if err := serial.Close(); err != nil {
+					out.Warning(fmt.Sprintf("Failed to close serial port: %v", err))
+				}
+			}()
 
 			// Create channels for TUI display and pipeline data
 			stringCh := make(chan string, 16)
@@ -281,11 +282,11 @@ var captureSerialCmd = &cobra.Command{
 				out.Blank()
 				out.Muted("Exited without saving.")
 				// Wait for pipeline to finish but discard results
-					run := <-pipelineResultCh
-					runErr := <-pipelineErrCh
-					if runErr != nil && !errors.Is(runErr, context.Canceled) {
-						out.Error(fmt.Sprintf("Capture pipeline error: %v", runErr))
-					}
+				run := <-pipelineResultCh
+				runErr := <-pipelineErrCh
+				if runErr != nil && !errors.Is(runErr, context.Canceled) {
+					out.Error(fmt.Sprintf("Capture pipeline error: %v", runErr))
+				}
 				if run != nil {
 					runDir := filepath.Join(tempRoot, run.ID)
 					_ = os.RemoveAll(runDir)
@@ -515,7 +516,7 @@ func parseAttributeFlags(values map[string]string) (map[string]string, error) {
 			b.WriteRune('\n')
 		}
 		first = false
-		b.WriteString(fmt.Sprintf("%s=%s", k, v))
+		fmt.Fprintf(&b, "%s=%s", k, v)
 	}
 	return config.ParseAttributes(b.String())
 }
@@ -574,9 +575,7 @@ func cloneStringMap(src map[string]string) map[string]string {
 		return nil
 	}
 	dst := make(map[string]string, len(src))
-	for k, v := range src {
-		dst[k] = v
-	}
+	maps.Copy(dst, src)
 	return dst
 }
 
