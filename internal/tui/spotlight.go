@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -18,6 +19,9 @@ const (
 )
 
 var faintLineStyle = lipgloss.NewStyle().Faint(true)
+
+// Matches ANSI CSI escape sequences, including color and cursor controls.
+var ansiCSIRegex = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
 
 // SpotlightEffect applies a gradient fade effect to content based on scroll position
 type SpotlightEffect struct {
@@ -103,10 +107,22 @@ func (s *SpotlightEffect) applyColorIntensity(line string, intensity float64) st
 
 	// Preserve pre-existing colored output by falling back to a faint style
 	if strings.Contains(line, ANSIEscapePrefix) {
-		if intensity > 0.7 {
+		if intensity > 0.85 {
 			return line
 		}
-		return faintLineStyle.Render(line)
+		if intensity <= 0.6 {
+			plain := stripANSICSI(line)
+			return s.applyPlainTextIntensity(plain, intensity)
+		}
+		return applyFaintToANSILine(line)
+	}
+
+	return s.applyPlainTextIntensity(line, intensity)
+}
+
+func (s *SpotlightEffect) applyPlainTextIntensity(line string, intensity float64) string {
+	if line == "" {
+		return line
 	}
 
 	// Map intensity to grayscale ANSI colors (232-255 are grayscale)
@@ -114,4 +130,28 @@ func (s *SpotlightEffect) applyColorIntensity(line string, intensity float64) st
 	colorCode := max(min(232+int(math.Round(intensity*23)), 255), 232)
 
 	return fmt.Sprintf("\x1b[38;5;%dm%s\x1b[0m", colorCode, line)
+}
+
+// applyFaintToANSILine applies faint intensity to ANSI content while keeping
+// the effect active across explicit reset sequences from the device output.
+func applyFaintToANSILine(line string) string {
+	const (
+		reset    = "\x1b[0m"
+		reapply  = "\x1b[0;2m"
+		faintOn  = "\x1b[2m"
+		faintOff = "\x1b[0m"
+	)
+
+	// If no full reset exists, a normal faint wrapper is enough.
+	if !strings.Contains(line, reset) {
+		return faintLineStyle.Render(line)
+	}
+
+	// Re-apply faint after each reset so later text segments remain dimmed.
+	persistFaint := strings.ReplaceAll(line, reset, reapply)
+	return faintOn + persistFaint + faintOff
+}
+
+func stripANSICSI(line string) string {
+	return ansiCSIRegex.ReplaceAllString(line, "")
 }
