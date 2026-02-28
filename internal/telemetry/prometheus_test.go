@@ -19,7 +19,7 @@ func TestPrometheusMetrics_RecordCapture(t *testing.T) {
 	m.RecordCapture("serial")
 
 	snapshot := m.Snapshot()
-	captures := snapshot["captures"].(map[string]interface{})
+	captures := snapshot["captures"].(map[string]any)
 
 	if captures["total"].(int64) != 3 {
 		t.Errorf("total captures = %v, want 3", captures["total"])
@@ -43,7 +43,7 @@ func TestPrometheusMetrics_RecordBytes(t *testing.T) {
 	m.RecordBytes("ingested", 1024)
 
 	snapshot := m.Snapshot()
-	bytes := snapshot["bytes"].(map[string]interface{})
+	bytes := snapshot["bytes"].(map[string]any)
 
 	if bytes["ingested"].(int64) != 2048 {
 		t.Errorf("ingested bytes = %v, want 2048", bytes["ingested"])
@@ -64,7 +64,7 @@ func TestPrometheusMetrics_RecordUpload(t *testing.T) {
 	m.RecordUpload(false, 200)
 
 	snapshot := m.Snapshot()
-	uploads := snapshot["uploads"].(map[string]interface{})
+	uploads := snapshot["uploads"].(map[string]any)
 
 	if uploads["attempts"].(int64) != 3 {
 		t.Errorf("upload attempts = %v, want 3", uploads["attempts"])
@@ -150,12 +150,12 @@ func TestPrometheusMetrics_ConcurrentAccess(t *testing.T) {
 	}
 
 	snapshot := m.Snapshot()
-	captures := snapshot["captures"].(map[string]interface{})
+	captures := snapshot["captures"].(map[string]any)
 	if captures["total"].(int64) != 1000 {
 		t.Errorf("concurrent captures = %v, want 1000", captures["total"])
 	}
 
-	bytes := snapshot["bytes"].(map[string]interface{})
+	bytes := snapshot["bytes"].(map[string]any)
 	if bytes["ingested"].(int64) != 1000 {
 		t.Errorf("concurrent bytes = %v, want 1000", bytes["ingested"])
 	}

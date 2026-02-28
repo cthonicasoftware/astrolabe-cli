@@ -137,7 +137,7 @@ func (p *PrometheusMetrics) RecordError(category string) {
 
 // Snapshot returns a point-in-time view of all metrics.
 // This provides a convenient way to view metrics without scraping the /metrics endpoint.
-func (p *PrometheusMetrics) Snapshot() map[string]interface{} {
+func (p *PrometheusMetrics) Snapshot() map[string]any {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -151,17 +151,17 @@ func (p *PrometheusMetrics) Snapshot() map[string]interface{} {
 		errors[k] = v
 	}
 
-	return map[string]interface{}{
-		"captures": map[string]interface{}{
+	return map[string]any{
+		"captures": map[string]any{
 			"total":   p.captureCount,
 			"by_kind": captureByKind,
 		},
-		"bytes": map[string]interface{}{
+		"bytes": map[string]any{
 			"ingested":   p.bytesIngested,
 			"normalized": p.bytesNormalized,
 			"uploaded":   p.bytesUploaded,
 		},
-		"uploads": map[string]interface{}{
+		"uploads": map[string]any{
 			"attempts":    p.uploadAttempts,
 			"success":     p.uploadSuccess,
 			"failures":    p.uploadFailures,

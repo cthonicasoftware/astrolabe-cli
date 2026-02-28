@@ -22,7 +22,7 @@ type Metrics interface {
 	RecordError(category string)
 
 	// Snapshot returns current metrics as a map for debugging/export
-	Snapshot() map[string]interface{}
+	Snapshot() map[string]any
 }
 
 // NoopMetrics is a silent implementation for when telemetry is disabled.
@@ -32,7 +32,7 @@ func (n *NoopMetrics) RecordCapture(sourceKind string)             {}
 func (n *NoopMetrics) RecordBytes(stage string, bytes int64)       {}
 func (n *NoopMetrics) RecordUpload(success bool, durationMs int64) {}
 func (n *NoopMetrics) RecordError(category string)                 {}
-func (n *NoopMetrics) Snapshot() map[string]interface{}            { return nil }
+func (n *NoopMetrics) Snapshot() map[string]any            { return nil }
 
 // Global registry - safe for concurrent access
 var (
@@ -77,7 +77,7 @@ func RecordError(category string) {
 	Current().RecordError(category)
 }
 
-func Snapshot() map[string]interface{} {
+func Snapshot() map[string]any {
 	return Current().Snapshot()
 }
 

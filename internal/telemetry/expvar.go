@@ -106,7 +106,7 @@ func (e *ExpvarMetrics) RecordError(category string) {
 	e.errors.Add(category, 1)
 }
 
-func (e *ExpvarMetrics) Snapshot() map[string]interface{} {
+func (e *ExpvarMetrics) Snapshot() map[string]any {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -124,17 +124,17 @@ func (e *ExpvarMetrics) Snapshot() map[string]interface{} {
 		}
 	})
 
-	return map[string]interface{}{
-		"captures": map[string]interface{}{
+	return map[string]any{
+		"captures": map[string]any{
 			"total":   e.captureCount.Value(),
 			"by_kind": captureByKind,
 		},
-		"bytes": map[string]interface{}{
+		"bytes": map[string]any{
 			"ingested":   e.bytesIngested.Value(),
 			"normalized": e.bytesNormalized.Value(),
 			"uploaded":   e.bytesUploaded.Value(),
 		},
-		"uploads": map[string]interface{}{
+		"uploads": map[string]any{
 			"attempts":    e.uploadAttempts.Value(),
 			"success":     e.uploadSuccess.Value(),
 			"failures":    e.uploadFailures.Value(),

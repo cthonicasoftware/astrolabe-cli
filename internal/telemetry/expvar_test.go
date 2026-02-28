@@ -12,7 +12,7 @@ func TestExpvarMetrics_RecordCapture(t *testing.T) {
 	m.RecordCapture("serial")
 
 	snapshot := m.Snapshot()
-	captures := snapshot["captures"].(map[string]interface{})
+	captures := snapshot["captures"].(map[string]any)
 
 	if captures["total"].(int64) != 3 {
 		t.Errorf("total captures = %v, want 3", captures["total"])
@@ -36,7 +36,7 @@ func TestExpvarMetrics_RecordBytes(t *testing.T) {
 	m.RecordBytes("ingested", 1024) // add more
 
 	snapshot := m.Snapshot()
-	bytes := snapshot["bytes"].(map[string]interface{})
+	bytes := snapshot["bytes"].(map[string]any)
 
 	if bytes["ingested"].(int64) != 2048 {
 		t.Errorf("ingested bytes = %v, want 2048", bytes["ingested"])
@@ -57,7 +57,7 @@ func TestExpvarMetrics_RecordUpload(t *testing.T) {
 	m.RecordUpload(false, 200)
 
 	snapshot := m.Snapshot()
-	uploads := snapshot["uploads"].(map[string]interface{})
+	uploads := snapshot["uploads"].(map[string]any)
 
 	if uploads["attempts"].(int64) != 3 {
 		t.Errorf("upload attempts = %v, want 3", uploads["attempts"])
@@ -127,8 +127,8 @@ func TestExpvarMetrics_ConcurrentAccess(t *testing.T) {
 
 	// Take snapshot before
 	before := m.Snapshot()
-	beforeCaptures := before["captures"].(map[string]interface{})["total"].(int64)
-	beforeBytes := before["bytes"].(map[string]interface{})["ingested"].(int64)
+	beforeCaptures := before["captures"].(map[string]any)["total"].(int64)
+	beforeBytes := before["bytes"].(map[string]any)["ingested"].(int64)
 
 	done := make(chan bool)
 	for i := 0; i < 5; i++ {
@@ -149,13 +149,13 @@ func TestExpvarMetrics_ConcurrentAccess(t *testing.T) {
 
 	// Check delta instead of absolute values
 	snapshot := m.Snapshot()
-	captures := snapshot["captures"].(map[string]interface{})
+	captures := snapshot["captures"].(map[string]any)
 	afterCaptures := captures["total"].(int64)
 	if afterCaptures-beforeCaptures != 1000 {
 		t.Errorf("concurrent captures delta = %v, want 1000", afterCaptures-beforeCaptures)
 	}
 
-	bytes := snapshot["bytes"].(map[string]interface{})
+	bytes := snapshot["bytes"].(map[string]any)
 	afterBytes := bytes["ingested"].(int64)
 	if afterBytes-beforeBytes != 1000 {
 		t.Errorf("concurrent bytes delta = %v, want 1000", afterBytes-beforeBytes)

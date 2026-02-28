@@ -108,7 +108,7 @@ func TestInitFromConfig_Integration(t *testing.T) {
 	InitFromConfig(cfg)
 
 	before := Snapshot()
-	beforeCaptures := before["captures"].(map[string]interface{})["total"].(int64)
+	beforeCaptures := before["captures"].(map[string]any)["total"].(int64)
 
 	// Record some metrics
 	RecordCapture("test")
@@ -121,7 +121,7 @@ func TestInitFromConfig_Integration(t *testing.T) {
 		t.Error("Snapshot should not be nil after InitFromConfig")
 	}
 
-	captures := snapshot["captures"].(map[string]interface{})
+	captures := snapshot["captures"].(map[string]any)
 	if captures["total"].(int64)-beforeCaptures != 1 {
 		t.Errorf("captures delta after init = %v, want 1", captures["total"].(int64)-beforeCaptures)
 	}
