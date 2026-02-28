@@ -16,7 +16,6 @@ import (
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/sources"
 	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/storage"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 )
 
 var (
@@ -176,7 +175,7 @@ Examples:
 		store := storage.NewFS(runRoot)
 
 		// Build manifest
-		meta := fileManifestOptions{
+		meta := core.ManifestOptions{
 			Operator: fileOperator,
 			Location: fileLocation,
 			Device: core.DeviceInfo{
@@ -194,7 +193,7 @@ Examples:
 			Tags:       append([]string(nil), flagTags...),
 			Attributes: cloneStringMap(flagAttrs),
 		}
-		applyFileMetadataDefaults(&meta, savedMetadata, cmd.Flags())
+		applyMetadataDefaults(&meta, savedMetadata, cmd.Flags())
 
 		manifest := buildFileManifest(absPath, fileFormat, meta)
 		captureSettings := buildFileCaptureSettings(absPath, fileFormat)
@@ -241,16 +240,7 @@ Examples:
 	},
 }
 
-type fileManifestOptions struct {
-	Operator   string
-	Location   string
-	Device     core.DeviceInfo
-	Test       core.TestInfo
-	Tags       []string
-	Attributes map[string]string
-}
-
-func buildFileManifest(filePath, format string, opts fileManifestOptions) core.Manifest {
+func buildFileManifest(filePath, format string, opts core.ManifestOptions) core.Manifest {
 	attrs := map[string]string{
 		"source_kind":   "file",
 		"source_file":   filepath.Base(filePath),
@@ -322,62 +312,6 @@ func generateRunID() string {
 	return fmt.Sprintf("run-%s", now.Format("20060102-150405"))
 }
 
-func applyFileMetadataDefaults(opts *fileManifestOptions, saved config.Metadata, flags *pflag.FlagSet) {
-	isChanged := func(name string) bool {
-		if flags == nil {
-			return false
-		}
-		return flags.Changed(name)
-	}
-
-	if saved.Operator != "" && !isChanged("operator") && opts.Operator == "" {
-		opts.Operator = saved.Operator
-	}
-	if saved.Location != "" && !isChanged("location") && opts.Location == "" {
-		opts.Location = saved.Location
-	}
-
-	if saved.Device.ID != "" && !isChanged("device-id") && opts.Device.ID == "" {
-		opts.Device.ID = saved.Device.ID
-	}
-	if saved.Device.Serial != "" && !isChanged("device-serial") && opts.Device.Serial == "" {
-		opts.Device.Serial = saved.Device.Serial
-	}
-	if saved.Device.Firmware != "" && !isChanged("device-firmware") && opts.Device.Firmware == "" {
-		opts.Device.Firmware = saved.Device.Firmware
-	}
-	if saved.Device.FirmwareHash != "" && !isChanged("device-fw-hash") && opts.Device.FirmwareHash == "" {
-		opts.Device.FirmwareHash = saved.Device.FirmwareHash
-	}
-	if saved.Device.HardwareVersion != "" && !isChanged("device-hw-version") && opts.Device.HardwareVersion == "" {
-		opts.Device.HardwareVersion = saved.Device.HardwareVersion
-	}
-
-	if saved.Test.Plan != "" && !isChanged("test-plan") && opts.Test.Plan == "" {
-		opts.Test.Plan = saved.Test.Plan
-	}
-	if saved.Test.Variant != "" && !isChanged("test-variant") && opts.Test.Variant == "" {
-		opts.Test.Variant = saved.Test.Variant
-	}
-	if saved.Test.Run != "" && !isChanged("test-run") && opts.Test.Run == "" {
-		opts.Test.Run = saved.Test.Run
-	}
-
-	if len(saved.Tags) > 0 && !isChanged("tag") && len(opts.Tags) == 0 {
-		opts.Tags = append([]string(nil), saved.Tags...)
-	}
-
-	if len(saved.Attributes) > 0 && !isChanged("attr") {
-		if opts.Attributes == nil {
-			opts.Attributes = make(map[string]string)
-		}
-		for k, v := range saved.Attributes {
-			if _, exists := opts.Attributes[k]; !exists {
-				opts.Attributes[k] = v
-			}
-		}
-	}
-}
 
 func init() {
 	captureCmd.AddCommand(captureFileCmd)
@@ -397,8 +331,8 @@ func init() {
 	captureFileCmd.Flags().StringVar(&fileDeviceID, "device-id", "", "Device identifier")
 	captureFileCmd.Flags().StringVar(&fileDeviceSerial, "device-serial", "", "Device serial number")
 	captureFileCmd.Flags().StringVar(&fileDeviceFirmware, "device-firmware", "", "Device firmware version")
-	captureFileCmd.Flags().StringVar(&fileDeviceFWHash, "device-fw-hash", "", "Device firmware hash")
-	captureFileCmd.Flags().StringVar(&fileDeviceHWVersion, "device-hw-version", "", "Device hardware version")
+	captureFileCmd.Flags().StringVar(&fileDeviceFWHash, "device-firmware-hash", "", "Device firmware hash")
+	captureFileCmd.Flags().StringVar(&fileDeviceHWVersion, "device-hardware-version", "", "Device hardware version")
 	captureFileCmd.Flags().StringVar(&fileTestPlan, "test-plan", "", "Test plan name")
 	captureFileCmd.Flags().StringVar(&fileTestVariant, "test-variant", "", "Test variant")
 	captureFileCmd.Flags().StringVar(&fileTestRun, "test-run", "", "Test run identifier")

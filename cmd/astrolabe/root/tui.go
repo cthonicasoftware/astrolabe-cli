@@ -76,7 +76,7 @@ var tuiCmd = &cobra.Command{
 					defer os.RemoveAll(tempRoot)
 					store := storage.NewFS(tempRoot)
 					normalizer := normalize.NewLineJSON()
-					meta := serialManifestOptions{}
+					meta := core.ManifestOptions{}
 					if metaErr == nil {
 						applyMetadataDefaults(&meta, savedMetadata, nil)
 					}
@@ -236,7 +236,7 @@ var tuiCmd = &cobra.Command{
 					}
 
 					// Build manifest with defaults
-					meta := serialManifestOptions{} // Reuse serial manifest options
+					meta := core.ManifestOptions{} // Reuse serial manifest options
 					if metaErr == nil {
 						applyMetadataDefaults(&meta, savedMetadata, nil)
 					}
@@ -460,7 +460,7 @@ var tuiCmd = &cobra.Command{
 	},
 }
 
-func buildTCPManifestFromOptions(host string, port int, opts serialManifestOptions) core.Manifest {
+func buildTCPManifestFromOptions(host string, port int, opts core.ManifestOptions) core.Manifest {
 	attrs := map[string]string{
 		"source_kind": "tcp",
 		"tcp_host":    host,
