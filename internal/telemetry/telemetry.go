@@ -32,7 +32,7 @@ func (n *NoopMetrics) RecordCapture(sourceKind string)             {}
 func (n *NoopMetrics) RecordBytes(stage string, bytes int64)       {}
 func (n *NoopMetrics) RecordUpload(success bool, durationMs int64) {}
 func (n *NoopMetrics) RecordError(category string)                 {}
-func (n *NoopMetrics) Snapshot() map[string]any            { return nil }
+func (n *NoopMetrics) Snapshot() map[string]any                    { return nil }
 
 // Global registry - safe for concurrent access
 var (
