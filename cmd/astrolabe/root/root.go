@@ -1,7 +1,6 @@
 package root
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -44,7 +43,7 @@ func initConfig() {
 	_ = viper.ReadInConfig()
 }
 
-func Execute() {
+func Execute() error {
 	// attach subcommands
 	rootCmd.AddCommand(captureCmd)
 	rootCmd.AddCommand(uploadCmd)
@@ -52,8 +51,5 @@ func Execute() {
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(versionCmd)
 
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
+	return rootCmd.Execute()
 }
