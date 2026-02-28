@@ -52,6 +52,7 @@ var (
 var captureTCPCmd = &cobra.Command{
 	Use:   "tcp",
 	Short: "Capture from a TCP network source",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Check if we should run in interactive mode
 		// Interactive mode runs when:

@@ -23,6 +23,7 @@ import (
 var tuiCmd = &cobra.Command{
 	Use:   "tui",
 	Short: "Launch the interactive Text UI",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Main TUI loop - keep showing welcome screen until user quits
 		var status *tui.StatusMessage

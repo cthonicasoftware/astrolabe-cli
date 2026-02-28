@@ -15,6 +15,7 @@ import (
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Manage configuration",
+	Args:  cobra.NoArgs,
 }
 
 var configEditCmd = &cobra.Command{
@@ -26,6 +27,7 @@ var configEditCmd = &cobra.Command{
 - Authentication token
 - Offline cache location
 - Upload retry settings`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		_, err := tui.RunConfigEditor(nil)
 		return err

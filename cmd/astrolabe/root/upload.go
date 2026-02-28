@@ -25,6 +25,7 @@ var (
 var uploadCmd = &cobra.Command{
 	Use:   "upload",
 	Short: "Upload cached runs to the server",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Create styled printer
 		jsonMode, _ := cmd.Flags().GetBool("json")

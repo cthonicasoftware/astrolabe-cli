@@ -5,6 +5,7 @@ import "github.com/spf13/cobra"
 var captureCmd = &cobra.Command{
 	Use:   "capture",
 	Short: "Start a capture from a source",
+	Args:  cobra.NoArgs,
 }
 
 func init() {
