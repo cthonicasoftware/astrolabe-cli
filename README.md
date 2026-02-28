@@ -11,7 +11,7 @@ Astrolabe is a command-line tool for capturing QA run data from serial devices, 
 ```bash
 git clone <your-repo-url>
 cd astrolabe
-go build -o astrolabe ./cmastrolabe
+go build -o astrolabe ./cmd/astrolabe
 ```
 
 ### Option 2: Use mise tasks
