@@ -48,6 +48,7 @@ var (
 var captureSerialCmd = &cobra.Command{
 	Use:   "serial",
 	Short: "Capture from a serial port",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Check if we should run in interactive mode
 		// Interactive mode runs when:

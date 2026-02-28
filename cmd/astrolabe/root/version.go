@@ -28,6 +28,7 @@ type versionInfo struct {
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Report agent and schema versions",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		info := versionInfo{
 			Agent:     Version,

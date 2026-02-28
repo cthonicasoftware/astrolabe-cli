@@ -1,7 +1,10 @@
 package main
 
-import "github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root"
+import (
+	"github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root"
+	"github.com/spf13/cobra"
+)
 
 func main() {
-	root.Execute()
+	cobra.CheckErr(root.Execute())
 }

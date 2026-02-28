@@ -2,6 +2,7 @@ package root
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 
@@ -28,6 +29,8 @@ var validateCmd = &cobra.Command{
 	},
 }
 
+var errValidationFailed = errors.New("validation failed")
+
 func outputJSON(result validate.Result) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
@@ -35,7 +38,7 @@ func outputJSON(result validate.Result) error {
 		return fmt.Errorf("encode result: %w", err)
 	}
 	if !result.Valid {
-		os.Exit(1)
+		return errValidationFailed
 	}
 	return nil
 }
@@ -69,7 +72,7 @@ func outputStyled(result validate.Result) error {
 		for _, err := range result.Errors {
 			out.Muted(fmt.Sprintf("  %s", err))
 		}
-		os.Exit(1)
+		return errValidationFailed
 	}
 
 	return nil
