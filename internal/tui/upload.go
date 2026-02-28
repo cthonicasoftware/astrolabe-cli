@@ -221,7 +221,6 @@ func RunUploadTUI(client *upload.Client, runIDs []string) error {
 // This is exported for testing purposes.
 func runUploadTUIWithClient(client upload.UploadClient, runIDs []string) error {
 	if len(runIDs) == 0 {
-		fmt.Println("No runs to upload")
 		return nil
 	}
 
