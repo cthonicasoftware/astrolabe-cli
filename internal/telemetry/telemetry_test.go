@@ -57,7 +57,7 @@ func TestTimedUpload(t *testing.T) {
 	defer Init(&NoopMetrics{})
 
 	before := Snapshot()
-	beforeUploads := before["uploads"].(map[string]interface{})
+	beforeUploads := before["uploads"].(map[string]any)
 	beforeSuccess := beforeUploads["success"].(int64)
 	beforeFailures := beforeUploads["failures"].(int64)
 	beforeAttempts := beforeUploads["attempts"].(int64)
@@ -71,7 +71,7 @@ func TestTimedUpload(t *testing.T) {
 	}
 
 	snapshot := Snapshot()
-	uploads := snapshot["uploads"].(map[string]interface{})
+	uploads := snapshot["uploads"].(map[string]any)
 	if uploads["success"].(int64)-beforeSuccess != 1 {
 		t.Errorf("success delta = %v, want 1", uploads["success"].(int64)-beforeSuccess)
 	}
@@ -86,7 +86,7 @@ func TestTimedUpload(t *testing.T) {
 	}
 
 	snapshot = Snapshot()
-	uploads = snapshot["uploads"].(map[string]interface{})
+	uploads = snapshot["uploads"].(map[string]any)
 	if uploads["failures"].(int64)-beforeFailures != 1 {
 		t.Errorf("failures delta = %v, want 1", uploads["failures"].(int64)-beforeFailures)
 	}
@@ -101,7 +101,7 @@ func TestConcurrentAccess(t *testing.T) {
 	defer Init(&NoopMetrics{})
 
 	before := Snapshot()
-	beforeCaptures := before["captures"].(map[string]interface{})["total"].(int64)
+	beforeCaptures := before["captures"].(map[string]any)["total"].(int64)
 
 	done := make(chan bool)
 	for i := 0; i < 10; i++ {
@@ -121,7 +121,7 @@ func TestConcurrentAccess(t *testing.T) {
 	}
 
 	snapshot := Snapshot()
-	captures := snapshot["captures"].(map[string]interface{})
+	captures := snapshot["captures"].(map[string]any)
 	afterCaptures := captures["total"].(int64)
 	if afterCaptures-beforeCaptures != 1000 {
 		t.Errorf("concurrent capture delta = %v, want 1000", afterCaptures-beforeCaptures)

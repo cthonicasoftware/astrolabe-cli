@@ -1,131 +1,31 @@
 package telemetry
 
 import (
-	"sync"
-)
+	"net/http"
 
-// PrometheusMetrics is a stub implementation for Prometheus-compatible metrics.
-// This provides the interface structure; actual prometheus client can be added later.
-//
-// To use real Prometheus metrics, replace this with:
-//
-//	import "github.com/prometheus/client_golang/prometheus"
-//	import "github.com/prometheus/client_golang/prometheus/promauto"
-type PrometheusMetrics struct {
-	mu sync.Mutex
-
-	// In-memory counters for stub implementation
-	captureCount    int64
-	captureByKind   map[string]int64
-	bytesIngested   int64
-	bytesNormalized int64
-	bytesUploaded   int64
-	uploadAttempts  int64
-	uploadSuccess   int64
-	uploadFailures  int64
-	uploadDuration  int64
-	errors          map[string]int64
-}
-
-// NewPrometheusMetrics creates a stub Prometheus metrics collector.
-// TODO: Replace with actual prometheus.Counter, prometheus.Gauge, etc.
-func NewPrometheusMetrics() *PrometheusMetrics {
-	return &PrometheusMetrics{
-		captureByKind: make(map[string]int64),
-		errors:        make(map[string]int64),
-	}
-}
-
-func (p *PrometheusMetrics) RecordCapture(sourceKind string) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.captureCount++
-	p.captureByKind[sourceKind]++
-	// TODO: captureCounter.WithLabelValues(sourceKind).Inc()
-}
-
-func (p *PrometheusMetrics) RecordBytes(stage string, n int64) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	switch stage {
-	case "ingested":
-		p.bytesIngested += n
-		// TODO: bytesCounter.WithLabelValues("ingested").Add(float64(n))
-	case "normalized":
-		p.bytesNormalized += n
-		// TODO: bytesCounter.WithLabelValues("normalized").Add(float64(n))
-	case "uploaded":
-		p.bytesUploaded += n
-		// TODO: bytesCounter.WithLabelValues("uploaded").Add(float64(n))
-	}
-}
-
-func (p *PrometheusMetrics) RecordUpload(success bool, durationMs int64) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.uploadAttempts++
-	if success {
-		p.uploadSuccess++
-		// TODO: uploadCounter.WithLabelValues("success").Inc()
-	} else {
-		p.uploadFailures++
-		// TODO: uploadCounter.WithLabelValues("failure").Inc()
-	}
-	p.uploadDuration += durationMs
-	// TODO: uploadDurationHistogram.Observe(float64(durationMs))
-}
-
-func (p *PrometheusMetrics) RecordError(category string) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.errors[category]++
-	// TODO: errorCounter.WithLabelValues(category).Inc()
-}
-
-func (p *PrometheusMetrics) Snapshot() map[string]interface{} {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	captureByKind := make(map[string]int64)
-	for k, v := range p.captureByKind {
-		captureByKind[k] = v
-	}
-
-	errors := make(map[string]int64)
-	for k, v := range p.errors {
-		errors[k] = v
-	}
-
-	return map[string]interface{}{
-		"captures": map[string]interface{}{
-			"total":   p.captureCount,
-			"by_kind": captureByKind,
-		},
-		"bytes": map[string]interface{}{
-			"ingested":   p.bytesIngested,
-			"normalized": p.bytesNormalized,
-			"uploaded":   p.bytesUploaded,
-		},
-		"uploads": map[string]interface{}{
-			"attempts":    p.uploadAttempts,
-			"success":     p.uploadSuccess,
-			"failures":    p.uploadFailures,
-			"duration_ms": p.uploadDuration,
-		},
-		"errors": errors,
-	}
-}
-
-/*
-Example real Prometheus implementation:
-
-import (
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-var (
-	captureCounter = promauto.NewCounterVec(
+// PrometheusMetrics provides Prometheus-compatible metrics collection.
+// Each instance owns its own prometheus.Registry for full isolation.
+// The Prometheus counters are the single source of truth — Snapshot()
+// reads directly from them, eliminating dual bookkeeping.
+type PrometheusMetrics struct {
+	registry *prometheus.Registry
+
+	captureCounter          *prometheus.CounterVec
+	bytesCounter            *prometheus.CounterVec
+	uploadCounter           *prometheus.CounterVec
+	uploadDurationHistogram prometheus.Histogram
+	errorCounter            *prometheus.CounterVec
+}
+
+// NewPrometheusMetrics creates a new Prometheus metrics collector with its own registry.
+func NewPrometheusMetrics() *PrometheusMetrics {
+	reg := prometheus.NewRegistry()
+
+	captureCounter := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "astrolabe_captures_total",
 			Help: "Total number of captures by source kind",
@@ -133,7 +33,7 @@ var (
 		[]string{"source_kind"},
 	)
 
-	bytesCounter = promauto.NewCounterVec(
+	bytesCounter := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "astrolabe_bytes_total",
 			Help: "Total bytes processed by stage",
@@ -141,7 +41,7 @@ var (
 		[]string{"stage"},
 	)
 
-	uploadCounter = promauto.NewCounterVec(
+	uploadCounter := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "astrolabe_uploads_total",
 			Help: "Total upload attempts",
@@ -149,7 +49,7 @@ var (
 		[]string{"status"},
 	)
 
-	uploadDurationHistogram = promauto.NewHistogram(
+	uploadDurationHistogram := prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "astrolabe_upload_duration_ms",
 			Help:    "Upload duration in milliseconds",
@@ -157,12 +57,144 @@ var (
 		},
 	)
 
-	errorCounter = promauto.NewCounterVec(
+	errorCounter := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "astrolabe_errors_total",
 			Help: "Total errors by category",
 		},
 		[]string{"category"},
 	)
-)
-*/
+
+	reg.MustRegister(captureCounter, bytesCounter, uploadCounter, uploadDurationHistogram, errorCounter)
+
+	return &PrometheusMetrics{
+		registry:                reg,
+		captureCounter:          captureCounter,
+		bytesCounter:            bytesCounter,
+		uploadCounter:           uploadCounter,
+		uploadDurationHistogram: uploadDurationHistogram,
+		errorCounter:            errorCounter,
+	}
+}
+
+// RecordCapture increments the capture counter for a given source kind.
+func (p *PrometheusMetrics) RecordCapture(sourceKind string) {
+	p.captureCounter.WithLabelValues(sourceKind).Inc()
+}
+
+// RecordBytes records the number of bytes processed at a given stage.
+func (p *PrometheusMetrics) RecordBytes(stage string, n int64) {
+	p.bytesCounter.WithLabelValues(stage).Add(float64(n))
+}
+
+// RecordUpload records an upload attempt with its success status and duration.
+func (p *PrometheusMetrics) RecordUpload(success bool, durationMs int64) {
+	status := "failure"
+	if success {
+		status = "success"
+	}
+	p.uploadCounter.WithLabelValues(status).Inc()
+	p.uploadDurationHistogram.Observe(float64(durationMs))
+}
+
+// RecordError increments the error counter for a given category.
+func (p *PrometheusMetrics) RecordError(category string) {
+	p.errorCounter.WithLabelValues(category).Inc()
+}
+
+// Snapshot returns a point-in-time view of all metrics by reading directly
+// from the Prometheus registry. This is the single source of truth.
+func (p *PrometheusMetrics) Snapshot() map[string]any {
+	mfs, err := p.registry.Gather()
+	if err != nil {
+		return nil
+	}
+
+	var captureTotal int64
+	captureByKind := make(map[string]int64)
+	bytesMap := make(map[string]int64)
+	var uploadSuccess, uploadFailure int64
+	var uploadDuration int64
+	errors := make(map[string]int64)
+
+	for _, mf := range mfs {
+		switch mf.GetName() {
+		case "astrolabe_captures_total":
+			for _, m := range mf.GetMetric() {
+				val := int64(m.GetCounter().GetValue())
+				captureTotal += val
+				for _, lp := range m.GetLabel() {
+					if lp.GetName() == "source_kind" {
+						captureByKind[lp.GetValue()] = val
+					}
+				}
+			}
+		case "astrolabe_bytes_total":
+			for _, m := range mf.GetMetric() {
+				val := int64(m.GetCounter().GetValue())
+				for _, lp := range m.GetLabel() {
+					if lp.GetName() == "stage" {
+						bytesMap[lp.GetValue()] = val
+					}
+				}
+			}
+		case "astrolabe_uploads_total":
+			for _, m := range mf.GetMetric() {
+				val := int64(m.GetCounter().GetValue())
+				for _, lp := range m.GetLabel() {
+					if lp.GetName() == "status" {
+						switch lp.GetValue() {
+						case "success":
+							uploadSuccess = val
+						case "failure":
+							uploadFailure = val
+						}
+					}
+				}
+			}
+		case "astrolabe_upload_duration_ms":
+			for _, m := range mf.GetMetric() {
+				uploadDuration = int64(m.GetHistogram().GetSampleSum())
+			}
+		case "astrolabe_errors_total":
+			for _, m := range mf.GetMetric() {
+				val := int64(m.GetCounter().GetValue())
+				for _, lp := range m.GetLabel() {
+					if lp.GetName() == "category" {
+						errors[lp.GetValue()] = val
+					}
+				}
+			}
+		}
+	}
+
+	return map[string]any{
+		"captures": map[string]any{
+			"total":   captureTotal,
+			"by_kind": captureByKind,
+		},
+		"bytes": map[string]any{
+			"ingested":   bytesMap["ingested"],
+			"normalized": bytesMap["normalized"],
+			"uploaded":   bytesMap["uploaded"],
+		},
+		"uploads": map[string]any{
+			"attempts":    uploadSuccess + uploadFailure,
+			"success":     uploadSuccess,
+			"failures":    uploadFailure,
+			"duration_ms": uploadDuration,
+		},
+		"errors": errors,
+	}
+}
+
+// Handler returns an HTTP handler for the /metrics endpoint.
+// The handler only exposes metrics from this instance's registry.
+//
+// Example usage:
+//
+//	http.Handle("/metrics", metrics.Handler())
+//	http.ListenAndServe(":2112", nil)
+func (p *PrometheusMetrics) Handler() http.Handler {
+	return promhttp.HandlerFor(p.registry, promhttp.HandlerOpts{})
+}
