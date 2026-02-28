@@ -61,10 +61,10 @@ var tuiCmd = &cobra.Command{
 						continue
 					}
 					serialCfg := captureConfig.SerialConfig
-					savedMetadata, metaErr := config.LoadMetadata()
-					if metaErr != nil {
-						fmt.Fprintf(os.Stderr, "warning: failed to load metadata: %v\n", metaErr)
-					}
+						savedMetadata, metaErr := config.LoadMetadata()
+						if metaErr != nil {
+							out.Warning(fmt.Sprintf("Failed to load metadata: %v", metaErr))
+						}
 					appCfg := config.Load()
 					if err := os.MkdirAll(appCfg.OfflineCache, 0o755); err != nil {
 						return fmt.Errorf("ensure offline cache: %w", err)
@@ -187,17 +187,17 @@ var tuiCmd = &cobra.Command{
 							run := <-pipelineResultCh
 							runErr := <-pipelineErrCh
 							if runErr != nil && !errors.Is(runErr, context.Canceled) {
-							fmt.Fprintf(os.Stderr, "capture pipeline error: %v\n", runErr)
-						}
+								out.Error(fmt.Sprintf("Capture pipeline error: %v", runErr))
+							}
 						if run != nil {
 							runDir := filepath.Join(tempRoot, run.ID)
 							_ = os.RemoveAll(runDir)
 						}
 						status = tui.NewStatusMessage(tui.StatusInfo, "Run Discarded", "Capture discarded. Start a new run when you are ready.")
 					}
-					if err := serial.Close(); err != nil {
-						fmt.Fprintf(os.Stderr, "warning: failed to close serial port: %v\n", err)
-					}
+						if err := serial.Close(); err != nil {
+							out.Warning(fmt.Sprintf("Failed to close serial port: %v", err))
+						}
 				case "tcp":
 					if captureConfig.TCPHost == "" || captureConfig.TCPPort == "" {
 						continue
@@ -214,10 +214,10 @@ var tuiCmd = &cobra.Command{
 						Port: tcpPort,
 					}
 
-					savedMetadata, metaErr := config.LoadMetadata()
-					if metaErr != nil {
-						fmt.Fprintf(os.Stderr, "warning: failed to load metadata: %v\n", metaErr)
-					}
+						savedMetadata, metaErr := config.LoadMetadata()
+						if metaErr != nil {
+							out.Warning(fmt.Sprintf("Failed to load metadata: %v", metaErr))
+						}
 					appCfg := config.Load()
 					if err := os.MkdirAll(appCfg.OfflineCache, 0o755); err != nil {
 						return fmt.Errorf("ensure offline cache: %w", err)
@@ -380,17 +380,17 @@ var tuiCmd = &cobra.Command{
 							run := <-pipelineResultCh
 							runErr := <-pipelineErrCh
 							if runErr != nil && !errors.Is(runErr, context.Canceled) {
-							fmt.Fprintf(os.Stderr, "capture pipeline error: %v\n", runErr)
-						}
+								out.Error(fmt.Sprintf("Capture pipeline error: %v", runErr))
+							}
 						if run != nil {
 							runDir := filepath.Join(tempRoot, run.ID)
 							_ = os.RemoveAll(runDir)
 						}
 						status = tui.NewStatusMessage(tui.StatusInfo, "Run Discarded", "Capture discarded. Start a new run when you are ready.")
 					}
-					if err := tcpSource.Close(); err != nil {
-						fmt.Fprintf(os.Stderr, "warning: failed to close TCP connection: %v\n", err)
-					}
+						if err := tcpSource.Close(); err != nil {
+							out.Warning(fmt.Sprintf("Failed to close TCP connection: %v", err))
+						}
 				case "file":
 					// TODO: Implement file source handling
 					status = tui.NewStatusMessage(tui.StatusInfo, "Not Implemented", "File source capture is not yet implemented.")

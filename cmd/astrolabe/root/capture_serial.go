@@ -50,6 +50,10 @@ var captureSerialCmd = &cobra.Command{
 	Short: "Capture from a serial port",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Create styled printer (check for --json flag from root command)
+		jsonMode, _ := cmd.Flags().GetBool("json")
+		out := cliout.DefaultPrinter(jsonMode)
+
 		// Check if we should run in interactive mode
 		// Interactive mode runs when:
 		// 1. We have a TTY (not in CI/pipe)
@@ -61,9 +65,9 @@ var captureSerialCmd = &cobra.Command{
 			savedMetadata config.Metadata
 			metaErr       error
 		)
-		if savedMetadata, metaErr = config.LoadMetadata(); metaErr != nil {
-			fmt.Fprintf(os.Stderr, "warning: failed to load metadata: %v\n", metaErr)
-		}
+			if savedMetadata, metaErr = config.LoadMetadata(); metaErr != nil {
+				out.Warning(fmt.Sprintf("Failed to load metadata: %v", metaErr))
+			}
 
 		var (
 			serialCfg *sources.Config
@@ -102,10 +106,6 @@ var captureSerialCmd = &cobra.Command{
 			defaults.Baud = serialBaud
 			serialCfg = &defaults
 		}
-
-		// Create styled printer (check for --json flag from root command)
-		jsonMode, _ := cmd.Flags().GetBool("json")
-		out := cliout.DefaultPrinter(jsonMode)
 
 		if !launchTUI {
 			out.Step(fmt.Sprintf("Starting serial capture: %s @ %d baud", serialCfg.Port, serialCfg.Baud))
@@ -180,11 +180,11 @@ var captureSerialCmd = &cobra.Command{
 			if err := serial.Open(ctx); err != nil {
 				return fmt.Errorf("failed to open serial port: %w", err)
 			}
-			defer func() {
-				if err := serial.Close(); err != nil {
-					fmt.Fprintf(os.Stderr, "warning: failed to close serial port: %v\n", err)
-				}
-			}()
+				defer func() {
+					if err := serial.Close(); err != nil {
+						out.Warning(fmt.Sprintf("Failed to close serial port: %v", err))
+					}
+				}()
 
 			// Create channels for TUI display and pipeline data
 			stringCh := make(chan string, 16)
@@ -281,11 +281,11 @@ var captureSerialCmd = &cobra.Command{
 				out.Blank()
 				out.Muted("Exited without saving.")
 				// Wait for pipeline to finish but discard results
-				run := <-pipelineResultCh
-				runErr := <-pipelineErrCh
-				if runErr != nil && !errors.Is(runErr, context.Canceled) {
-					fmt.Fprintf(os.Stderr, "capture pipeline error: %v\n", runErr)
-				}
+					run := <-pipelineResultCh
+					runErr := <-pipelineErrCh
+					if runErr != nil && !errors.Is(runErr, context.Canceled) {
+						out.Error(fmt.Sprintf("Capture pipeline error: %v", runErr))
+					}
 				if run != nil {
 					runDir := filepath.Join(tempRoot, run.ID)
 					_ = os.RemoveAll(runDir)
@@ -339,7 +339,7 @@ var captureSerialCmd = &cobra.Command{
 			}
 			defer func() {
 				if err := serial.Close(); err != nil {
-					fmt.Fprintf(os.Stderr, "warning: failed to close serial port: %v\n", err)
+					out.Warning(fmt.Sprintf("Failed to close serial port: %v", err))
 				}
 			}()
 

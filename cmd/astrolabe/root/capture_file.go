@@ -106,12 +106,12 @@ Examples:
 		out.Step(fmt.Sprintf("Ingesting file: %s (format: %s)", absPath, fileFormat))
 
 		// Load metadata defaults
-		var savedMetadata config.Metadata
-		if meta, err := config.LoadMetadata(); err == nil {
-			savedMetadata = meta
-		} else {
-			fmt.Fprintf(os.Stderr, "warning: failed to load metadata: %v\n", err)
-		}
+			var savedMetadata config.Metadata
+			if meta, err := config.LoadMetadata(); err == nil {
+				savedMetadata = meta
+			} else {
+				out.Warning(fmt.Sprintf("Failed to load metadata: %v", err))
+			}
 
 		// Parse flags
 		flagTags, err := parseTagFlags(fileTags)
