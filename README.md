@@ -84,6 +84,8 @@ astrolabe capture file ./data/results.csv --format csv --operator "Jane Doe" --l
 ```bash
 astrolabe validate ~/.astrolabe/runs/<run-id>
 ```
+<img width="954" height="466" alt="image" src="https://github.com/user-attachments/assets/c7635d73-700a-47a6-8322-07888b865434" />
+
 
 ### Upload runs
 ```bash
