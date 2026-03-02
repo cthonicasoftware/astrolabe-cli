@@ -1,6 +1,8 @@
 # Astrolabe CLI
 
 Astrolabe is a command-line tool for capturing QA run data from serial devices, TCP sources, and existing files, then validating and uploading those runs to your backend.
+<img width="1431" height="622" alt="image" src="https://github.com/user-attachments/assets/5403ec8c-c65b-4f60-93b6-78337517ea7e" />
+
 
 ## Installation
 
@@ -51,12 +53,17 @@ astrolabe config get operator
 - Upload one run or all pending cached runs (`astrolabe upload`)
 - JSON output mode for automation (`--json`)
 
+<img width="799" height="486" alt="image" src="https://github.com/user-attachments/assets/891df31f-6136-4a9b-b728-f049e2d1b314" />
+
+
 ## Examples
 
 ### Show help
 ```bash
 astrolabe help
 ```
+<img width="888" height="586" alt="image" src="https://github.com/user-attachments/assets/a3471f47-bba9-4c9e-8bd9-3999f37ffc33" />
+
 
 ### Capture from serial
 ```bash
@@ -91,6 +98,8 @@ astrolabe upload --run-id <run-id>
 ```bash
 astrolabe validate ~/.astrolabe/runs/<run-id> --json
 ```
+<img width="919" height="124" alt="image" src="https://github.com/user-attachments/assets/2053fc16-f715-473f-9ea1-33bace8d5367" />
+
 
 ## Documentation
 
