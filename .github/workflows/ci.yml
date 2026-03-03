@@ -58,22 +58,32 @@ jobs:
 
   build:
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runs_on }}
     needs: test
     strategy:
       matrix:
         include:
           - goos: linux
             goarch: amd64
+            runs_on: ubuntu-latest
+            cgo_enabled: 0
           - goos: linux
             goarch: arm64
+            runs_on: ubuntu-latest
+            cgo_enabled: 0
           - goos: darwin
             goarch: amd64
+            runs_on: macos-latest
+            cgo_enabled: 1
           - goos: darwin
             goarch: arm64
+            runs_on: macos-latest
+            cgo_enabled: 1
           - goos: windows
             goarch: amd64
             extension: .exe
+            runs_on: windows-latest
+            cgo_enabled: 0
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -86,7 +96,7 @@ jobs:
 
       - name: Build binary
         env:
-          CGO_ENABLED: 0
+          CGO_ENABLED: ${{ matrix.cgo_enabled }}
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
