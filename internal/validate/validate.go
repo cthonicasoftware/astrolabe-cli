@@ -10,8 +10,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/storage"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/storage"
 )
 
 // CheckStatus represents the outcome of a validation check.
@@ -408,3 +408,4 @@ func (v *Validator) checkPassed(name string) bool {
 	}
 	return false
 }
+

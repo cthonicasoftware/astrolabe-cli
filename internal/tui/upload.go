@@ -11,7 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/upload"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/upload"
 )
 
 type uploadModel struct {
@@ -346,3 +346,4 @@ func RunUploadWithStatus(client *upload.Client, runIDs []string, currentStatus *
 		), nil
 	}
 }
+

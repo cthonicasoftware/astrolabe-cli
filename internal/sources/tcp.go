@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 )
 
 // TCPConfig captures the TCP connection parameters.
@@ -197,3 +197,4 @@ func (t *TCP) Close() error {
 func (t *TCP) Address() string {
 	return fmt.Sprintf("%s:%d", t.Host, t.Port)
 }
+

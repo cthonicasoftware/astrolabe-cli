@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/sources"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
 )
 
 // MockSerial simulates a serial device for testing.
@@ -200,3 +200,4 @@ func (m *MockSerial) FramesRemaining() int {
 	defer m.mu.Unlock()
 	return len(m.frames) - m.frameCursor
 }
+

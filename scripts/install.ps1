@@ -419,7 +419,7 @@ function Show-Summary {
     Write-Host "  5. Get help:" -ForegroundColor White
     Write-Host "     astrolabe --help" -ForegroundColor Cyan
     Write-Host ""
-    Write-ColorOutput "Documentation: https://github.com/LostinTimeandspaceYT/qa_cli_agent" -Level Info
+    Write-ColorOutput "Documentation: https://github.com/cthonicasoftware/astrolabe-cli" -Level Info
 }
 
 #endregion
@@ -474,3 +474,4 @@ catch {
 }
 
 #endregion
+

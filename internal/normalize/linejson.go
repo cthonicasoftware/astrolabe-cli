@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 )
 
 type Normalizer interface {
@@ -31,3 +31,4 @@ func (l *LineJSON) Ingest(b []byte) ([]core.Record, error) {
 }
 
 func (l *LineJSON) Close() error { return nil }
+

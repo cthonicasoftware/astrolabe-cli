@@ -50,7 +50,7 @@ run = """
 VERSION="${ASTROLABE_VERSION:-dev}"
 GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-echo "-X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.Version=${VERSION} -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.Commit=${GIT_COMMIT} -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.BuildDate=${BUILD_DATE}"
+echo "-X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.Version=${VERSION} -X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.Commit=${GIT_COMMIT} -X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.BuildDate=${BUILD_DATE}"
 """
 description = "Generate ldflags for version embedding"
 
@@ -60,7 +60,7 @@ mkdir -p dist
 VERSION="${ASTROLABE_VERSION:-dev}"
 GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-LDFLAGS="-s -w -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.Version=${VERSION} -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.Commit=${GIT_COMMIT} -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.BuildDate=${BUILD_DATE}"
+LDFLAGS="-s -w -X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.Version=${VERSION} -X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.Commit=${GIT_COMMIT} -X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.BuildDate=${BUILD_DATE}"
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/astrolabe-linux-amd64 ./cmd/astrolabe
 echo "Built: dist/astrolabe-linux-amd64"
 """
@@ -72,7 +72,7 @@ mkdir -p dist
 VERSION="${ASTROLABE_VERSION:-dev}"
 GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-LDFLAGS="-s -w -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.Version=${VERSION} -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.Commit=${GIT_COMMIT} -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.BuildDate=${BUILD_DATE}"
+LDFLAGS="-s -w -X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.Version=${VERSION} -X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.Commit=${GIT_COMMIT} -X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.BuildDate=${BUILD_DATE}"
 CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o dist/astrolabe-linux-arm64 ./cmd/astrolabe
 echo "Built: dist/astrolabe-linux-arm64"
 """
@@ -84,7 +84,7 @@ mkdir -p dist
 VERSION="${ASTROLABE_VERSION:-dev}"
 GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-LDFLAGS="-s -w -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.Version=${VERSION} -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.Commit=${GIT_COMMIT} -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.BuildDate=${BUILD_DATE}"
+LDFLAGS="-s -w -X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.Version=${VERSION} -X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.Commit=${GIT_COMMIT} -X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.BuildDate=${BUILD_DATE}"
 CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/astrolabe-darwin-amd64 ./cmd/astrolabe
 echo "Built: dist/astrolabe-darwin-amd64"
 """
@@ -96,7 +96,7 @@ mkdir -p dist
 VERSION="${ASTROLABE_VERSION:-dev}"
 GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-LDFLAGS="-s -w -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.Version=${VERSION} -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.Commit=${GIT_COMMIT} -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.BuildDate=${BUILD_DATE}"
+LDFLAGS="-s -w -X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.Version=${VERSION} -X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.Commit=${GIT_COMMIT} -X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.BuildDate=${BUILD_DATE}"
 CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o dist/astrolabe-darwin-arm64 ./cmd/astrolabe
 echo "Built: dist/astrolabe-darwin-arm64"
 """
@@ -108,7 +108,7 @@ mkdir -p dist
 VERSION="${ASTROLABE_VERSION:-dev}"
 GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-LDFLAGS="-s -w -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.Version=${VERSION} -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.Commit=${GIT_COMMIT} -X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.BuildDate=${BUILD_DATE}"
+LDFLAGS="-s -w -X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.Version=${VERSION} -X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.Commit=${GIT_COMMIT} -X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.BuildDate=${BUILD_DATE}"
 CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/astrolabe-windows-amd64.exe ./cmd/astrolabe
 echo "Built: dist/astrolabe-windows-amd64.exe"
 """
@@ -201,3 +201,4 @@ echo "Created: dist/checksums.txt"
 cat dist/checksums.txt
 """
 description = "Generate SHA256 checksums for release artifacts"
+

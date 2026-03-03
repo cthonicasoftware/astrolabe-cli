@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 )
 
 // ManifestDocument represents the serialized metadata persisted alongside capture artifacts.
@@ -40,3 +40,4 @@ func LoadManifest(path string) (ManifestDocument, error) {
 
 	return doc, nil
 }
+

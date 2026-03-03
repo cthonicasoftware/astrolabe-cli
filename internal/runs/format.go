@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 )
 
 // FormatDuration renders a human-friendly duration string from seconds.
@@ -55,3 +55,4 @@ func FormatTestPlan(test core.TestInfo) string {
 	}
 	return fmt.Sprintf("%s/%s", test.Plan, test.Variant)
 }
+

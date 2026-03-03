@@ -7,7 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/upload"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/upload"
 )
 
 func TestUploadModel_Init(t *testing.T) {
@@ -531,3 +531,4 @@ func TestUploadModel_ConsecutiveFailsResetOnSuccess(t *testing.T) {
 		t.Errorf("expected failed=3, got %d", model.failed)
 	}
 }
+

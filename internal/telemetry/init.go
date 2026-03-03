@@ -1,7 +1,7 @@
 package telemetry
 
 import (
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/config"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
 )
 
 // InitFromConfig initializes the global telemetry based on config settings.
@@ -24,3 +24,4 @@ func InitFromConfig(cfg config.Config) {
 		Init(&NoopMetrics{})
 	}
 }
+

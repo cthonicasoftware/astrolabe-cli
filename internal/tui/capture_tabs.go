@@ -9,7 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"go.bug.st/serial"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/sources"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
 )
 
 type captureTabsModel struct {
@@ -978,3 +978,4 @@ type CaptureConfig struct {
 	TCPPort      string
 	SCPIAddress  string // For future SCPI/VISA implementation
 }
+

@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/tui"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/tui"
 )
 
 // Printer handles styled CLI output with consistent formatting
@@ -200,3 +200,4 @@ func (p *Printer) printJSON(level, message string, data interface{}) {
 
 	_ = json.NewEncoder(p.writer).Encode(evt)
 }
+

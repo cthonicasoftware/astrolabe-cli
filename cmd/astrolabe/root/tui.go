@@ -8,16 +8,16 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/capture"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/cliout"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/config"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/normalize"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/sources"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/storage"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/tui"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/upload"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/capture"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/normalize"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/storage"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/tui"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/upload"
 	"github.com/spf13/cobra"
 )
 
@@ -61,10 +61,10 @@ var tuiCmd = &cobra.Command{
 						continue
 					}
 					serialCfg := captureConfig.SerialConfig
-						savedMetadata, metaErr := config.LoadMetadata()
-						if metaErr != nil {
-							out.Warning(fmt.Sprintf("Failed to load metadata: %v", metaErr))
-						}
+					savedMetadata, metaErr := config.LoadMetadata()
+					if metaErr != nil {
+						out.Warning(fmt.Sprintf("Failed to load metadata: %v", metaErr))
+					}
 					appCfg := config.Load()
 					if err := os.MkdirAll(appCfg.OfflineCache, 0o755); err != nil {
 						return fmt.Errorf("ensure offline cache: %w", err)
@@ -154,50 +154,50 @@ var tuiCmd = &cobra.Command{
 						cancel()
 						serial.Close()
 						return fmt.Errorf("unexpected model type: %T", finalModel)
-						}
-						cancel()
-						if tuiApp.SaveRequested() {
-							out.Blank()
-							out.Step("Saving capture data...")
-							run := <-pipelineResultCh
-							runErr := <-pipelineErrCh
-							if runErr != nil && !errors.Is(runErr, context.Canceled) {
-								serial.Close()
-								return fmt.Errorf("capture pipeline: %w", runErr)
+					}
+					cancel()
+					if tuiApp.SaveRequested() {
+						out.Blank()
+						out.Step("Saving capture data...")
+						run := <-pipelineResultCh
+						runErr := <-pipelineErrCh
+						if runErr != nil && !errors.Is(runErr, context.Canceled) {
+							serial.Close()
+							return fmt.Errorf("capture pipeline: %w", runErr)
 						}
 						if run == nil {
 							serial.Close()
 							return fmt.Errorf("capture pipeline: run not returned")
 						}
-							if err := promoteRunArtifacts(run, tempRoot, appCfg.OfflineCache); err != nil {
-								serial.Close()
-								return fmt.Errorf("finalize run artifacts: %w", err)
-							}
-							out.Success("Serial capture saved")
-							out.KeyValue("Records", fmt.Sprintf("%d", run.RecordsCount))
-							out.KeyValue("Run ID", run.ID)
-							out.KeyValue("Cache dir", appCfg.OfflineCache)
-							for _, artifact := range run.Artifacts {
-								out.Muted(fmt.Sprintf("  - %s (%s)", artifact.Path, artifact.Role))
-							}
-							status = tui.NewStatusMessage(tui.StatusSuccess, "Run Saved", fmt.Sprintf("Run %s saved. Select 'View Runs' to inspect artifacts.", run.ID))
-						} else {
-							out.Blank()
-							out.Muted("Exited without saving.")
-							run := <-pipelineResultCh
-							runErr := <-pipelineErrCh
-							if runErr != nil && !errors.Is(runErr, context.Canceled) {
-								out.Error(fmt.Sprintf("Capture pipeline error: %v", runErr))
-							}
+						if err := promoteRunArtifacts(run, tempRoot, appCfg.OfflineCache); err != nil {
+							serial.Close()
+							return fmt.Errorf("finalize run artifacts: %w", err)
+						}
+						out.Success("Serial capture saved")
+						out.KeyValue("Records", fmt.Sprintf("%d", run.RecordsCount))
+						out.KeyValue("Run ID", run.ID)
+						out.KeyValue("Cache dir", appCfg.OfflineCache)
+						for _, artifact := range run.Artifacts {
+							out.Muted(fmt.Sprintf("  - %s (%s)", artifact.Path, artifact.Role))
+						}
+						status = tui.NewStatusMessage(tui.StatusSuccess, "Run Saved", fmt.Sprintf("Run %s saved. Select 'View Runs' to inspect artifacts.", run.ID))
+					} else {
+						out.Blank()
+						out.Muted("Exited without saving.")
+						run := <-pipelineResultCh
+						runErr := <-pipelineErrCh
+						if runErr != nil && !errors.Is(runErr, context.Canceled) {
+							out.Error(fmt.Sprintf("Capture pipeline error: %v", runErr))
+						}
 						if run != nil {
 							runDir := filepath.Join(tempRoot, run.ID)
 							_ = os.RemoveAll(runDir)
 						}
 						status = tui.NewStatusMessage(tui.StatusInfo, "Run Discarded", "Capture discarded. Start a new run when you are ready.")
 					}
-						if err := serial.Close(); err != nil {
-							out.Warning(fmt.Sprintf("Failed to close serial port: %v", err))
-						}
+					if err := serial.Close(); err != nil {
+						out.Warning(fmt.Sprintf("Failed to close serial port: %v", err))
+					}
 				case "tcp":
 					if captureConfig.TCPHost == "" || captureConfig.TCPPort == "" {
 						continue
@@ -214,10 +214,10 @@ var tuiCmd = &cobra.Command{
 						Port: tcpPort,
 					}
 
-						savedMetadata, metaErr := config.LoadMetadata()
-						if metaErr != nil {
-							out.Warning(fmt.Sprintf("Failed to load metadata: %v", metaErr))
-						}
+					savedMetadata, metaErr := config.LoadMetadata()
+					if metaErr != nil {
+						out.Warning(fmt.Sprintf("Failed to load metadata: %v", metaErr))
+					}
 					appCfg := config.Load()
 					if err := os.MkdirAll(appCfg.OfflineCache, 0o755); err != nil {
 						return fmt.Errorf("ensure offline cache: %w", err)
@@ -348,49 +348,49 @@ var tuiCmd = &cobra.Command{
 						return fmt.Errorf("unexpected model type: %T", finalModel)
 					}
 
-						cancel()
-						if tuiApp.SaveRequested() {
-							out.Blank()
-							out.Step("Saving capture data...")
-							run := <-pipelineResultCh
-							runErr := <-pipelineErrCh
-							if runErr != nil && !errors.Is(runErr, context.Canceled) {
-								tcpSource.Close()
-								return fmt.Errorf("capture pipeline: %w", runErr)
+					cancel()
+					if tuiApp.SaveRequested() {
+						out.Blank()
+						out.Step("Saving capture data...")
+						run := <-pipelineResultCh
+						runErr := <-pipelineErrCh
+						if runErr != nil && !errors.Is(runErr, context.Canceled) {
+							tcpSource.Close()
+							return fmt.Errorf("capture pipeline: %w", runErr)
 						}
 						if run == nil {
 							tcpSource.Close()
 							return fmt.Errorf("capture pipeline: run not returned")
 						}
-							if err := promoteRunArtifacts(run, tempRoot, appCfg.OfflineCache); err != nil {
-								tcpSource.Close()
-								return fmt.Errorf("finalize run artifacts: %w", err)
-							}
-							out.Success("TCP capture saved")
-							out.KeyValue("Records", fmt.Sprintf("%d", run.RecordsCount))
-							out.KeyValue("Run ID", run.ID)
-							out.KeyValue("Cache dir", appCfg.OfflineCache)
-							for _, artifact := range run.Artifacts {
-								out.Muted(fmt.Sprintf("  - %s (%s)", artifact.Path, artifact.Role))
-							}
-							status = tui.NewStatusMessage(tui.StatusSuccess, "Run Saved", fmt.Sprintf("Run %s saved. Select 'View Runs' to inspect artifacts.", run.ID))
-						} else {
-							out.Blank()
-							out.Muted("Exited without saving.")
-							run := <-pipelineResultCh
-							runErr := <-pipelineErrCh
-							if runErr != nil && !errors.Is(runErr, context.Canceled) {
-								out.Error(fmt.Sprintf("Capture pipeline error: %v", runErr))
-							}
+						if err := promoteRunArtifacts(run, tempRoot, appCfg.OfflineCache); err != nil {
+							tcpSource.Close()
+							return fmt.Errorf("finalize run artifacts: %w", err)
+						}
+						out.Success("TCP capture saved")
+						out.KeyValue("Records", fmt.Sprintf("%d", run.RecordsCount))
+						out.KeyValue("Run ID", run.ID)
+						out.KeyValue("Cache dir", appCfg.OfflineCache)
+						for _, artifact := range run.Artifacts {
+							out.Muted(fmt.Sprintf("  - %s (%s)", artifact.Path, artifact.Role))
+						}
+						status = tui.NewStatusMessage(tui.StatusSuccess, "Run Saved", fmt.Sprintf("Run %s saved. Select 'View Runs' to inspect artifacts.", run.ID))
+					} else {
+						out.Blank()
+						out.Muted("Exited without saving.")
+						run := <-pipelineResultCh
+						runErr := <-pipelineErrCh
+						if runErr != nil && !errors.Is(runErr, context.Canceled) {
+							out.Error(fmt.Sprintf("Capture pipeline error: %v", runErr))
+						}
 						if run != nil {
 							runDir := filepath.Join(tempRoot, run.ID)
 							_ = os.RemoveAll(runDir)
 						}
 						status = tui.NewStatusMessage(tui.StatusInfo, "Run Discarded", "Capture discarded. Start a new run when you are ready.")
 					}
-						if err := tcpSource.Close(); err != nil {
-							out.Warning(fmt.Sprintf("Failed to close TCP connection: %v", err))
-						}
+					if err := tcpSource.Close(); err != nil {
+						out.Warning(fmt.Sprintf("Failed to close TCP connection: %v", err))
+					}
 				case "file":
 					// TODO: Implement file source handling
 					status = tui.NewStatusMessage(tui.StatusInfo, "Not Implemented", "File source capture is not yet implemented.")

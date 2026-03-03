@@ -8,8 +8,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/storage"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/storage"
 )
 
 // Summary provides a high-level view of a cached capture run.
@@ -108,3 +108,4 @@ func List(root string) (Result, error) {
 
 	return result, nil
 }
+

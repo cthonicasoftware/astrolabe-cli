@@ -3,7 +3,7 @@ package runs
 import (
 	"testing"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 )
 
 func TestFormatDuration(t *testing.T) {
@@ -41,3 +41,4 @@ func TestFormatTestPlan(t *testing.T) {
 		t.Fatalf("unexpected variantless format: %q", got)
 	}
 }
+

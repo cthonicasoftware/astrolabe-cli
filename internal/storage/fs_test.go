@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 )
 
 func TestFSStorePersistsArtifacts(t *testing.T) {
@@ -125,3 +125,4 @@ func TestFSStorePersistsArtifacts(t *testing.T) {
 		}
 	}
 }
+

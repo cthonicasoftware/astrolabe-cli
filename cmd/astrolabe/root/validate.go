@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/cliout"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/validate"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/validate"
 	"github.com/spf13/cobra"
 )
 

@@ -514,7 +514,7 @@ show_summary() {
         echo
     fi
 
-    log_info "Documentation: https://github.com/LostinTimeandspaceYT/qa_cli_agent"
+    log_info "Documentation: https://github.com/cthonicasoftware/astrolabe-cli"
 }
 
 # Main installation flow
@@ -548,3 +548,4 @@ main() {
 
 # Run main function
 main "$@"
+

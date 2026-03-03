@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 )
 
 // Metadata captures operator, device, and test context common to CLI and TUI workflows.
@@ -233,3 +233,4 @@ func FormatAttributeLines(attrs map[string]string) string {
 	}
 	return strings.Join(lines, "\n")
 }
+

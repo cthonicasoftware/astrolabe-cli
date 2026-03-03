@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 )
 
 func TestUploader_Upload_Success(t *testing.T) {
@@ -348,3 +348,4 @@ func TestIsRetryable(t *testing.T) {
 		})
 	}
 }
+

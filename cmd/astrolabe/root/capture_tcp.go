@@ -11,15 +11,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/capture"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/cliout"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/config"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/normalize"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/sources"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/storage"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/tui"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/capture"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/normalize"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/storage"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/tui"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -67,9 +67,9 @@ var captureTCPCmd = &cobra.Command{
 			savedMetadata config.Metadata
 			metaErr       error
 		)
-			if savedMetadata, metaErr = config.LoadMetadata(); metaErr != nil {
-				out.Warning(fmt.Sprintf("Failed to load metadata: %v", metaErr))
-			}
+		if savedMetadata, metaErr = config.LoadMetadata(); metaErr != nil {
+			out.Warning(fmt.Sprintf("Failed to load metadata: %v", metaErr))
+		}
 
 		var (
 			tcpCfg    sources.TCPConfig
@@ -201,11 +201,11 @@ var captureTCPCmd = &cobra.Command{
 			if err := tcp.Open(ctx); err != nil {
 				return fmt.Errorf("failed to open TCP connection to %s:%d: %w", tcpCfg.Host, tcpCfg.Port, err)
 			}
-				defer func() {
-					if err := tcp.Close(); err != nil {
-						out.Warning(fmt.Sprintf("Failed to close TCP connection: %v", err))
-					}
-				}()
+			defer func() {
+				if err := tcp.Close(); err != nil {
+					out.Warning(fmt.Sprintf("Failed to close TCP connection: %v", err))
+				}
+			}()
 
 			// Create channels for TUI display and pipeline data
 			stringCh := make(chan string, 16)
@@ -302,11 +302,11 @@ var captureTCPCmd = &cobra.Command{
 				out.Blank()
 				out.Muted("Exited without saving.")
 				// Wait for pipeline to finish but discard results
-					run := <-pipelineResultCh
-					runErr := <-pipelineErrCh
-					if runErr != nil && !errors.Is(runErr, context.Canceled) {
-						out.Error(fmt.Sprintf("Capture pipeline error: %v", runErr))
-					}
+				run := <-pipelineResultCh
+				runErr := <-pipelineErrCh
+				if runErr != nil && !errors.Is(runErr, context.Canceled) {
+					out.Error(fmt.Sprintf("Capture pipeline error: %v", runErr))
+				}
 				if run != nil {
 					runDir := filepath.Join(tempRoot, run.ID)
 					_ = os.RemoveAll(runDir)
@@ -430,12 +430,12 @@ const tcpSchemaVersion = "v1alpha1"
 
 func buildTCPManifest(cfg sources.TCPConfig, name string, opts core.ManifestOptions) core.Manifest {
 	attrs := map[string]string{
-		"source_kind":      "tcp",
-		"host":             cfg.Host,
-		"port":             strconv.Itoa(cfg.Port),
-		"connect_timeout":  cfg.ConnectTimeout.String(),
-		"read_timeout":     cfg.ReadTimeout.String(),
-		"buffer_size":      strconv.Itoa(cfg.BufferSize),
+		"source_kind":     "tcp",
+		"host":            cfg.Host,
+		"port":            strconv.Itoa(cfg.Port),
+		"connect_timeout": cfg.ConnectTimeout.String(),
+		"read_timeout":    cfg.ReadTimeout.String(),
+		"buffer_size":     strconv.Itoa(cfg.BufferSize),
 	}
 
 	for k, v := range opts.Attributes {
@@ -474,4 +474,3 @@ func buildTCPCaptureSettings(cfg sources.TCPConfig) core.CaptureSettings {
 		Notes:    fmt.Sprintf("tcp capture from %s:%d", cfg.Host, cfg.Port),
 	}
 }
-

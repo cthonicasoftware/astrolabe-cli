@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/sources"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/testutil"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/testutil"
 )
 
 // This file demonstrates how to use MockSerial in integration tests
@@ -176,3 +176,4 @@ func TestIntegration_ConfigurationVariations(t *testing.T) {
 		})
 	}
 }
+

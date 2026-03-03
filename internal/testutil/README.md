@@ -18,7 +18,7 @@ This package provides mock implementations and test helpers for the Astrolabe CL
 ### Basic Usage
 
 ```go
-import "github.com/LostinTimeandspaceYT/qa_cli_agent/internal/testutil"
+import "github.com/cthonicasoftware/astrolabe-cli/internal/testutil"
 
 // Create a mock with test data
 mock := testutil.NewMockSerial(
@@ -231,3 +231,4 @@ When adding new test utilities:
 3. Include usage examples
 4. Update this README with documentation
 5. Ensure interface compatibility with real implementations
+

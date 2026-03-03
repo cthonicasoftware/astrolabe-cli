@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 )
 
 func TestSaveAndLoadMetadata(t *testing.T) {
@@ -99,3 +99,4 @@ func TestMetadataFilePathUsesHome(t *testing.T) {
 		t.Fatalf("expected %s, got %s", want, path)
 	}
 }
+

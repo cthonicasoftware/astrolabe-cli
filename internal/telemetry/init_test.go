@@ -3,7 +3,7 @@ package telemetry
 import (
 	"testing"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/config"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
 )
 
 func TestInitFromConfig_Disabled(t *testing.T) {
@@ -126,3 +126,4 @@ func TestInitFromConfig_Integration(t *testing.T) {
 		t.Errorf("captures delta after init = %v, want 1", captures["total"].(int64)-beforeCaptures)
 	}
 }
+

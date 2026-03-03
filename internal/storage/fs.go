@@ -11,7 +11,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 )
 
 // Store abstracts the persistence layer used by capture pipelines.
@@ -204,3 +204,4 @@ func (f *FS) writeManifest(run *core.Run) error {
 	f.artifacts = append([]core.Artifact{manifestArtifact}, f.artifacts...)
 	return nil
 }
+

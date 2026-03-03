@@ -61,7 +61,7 @@ type SerialDevice interface {
 ## Usage Example
 
 ```go
-import "github.com/LostinTimeandspaceYT/qa_cli_agent/internal/testutil"
+import "github.com/cthonicasoftware/astrolabe-cli/internal/testutil"
 
 // Create mock with test data
 mock := testutil.NewMockSerial(
@@ -135,3 +135,4 @@ serial := testutil.NewMockSerial(
 ```
 
 The mock is a drop-in replacement that works identically to the real implementation!
+
