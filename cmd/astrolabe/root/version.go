@@ -4,13 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/cliout"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
 // Version information - set via ldflags at build time
-// Example: go build -ldflags "-X github.com/LostinTimeandspaceYT/qa_cli_agent/cmd/astrolabe/root.Version=1.0.0"
+// Example: go build -ldflags "-X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.Version=1.0.0"
 var (
 	Version   = "dev"
 	Commit    = "unknown"

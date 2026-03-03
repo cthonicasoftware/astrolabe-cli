@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 )
 
 func TestAPIClient_CreateRun(t *testing.T) {
@@ -320,3 +320,4 @@ func TestAPIClient_ContextCancellation(t *testing.T) {
 		t.Error("expected context cancellation error, got nil")
 	}
 }
+

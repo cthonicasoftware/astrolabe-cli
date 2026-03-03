@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/cliout"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/tui"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/tui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"

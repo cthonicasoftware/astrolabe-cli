@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/normalize"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/storage"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/normalize"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/storage"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -175,3 +175,4 @@ func defaultRunID() string {
 	entropy := ulid.Monotonic(rand.Reader, 0)
 	return ulid.MustNew(ulid.Timestamp(time.Now()), entropy).String()
 }
+

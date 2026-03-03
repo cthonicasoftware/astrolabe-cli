@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 )
 
 // Uploader handles the actual file upload to presigned URLs with retry logic.
@@ -166,3 +166,4 @@ func isRetryable(err error) bool {
 		return true
 	}
 }
+

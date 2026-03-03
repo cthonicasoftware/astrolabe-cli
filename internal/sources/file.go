@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 )
 
 // FileConfig captures file ingestion parameters.
@@ -239,3 +239,4 @@ func (f *File) Close() error {
 	}
 	return nil
 }
+

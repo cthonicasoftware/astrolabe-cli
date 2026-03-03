@@ -3,8 +3,8 @@ package root
 import (
 	"strings"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/config"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )

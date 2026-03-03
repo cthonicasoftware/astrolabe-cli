@@ -7,7 +7,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 	"go.bug.st/serial"
 )
 
@@ -245,3 +245,4 @@ func (s *Serial) Close() error {
 }
 
 //TODO: Create goroutine to refresh available port list on a timer or via os event
+

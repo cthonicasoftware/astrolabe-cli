@@ -3,8 +3,8 @@ package testutil_test
 import (
 	"fmt"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/sources"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/testutil"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/testutil"
 )
 
 // ExampleNewMockSerial demonstrates creating a mock serial device.
@@ -78,3 +78,4 @@ func ExampleMockSerial_Meta() {
 	// Output:
 	// Kind: serial, Port: /dev/ttyUSB0, Baud: 115200
 }
+

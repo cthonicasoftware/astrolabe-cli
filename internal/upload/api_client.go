@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 )
 
 // APIClient handles communication with the QA backend server.
@@ -242,3 +242,4 @@ func (c *APIClient) ConfirmUpload(ctx context.Context, remoteRunID string, artif
 
 	return nil
 }
+

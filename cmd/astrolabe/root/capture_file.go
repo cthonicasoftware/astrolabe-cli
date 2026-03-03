@@ -8,21 +8,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/capture"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/cliout"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/config"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/normalize"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/sources"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/storage"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/capture"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/normalize"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/storage"
 	"github.com/spf13/cobra"
 )
 
 var (
-	fileFormat     string
-	fileSkipLines  int
-	fileDelimiter  string
-	fileNoHeaders  bool
+	fileFormat      string
+	fileSkipLines   int
+	fileDelimiter   string
+	fileNoHeaders   bool
 	fileColumnNames []string
 
 	// Metadata flags (same as serial)
@@ -105,12 +105,12 @@ Examples:
 		out.Step(fmt.Sprintf("Ingesting file: %s (format: %s)", absPath, fileFormat))
 
 		// Load metadata defaults
-			var savedMetadata config.Metadata
-			if meta, err := config.LoadMetadata(); err == nil {
-				savedMetadata = meta
-			} else {
-				out.Warning(fmt.Sprintf("Failed to load metadata: %v", err))
-			}
+		var savedMetadata config.Metadata
+		if meta, err := config.LoadMetadata(); err == nil {
+			savedMetadata = meta
+		} else {
+			out.Warning(fmt.Sprintf("Failed to load metadata: %v", err))
+		}
 
 		// Parse flags
 		flagTags, err := parseTagFlags(fileTags)
@@ -311,7 +311,6 @@ func generateRunID() string {
 	now := time.Now().UTC()
 	return fmt.Sprintf("run-%s", now.Format("20060102-150405"))
 }
-
 
 func init() {
 	captureCmd.AddCommand(captureFileCmd)

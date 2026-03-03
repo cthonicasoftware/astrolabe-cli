@@ -9,8 +9,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/config"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 )
 
 const (
@@ -344,3 +344,4 @@ func RunMetadataEditor(status *StatusMessage) (*StatusMessage, error) {
 	}
 	return status, nil
 }
+

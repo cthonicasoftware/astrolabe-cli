@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 )
 
 // CSVConfig defines CSV parsing behavior.
@@ -169,3 +169,4 @@ func (c *CSV) Close() error {
 	}
 	return nil
 }
+

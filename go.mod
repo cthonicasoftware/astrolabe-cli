@@ -1,4 +1,4 @@
-module github.com/LostinTimeandspaceYT/qa_cli_agent
+module github.com/cthonicasoftware/astrolabe-cli
 
 go 1.25
 

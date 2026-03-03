@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/storage"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/storage"
 )
 
 func TestFindPendingRuns(t *testing.T) {

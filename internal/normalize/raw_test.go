@@ -3,7 +3,7 @@ package normalize
 import (
 	"testing"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 )
 
 func TestRaw_Basic(t *testing.T) {
@@ -261,3 +261,4 @@ func TestRaw_PartialLine(t *testing.T) {
 		t.Errorf("Expected content='partial line', got %v", records[0].Payload["content"])
 	}
 }
+

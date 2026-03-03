@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/sources"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
 )
 
 func TestMockSerial_BasicOperation(t *testing.T) {
@@ -338,3 +338,4 @@ func TestMockSerial_DoubleCloseError(t *testing.T) {
 		t.Error("Expected error when closing already-closed mock serial")
 	}
 }
+

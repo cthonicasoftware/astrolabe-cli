@@ -7,7 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/sources"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
 )
 
 const (
@@ -346,3 +346,4 @@ func (m *advancedSettingsModel) WasApplied() bool {
 func (m *advancedSettingsModel) ShouldClose() bool {
 	return m.shouldClose
 }
+

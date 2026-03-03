@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/storage"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/storage"
 )
 
 // Client orchestrates the full upload process:
@@ -276,3 +276,4 @@ func computeFileSHA256(filePath string) (string, error) {
 
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
+

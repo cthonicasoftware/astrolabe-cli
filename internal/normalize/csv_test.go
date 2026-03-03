@@ -3,7 +3,7 @@ package normalize
 import (
 	"testing"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 )
 
 func TestCSV_BasicWithHeaders(t *testing.T) {
@@ -259,3 +259,4 @@ func TestCSV_PartialLine(t *testing.T) {
 		}
 	}
 }
+

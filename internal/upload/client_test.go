@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/storage"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/storage"
 )
 
 // TestUploadRun_Integration demonstrates the full upload flow.
@@ -166,3 +166,4 @@ func TestUploadRun_Integration(t *testing.T) {
 		t.Errorf("expected remote_run_id=remote-run-67890, got %s", state.RemoteRunID)
 	}
 }
+

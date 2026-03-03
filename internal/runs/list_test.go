@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/storage"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/storage"
 )
 
 func TestListEnumeratesRuns(t *testing.T) {
@@ -89,3 +89,4 @@ func jsonMarshalIndent(v any) ([]byte, error) {
 	}
 	return append(data, '\n'), nil
 }
+

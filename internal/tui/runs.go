@@ -16,8 +16,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/config"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/runs"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/runs"
 )
 
 var (
@@ -883,3 +883,4 @@ func formatBytes(size int64) string {
 		return fmt.Sprintf("%d B", size)
 	}
 }
+

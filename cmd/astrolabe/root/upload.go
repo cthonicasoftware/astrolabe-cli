@@ -8,11 +8,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/cliout"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/config"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/core"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/tui"
-	"github.com/LostinTimeandspaceYT/qa_cli_agent/internal/upload"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/tui"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/upload"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
