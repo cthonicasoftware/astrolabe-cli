@@ -72,6 +72,7 @@ func buildManifestOptions(in captureMetadataInput, savedMetadata config.Metadata
 func runHeadlessCapture(
 	out *cliout.Printer,
 	source captureManagedSource,
+	normalizer normalize.Normalizer,
 	storeRoot string,
 	manifest core.Manifest,
 	captureSettings core.CaptureSettings,
@@ -79,7 +80,7 @@ func runHeadlessCapture(
 	store := storage.NewFS(storeRoot)
 	opts := capture.Options{
 		Source:     source,
-		Normalizer: normalize.NewLineJSON(),
+		Normalizer: normalizer,
 		Store:      store,
 		Manifest:   manifest,
 		Capture:    captureSettings,

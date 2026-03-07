@@ -11,6 +11,7 @@ import (
 	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/normalize"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/tui"
 	"github.com/spf13/cobra"
@@ -134,7 +135,7 @@ var captureSerialCmd = &cobra.Command{
 
 		out.Info("Capturing... (press Ctrl+C to stop)")
 		out.Blank()
-		run, interrupted, err := runHeadlessCapture(out, serial, appCfg.OfflineCache, manifest, captureSettings)
+		run, interrupted, err := runHeadlessCapture(out, serial, normalize.NewLineJSON(), appCfg.OfflineCache, manifest, captureSettings)
 		if err != nil {
 			return err
 		}
