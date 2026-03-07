@@ -35,6 +35,7 @@ type File struct {
 
 	mu     sync.Mutex
 	file   *os.File
+	opened bool
 	ch     chan []byte
 	cancel context.CancelFunc
 }
@@ -82,18 +83,26 @@ func NewFile(path string) (*File, error) {
 
 // Open starts reading the file and streaming data through the channel.
 func (f *File) Open(ctx context.Context) error {
+	f.mu.Lock()
+	if f.opened {
+		f.mu.Unlock()
+		return fmt.Errorf("file source already open")
+	}
+
 	file, err := os.Open(f.Path)
 	if err != nil {
+		f.mu.Unlock()
 		return fmt.Errorf("failed to open file %s: %w", f.Path, err)
 	}
 
-	f.mu.Lock()
 	f.file = file
-	f.mu.Unlock()
+	f.ch = make(chan []byte, 16)
+	f.opened = true
 
 	// Create cancellable context for read loop
 	readCtx, cancel := context.WithCancel(ctx)
 	f.cancel = cancel
+	f.mu.Unlock()
 
 	// Start reading loop
 	go f.readLoop(readCtx)
@@ -103,15 +112,26 @@ func (f *File) Open(ctx context.Context) error {
 
 // readLoop streams file content through the channel.
 func (f *File) readLoop(ctx context.Context) {
-	defer close(f.ch)
-
 	f.mu.Lock()
 	file := f.file
+	ch := f.ch
 	f.mu.Unlock()
+	if ch != nil {
+		defer close(ch)
+	}
 
 	if file == nil {
 		return
 	}
+	defer func() {
+		_ = file.Close()
+		f.mu.Lock()
+		if f.file == file {
+			f.file = nil
+		}
+		f.opened = false
+		f.mu.Unlock()
+	}()
 
 	reader := bufio.NewReader(file)
 
@@ -128,15 +148,15 @@ func (f *File) readLoop(ctx context.Context) {
 
 	if f.ChunkSize > 0 {
 		// Chunk mode: read fixed-size chunks
-		f.readChunked(ctx, reader)
+		f.readChunked(ctx, reader, ch)
 	} else {
 		// Line mode: read line by line
-		f.readLines(ctx, reader)
+		f.readLines(ctx, reader, ch)
 	}
 }
 
 // readLines reads file line by line and sends each line as a frame.
-func (f *File) readLines(ctx context.Context, reader *bufio.Reader) {
+func (f *File) readLines(ctx context.Context, reader *bufio.Reader, ch chan<- []byte) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -148,7 +168,7 @@ func (f *File) readLines(ctx context.Context, reader *bufio.Reader) {
 					// Send final line if it doesn't end with newline
 					if len(line) > 0 {
 						select {
-						case f.ch <- line:
+						case ch <- line:
 						case <-ctx.Done():
 						}
 					}
@@ -160,7 +180,7 @@ func (f *File) readLines(ctx context.Context, reader *bufio.Reader) {
 
 			if len(line) > 0 {
 				select {
-				case f.ch <- line:
+				case ch <- line:
 				case <-ctx.Done():
 					return
 				}
@@ -170,7 +190,7 @@ func (f *File) readLines(ctx context.Context, reader *bufio.Reader) {
 }
 
 // readChunked reads file in fixed-size chunks.
-func (f *File) readChunked(ctx context.Context, reader *bufio.Reader) {
+func (f *File) readChunked(ctx context.Context, reader *bufio.Reader, ch chan<- []byte) {
 	buf := make([]byte, f.ChunkSize)
 
 	for {
@@ -186,7 +206,7 @@ func (f *File) readChunked(ctx context.Context, reader *bufio.Reader) {
 						chunk := make([]byte, n)
 						copy(chunk, buf[:n])
 						select {
-						case f.ch <- chunk:
+						case ch <- chunk:
 						case <-ctx.Done():
 						}
 					}
@@ -201,7 +221,7 @@ func (f *File) readChunked(ctx context.Context, reader *bufio.Reader) {
 				copy(chunk, buf[:n])
 
 				select {
-				case f.ch <- chunk:
+				case ch <- chunk:
 				case <-ctx.Done():
 					return
 				}
@@ -225,18 +245,19 @@ func (f *File) Meta() core.SourceMeta {
 
 // Close closes the file and stops the read loop.
 func (f *File) Close() error {
-	// Cancel the read loop
-	if f.cancel != nil {
-		f.cancel()
-	}
-
-	// Close the file
 	f.mu.Lock()
-	defer f.mu.Unlock()
+	cancel := f.cancel
+	file := f.file
+	f.cancel = nil
+	f.file = nil
+	f.opened = false
+	f.mu.Unlock()
 
-	if f.file != nil {
-		return f.file.Close()
+	if cancel != nil {
+		cancel()
+	}
+	if file != nil {
+		return file.Close()
 	}
 	return nil
 }
-

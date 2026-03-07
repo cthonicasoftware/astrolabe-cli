@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
-	"time"
+	"unicode/utf8"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/capture"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
@@ -141,12 +142,11 @@ Examples:
 		case "csv":
 			csvCfg := normalize.DefaultCSVConfig()
 			csvCfg.HasHeaders = !fileNoHeaders
-			if fileDelimiter != "" {
-				if len(fileDelimiter) != 1 {
-					return fmt.Errorf("delimiter must be a single character")
-				}
-				csvCfg.Delimiter = rune(fileDelimiter[0])
+			delimiter, err := parseDelimiter(fileDelimiter)
+			if err != nil {
+				return err
 			}
+			csvCfg.Delimiter = delimiter
 			if len(fileColumnNames) > 0 {
 				csvCfg.ColumnNames = fileColumnNames
 			}
@@ -165,35 +165,23 @@ Examples:
 			return fmt.Errorf("ensure offline cache: %w", err)
 		}
 
-		// Create permanent run directory
-		runID := generateRunID()
-		runRoot := filepath.Join(appCfg.OfflineCache, runID)
-		if err := os.MkdirAll(runRoot, 0o755); err != nil {
-			return fmt.Errorf("create run dir: %w", err)
-		}
-
-		store := storage.NewFS(runRoot)
+		store := storage.NewFS(appCfg.OfflineCache)
 
 		// Build manifest
-		meta := core.ManifestOptions{
-			Operator: fileOperator,
-			Location: fileLocation,
-			Device: core.DeviceInfo{
-				ID:              fileDeviceID,
-				Serial:          fileDeviceSerial,
-				Firmware:        fileDeviceFirmware,
-				FirmwareHash:    fileDeviceFWHash,
-				HardwareVersion: fileDeviceHWVersion,
-			},
-			Test: core.TestInfo{
-				Plan:    fileTestPlan,
-				Variant: fileTestVariant,
-				Run:     fileTestRun,
-			},
-			Tags:       append([]string(nil), flagTags...),
-			Attributes: cloneStringMap(flagAttrs),
-		}
-		applyMetadataDefaults(&meta, savedMetadata, cmd.Flags())
+		meta := buildManifestOptions(captureMetadataInput{
+			Operator:        fileOperator,
+			Location:        fileLocation,
+			DeviceID:        fileDeviceID,
+			DeviceSerial:    fileDeviceSerial,
+			DeviceFirmware:  fileDeviceFirmware,
+			DeviceFWHash:    fileDeviceFWHash,
+			DeviceHWVersion: fileDeviceHWVersion,
+			TestPlan:        fileTestPlan,
+			TestVariant:     fileTestVariant,
+			TestRun:         fileTestRun,
+			Tags:            flagTags,
+			Attributes:      flagAttrs,
+		}, savedMetadata, cmd.Flags(), true)
 
 		manifest := buildFileManifest(absPath, fileFormat, meta)
 		captureSettings := buildFileCaptureSettings(absPath, fileFormat)
@@ -205,7 +193,6 @@ Examples:
 			Store:      store,
 			Manifest:   manifest,
 			Capture:    captureSettings,
-			RunID:      runID,
 		}
 
 		pipeline, err := capture.NewPipeline(pipelineOpts)
@@ -232,7 +219,7 @@ Examples:
 		out.Success("File ingestion complete")
 		out.KeyValue("Run ID", run.ID)
 		out.KeyValue("Records", fmt.Sprintf("%d", run.RecordsCount))
-		out.KeyValue("Location", runRoot)
+		out.KeyValue("Location", filepath.Join(appCfg.OfflineCache, run.ID))
 		out.Blank()
 		out.Muted("Run 'astrolabe upload' to upload to server.")
 
@@ -248,31 +235,7 @@ func buildFileManifest(filePath, format string, opts core.ManifestOptions) core.
 		"source_path":   filePath,
 	}
 
-	for k, v := range opts.Attributes {
-		if k == "" || v == "" {
-			continue
-		}
-		attrs[k] = v
-	}
-
-	manifest := core.Manifest{
-		SchemaVersion: Schema,
-		Device:        opts.Device,
-		Test:          opts.Test,
-		Operator:      opts.Operator,
-		Location:      opts.Location,
-		Tags:          append([]string(nil), opts.Tags...),
-		Attributes:    attrs,
-	}
-
-	if manifest.Operator == "" {
-		manifest.Operator = os.Getenv("USER")
-	}
-	if manifest.Test.Plan == "" {
-		manifest.Test.Plan = "unspecified"
-	}
-
-	return manifest
+	return buildCaptureManifest(opts, attrs)
 }
 
 func buildFileCaptureSettings(filePath, format string) core.CaptureSettings {
@@ -305,11 +268,32 @@ func isValidFormat(format string) bool {
 	}
 }
 
-func generateRunID() string {
-	// Format: run-YYYYMMDD-HHMMSS
-	// This matches the default from capture/pipeline.go
-	now := time.Now().UTC()
-	return fmt.Sprintf("run-%s", now.Format("20060102-150405"))
+func parseDelimiter(value string) (rune, error) {
+	if value == "" {
+		return ',', nil
+	}
+	switch value {
+	case `\t`:
+		return '\t', nil
+	case `\n`:
+		return '\n', nil
+	case `\r`:
+		return '\r', nil
+	}
+
+	if strings.HasPrefix(value, `\u`) && len(value) == 6 {
+		n, err := strconv.ParseInt(value[2:], 16, 32)
+		if err != nil {
+			return 0, fmt.Errorf("invalid unicode delimiter: %w", err)
+		}
+		return rune(n), nil
+	}
+
+	if utf8.RuneCountInString(value) != 1 {
+		return 0, fmt.Errorf("delimiter must be a single character")
+	}
+	r, _ := utf8.DecodeRuneInString(value)
+	return r, nil
 }
 
 func init() {
