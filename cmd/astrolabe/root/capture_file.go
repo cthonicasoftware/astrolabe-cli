@@ -1,7 +1,6 @@
 package root
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,13 +8,11 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/cthonicasoftware/astrolabe-cli/internal/capture"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/normalize"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
-	"github.com/cthonicasoftware/astrolabe-cli/internal/storage"
 	"github.com/spf13/cobra"
 )
 
@@ -165,8 +162,6 @@ Examples:
 			return fmt.Errorf("ensure offline cache: %w", err)
 		}
 
-		store := storage.NewFS(appCfg.OfflineCache)
-
 		// Build manifest
 		meta := buildManifestOptions(captureMetadataInput{
 			Operator:        fileOperator,
@@ -186,37 +181,18 @@ Examples:
 		manifest := buildFileManifest(absPath, fileFormat, meta)
 		captureSettings := buildFileCaptureSettings(absPath, fileFormat)
 
-		// Create pipeline
-		pipelineOpts := capture.Options{
-			Source:     fileSource,
-			Normalizer: normalizer,
-			Store:      store,
-			Manifest:   manifest,
-			Capture:    captureSettings,
-		}
-
-		pipeline, err := capture.NewPipeline(pipelineOpts)
-		if err != nil {
-			return fmt.Errorf("build pipeline: %w", err)
-		}
-
-		// Open file source
-		ctx := context.Background()
-		if err := fileSource.Open(ctx); err != nil {
-			return fmt.Errorf("failed to open file: %w", err)
-		}
-		defer fileSource.Close()
-
-		// Run capture pipeline
 		out.Step("Processing file...")
-		run, err := pipeline.Run(ctx)
+		run, interrupted, err := runHeadlessCapture(out, fileSource, normalizer, appCfg.OfflineCache, manifest, captureSettings)
 		if err != nil {
-			return fmt.Errorf("capture failed: %w", err)
+			return err
 		}
 
-		// Success
 		out.Blank()
-		out.Success("File ingestion complete")
+		if interrupted {
+			out.Warning("File ingestion interrupted (partial run saved)")
+		} else {
+			out.Success("File ingestion complete")
+		}
 		out.KeyValue("Run ID", run.ID)
 		out.KeyValue("Records", fmt.Sprintf("%d", run.RecordsCount))
 		out.KeyValue("Location", filepath.Join(appCfg.OfflineCache, run.ID))

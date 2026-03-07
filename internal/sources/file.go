@@ -72,7 +72,6 @@ func NewFileWithConfig(cfg FileConfig) (*File, error) {
 
 	return &File{
 		FileConfig: cfg,
-		ch:         make(chan []byte, 16),
 	}, nil
 }
 
@@ -124,13 +123,16 @@ func (f *File) readLoop(ctx context.Context) {
 		return
 	}
 	defer func() {
-		_ = file.Close()
 		f.mu.Lock()
-		if f.file == file {
+		stillOwner := f.file == file
+		if stillOwner {
 			f.file = nil
 		}
 		f.opened = false
 		f.mu.Unlock()
+		if stillOwner {
+			_ = file.Close()
+		}
 	}()
 
 	reader := bufio.NewReader(file)
