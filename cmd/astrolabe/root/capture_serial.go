@@ -1,25 +1,17 @@
 package root
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"maps"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/cthonicasoftware/astrolabe-cli/internal/capture"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
-	"github.com/cthonicasoftware/astrolabe-cli/internal/normalize"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
-	"github.com/cthonicasoftware/astrolabe-cli/internal/storage"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/tui"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -50,54 +42,32 @@ var captureSerialCmd = &cobra.Command{
 	Short: "Capture from a serial port",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Create styled printer (check for --json flag from root command)
 		jsonMode, _ := cmd.Flags().GetBool("json")
 		out := cliout.DefaultPrinter(jsonMode)
 
-		// Check if we should run in interactive mode
-		// Interactive mode runs when:
-		// 1. We have a TTY (not in CI/pipe)
-		// 2. Port flag wasn't explicitly set
 		portFlagSet := cmd.Flags().Changed("port")
 		isInteractive := term.IsTerminal(int(os.Stdin.Fd())) && !portFlagSet
 
-		var (
-			savedMetadata config.Metadata
-			metaErr       error
-		)
-		if savedMetadata, metaErr = config.LoadMetadata(); metaErr != nil {
+		savedMetadata, metaErr := config.LoadMetadata()
+		if metaErr != nil {
 			out.Warning(fmt.Sprintf("Failed to load metadata: %v", metaErr))
 		}
 
 		var (
 			serialCfg *sources.Config
-			launchTUI bool = serialTUI
+			launchTUI = serialTUI
 		)
 		if isInteractive {
-			// Run interactive prompt with tabbed capture interface
-			var err error
-			captureConfig, err := tui.RunCaptureTabs()
+			captureConfig, err := runCaptureTabsForSource("serial")
 			if err != nil {
-				return fmt.Errorf("interactive prompt failed: %w", err)
+				return err
 			}
-			if captureConfig == nil {
-				return fmt.Errorf("capture configuration cancelled")
-			}
-			if captureConfig.SourceType != "serial" {
-				return fmt.Errorf("serial source required for this command, got: %s", captureConfig.SourceType)
-			}
-			if captureConfig.SerialConfig == nil {
-				return fmt.Errorf("serial configuration missing")
-			}
-
-			// Use values from interactive prompt
 			serialCfg = captureConfig.SerialConfig
 			serialPort = serialCfg.Port
 			serialBaud = serialCfg.Baud
-			launchTUI = true // Always launch TUI when using interactive mode
-			serialTUI = launchTUI
+			launchTUI = true
+			serialTUI = true
 		} else {
-			// Use command-line flags with defaults
 			if serialPort == "" {
 				return fmt.Errorf("serial port is required (use --port flag or run interactively)")
 			}
@@ -111,8 +81,6 @@ var captureSerialCmd = &cobra.Command{
 			out.Step(fmt.Sprintf("Starting serial capture: %s @ %d baud", serialCfg.Port, serialCfg.Baud))
 		}
 
-		serial := sources.NewSerialWithConfig(*serialCfg)
-
 		flagTags, err := parseTagFlags(serialTags)
 		if err != nil {
 			return fmt.Errorf("invalid --tag value: %w", err)
@@ -122,250 +90,66 @@ var captureSerialCmd = &cobra.Command{
 			return fmt.Errorf("invalid --attr value: %w", err)
 		}
 
+		meta := buildManifestOptions(captureMetadataInput{
+			Operator:        serialOperator,
+			Location:        serialLocation,
+			DeviceID:        serialDeviceID,
+			DeviceSerial:    serialDeviceSerial,
+			DeviceFirmware:  serialDeviceFirmware,
+			DeviceFWHash:    serialDeviceFWHash,
+			DeviceHWVersion: serialDeviceHWVersion,
+			TestPlan:        serialTestPlan,
+			TestVariant:     serialTestVariant,
+			TestRun:         serialTestRun,
+			Tags:            flagTags,
+			Attributes:      flagAttrs,
+		}, savedMetadata, cmd.Flags(), metaErr == nil)
+
+		manifest := buildSerialManifest(*serialCfg, serialName, meta)
+		captureSettings := buildSerialCaptureSettings(*serialCfg)
+		serial := sources.NewSerialWithConfig(*serialCfg)
+		appCfg := config.Load()
+
 		if launchTUI {
-			// Setup for TUI mode with optional save capability
-			appCfg := config.Load()
-			if err := os.MkdirAll(appCfg.OfflineCache, 0o755); err != nil {
-				return fmt.Errorf("ensure offline cache: %w", err)
-			}
-
-			tempRoot, err := os.MkdirTemp(appCfg.OfflineCache, ".tmp-run-")
-			if err != nil {
-				return fmt.Errorf("create temp run dir: %w", err)
-			}
-			defer os.RemoveAll(tempRoot)
-
-			store := storage.NewFS(tempRoot)
-			normalizer := normalize.NewLineJSON()
-
-			meta := core.ManifestOptions{
-				Operator: serialOperator,
-				Location: serialLocation,
-				Device: core.DeviceInfo{
-					ID:              serialDeviceID,
-					Serial:          serialDeviceSerial,
-					Firmware:        serialDeviceFirmware,
-					FirmwareHash:    serialDeviceFWHash,
-					HardwareVersion: serialDeviceHWVersion,
-				},
-				Test: core.TestInfo{
-					Plan:    serialTestPlan,
-					Variant: serialTestVariant,
-					Run:     serialTestRun,
-				},
-				Tags:       append([]string(nil), flagTags...),
-				Attributes: cloneStringMap(flagAttrs),
-			}
-			if metaErr == nil {
-				applyMetadataDefaults(&meta, savedMetadata, cmd.Flags())
-			}
-
-			pipelineOpts := capture.Options{
-				Source:     serial,
-				Normalizer: normalizer,
-				Store:      store,
-				Manifest:   buildSerialManifest(*serialCfg, serialName, meta),
-				Capture:    buildSerialCaptureSettings(*serialCfg),
-			}
-
-			pipeline, err := capture.NewPipeline(pipelineOpts)
-			if err != nil {
-				return fmt.Errorf("build pipeline: %w", err)
-			}
-
-			// Open the serial port
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
-			if err := serial.Open(ctx); err != nil {
-				return fmt.Errorf("failed to open serial port: %w", err)
-			}
-			defer func() {
-				if err := serial.Close(); err != nil {
-					out.Warning(fmt.Sprintf("Failed to close serial port: %v", err))
-				}
-			}()
-
-			// Create channels for TUI display and pipeline data
-			stringCh := make(chan string, 16)
-			pipelineFramesCh := make(chan []byte, 16)
-
-			// Create a wrapper source for the pipeline that reads from our tee'd channel
-			pipelineSource := &frameChannelSource{
-				framesCh: pipelineFramesCh,
-				meta:     serial.Meta(),
-			}
-			pipelineOpts.Source = pipelineSource
-			pipeline, err = capture.NewPipeline(pipelineOpts)
-			if err != nil {
-				return fmt.Errorf("rebuild pipeline with wrapper source: %w", err)
-			}
-
-			// Tee the data: read from serial and send to both pipeline and TUI
-			go func() {
-				defer close(stringCh)
-				defer close(pipelineFramesCh)
-				for frame := range serial.Frames() {
-					if len(frame) == 0 {
-						continue
-					}
-					// Send to TUI display
-					select {
-					case stringCh <- string(frame):
-					case <-ctx.Done():
-						return
-					}
-					// Send to pipeline
-					select {
-					case pipelineFramesCh <- frame:
-					case <-ctx.Done():
-						return
-					}
-				}
-			}()
-
-			// Run the capture pipeline in the background
-			pipelineResultCh := make(chan *core.Run, 1)
-			pipelineErrCh := make(chan error, 1)
-			go func() {
-				run, err := pipeline.Run(ctx)
-				pipelineResultCh <- run
-				pipelineErrCh <- err
-			}()
-
-			// Launch the TUI
 			title := fmt.Sprintf("Serial Capture - %s @ %d", serialCfg.Port, serialCfg.Baud)
-			m := tui.NewApp(title, stringCh)
-			p := tea.NewProgram(m, tea.WithAltScreen())
-			finalModel, err := p.Run()
+			run, saved, err := runInteractiveCapture(out, serial, title, appCfg.OfflineCache, manifest, captureSettings)
 			if err != nil {
-				cancel()
 				return err
 			}
 
-			// Check if user requested to save
-			tuiApp, ok := finalModel.(*tui.App)
-			if !ok {
-				cancel()
-				return fmt.Errorf("unexpected model type: %T", finalModel)
-			}
-
-			// Cancel context to stop serial reading and pipeline
-			cancel()
-
-			if tuiApp.SaveRequested() {
-				out.Blank()
-				out.Step("Saving capture data...")
-
-				run := <-pipelineResultCh
-				runErr := <-pipelineErrCh
-
-				if runErr != nil && !errors.Is(runErr, context.Canceled) {
-					return fmt.Errorf("capture pipeline: %w", runErr)
-				}
-				if run == nil {
-					return fmt.Errorf("capture pipeline: run not returned")
-				}
-
-				if err := promoteRunArtifacts(run, tempRoot, appCfg.OfflineCache); err != nil {
-					return fmt.Errorf("finalize run artifacts: %w", err)
-				}
-
+			out.Blank()
+			if saved {
 				out.Success("Serial capture saved")
 				out.KeyValue("Run ID", run.ID)
 				out.KeyValue("Records", fmt.Sprintf("%d", run.RecordsCount))
 				out.KeyValue("Location", filepath.Join(appCfg.OfflineCache, run.ID))
 				out.Blank()
 				out.Muted("Run 'astrolabe upload' to upload to server.")
-			} else {
-				out.Blank()
-				out.Muted("Exited without saving.")
-				// Wait for pipeline to finish but discard results
-				run := <-pipelineResultCh
-				runErr := <-pipelineErrCh
-				if runErr != nil && !errors.Is(runErr, context.Canceled) {
-					out.Error(fmt.Sprintf("Capture pipeline error: %v", runErr))
-				}
-				if run != nil {
-					runDir := filepath.Join(tempRoot, run.ID)
-					_ = os.RemoveAll(runDir)
-				}
-			}
-		} else {
-			appCfg := config.Load()
-			store := storage.NewFS(appCfg.OfflineCache)
-			normalizer := normalize.NewLineJSON()
-
-			meta := core.ManifestOptions{
-				Operator: serialOperator,
-				Location: serialLocation,
-				Device: core.DeviceInfo{
-					ID:              serialDeviceID,
-					Serial:          serialDeviceSerial,
-					Firmware:        serialDeviceFirmware,
-					FirmwareHash:    serialDeviceFWHash,
-					HardwareVersion: serialDeviceHWVersion,
-				},
-				Test: core.TestInfo{
-					Plan:    serialTestPlan,
-					Variant: serialTestVariant,
-					Run:     serialTestRun,
-				},
-				Tags:       append([]string(nil), flagTags...),
-				Attributes: cloneStringMap(flagAttrs),
-			}
-			if metaErr == nil {
-				applyMetadataDefaults(&meta, savedMetadata, cmd.Flags())
+				return nil
 			}
 
-			opts := capture.Options{
-				Source:     serial,
-				Normalizer: normalizer,
-				Store:      store,
-				Manifest:   buildSerialManifest(*serialCfg, serialName, meta),
-				Capture:    buildSerialCaptureSettings(*serialCfg),
-			}
-
-			pipeline, err := capture.NewPipeline(opts)
-			if err != nil {
-				return fmt.Errorf("build pipeline: %w", err)
-			}
-
-			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-			defer stop()
-
-			if err := serial.Open(ctx); err != nil {
-				return fmt.Errorf("failed to open serial port: %w", err)
-			}
-			defer func() {
-				if err := serial.Close(); err != nil {
-					out.Warning(fmt.Sprintf("Failed to close serial port: %v", err))
-				}
-			}()
-
-			out.Info("Capturing... (press Ctrl+C to stop)")
-			out.Blank()
-
-			run, runErr := pipeline.Run(ctx)
-			if runErr != nil && !errors.Is(runErr, context.Canceled) {
-				return fmt.Errorf("capture pipeline: %w", runErr)
-			}
-			if run == nil {
-				return fmt.Errorf("capture pipeline: run not returned")
-			}
-
-			out.Blank()
-			if runErr == nil {
-				out.Success("Serial capture complete")
-			} else {
-				out.Warning("Serial capture interrupted (partial run saved)")
-			}
-			out.KeyValue("Run ID", run.ID)
-			out.KeyValue("Records", fmt.Sprintf("%d", run.RecordsCount))
-			out.KeyValue("Location", filepath.Join(appCfg.OfflineCache, run.ID))
-			out.Blank()
-			out.Muted("Run 'astrolabe upload' to upload to server.")
+			out.Muted("Exited without saving.")
+			return nil
 		}
+
+		out.Info("Capturing... (press Ctrl+C to stop)")
+		out.Blank()
+		run, interrupted, err := runHeadlessCapture(out, serial, appCfg.OfflineCache, manifest, captureSettings)
+		if err != nil {
+			return err
+		}
+
+		out.Blank()
+		if interrupted {
+			out.Warning("Serial capture interrupted (partial run saved)")
+		} else {
+			out.Success("Serial capture complete")
+		}
+		out.KeyValue("Run ID", run.ID)
+		out.KeyValue("Records", fmt.Sprintf("%d", run.RecordsCount))
+		out.KeyValue("Location", filepath.Join(appCfg.OfflineCache, run.ID))
+		out.Blank()
+		out.Muted("Run 'astrolabe upload' to upload to server.")
 		return nil
 	},
 }
@@ -390,43 +174,16 @@ func init() {
 	captureSerialCmd.Flags().StringToStringVar(&serialAttributes, "attr", map[string]string{}, "additional manifest attribute (key=value, repeatable)")
 }
 
-const serialSchemaVersion = "v1alpha1"
-
 func buildSerialManifest(cfg sources.Config, name string, opts core.ManifestOptions) core.Manifest {
 	attrs := map[string]string{
 		"source_kind": "serial",
 		"port":        cfg.Port,
 		"baud":        strconv.Itoa(cfg.Baud),
 	}
-
-	for k, v := range opts.Attributes {
-		if k == "" || v == "" {
-			continue
-		}
-		attrs[k] = v
-	}
 	if name != "" {
 		attrs["run_label"] = name
 	}
-
-	manifest := core.Manifest{
-		SchemaVersion: serialSchemaVersion,
-		Device:        opts.Device,
-		Test:          opts.Test,
-		Operator:      opts.Operator,
-		Location:      opts.Location,
-		Tags:          append([]string(nil), opts.Tags...),
-		Attributes:    attrs,
-	}
-
-	if manifest.Operator == "" {
-		manifest.Operator = os.Getenv("USER")
-	}
-	if manifest.Test.Plan == "" {
-		manifest.Test.Plan = "unspecified"
-	}
-
-	return manifest
+	return buildCaptureManifest(opts, attrs)
 }
 
 func buildSerialCaptureSettings(cfg sources.Config) core.CaptureSettings {
@@ -517,16 +274,19 @@ func cloneStringMap(src map[string]string) map[string]string {
 	return dst
 }
 
-// frameChannelSource wraps a frames channel and implements the capture.Source interface
-type frameChannelSource struct {
-	framesCh <-chan []byte
-	meta     core.SourceMeta
-}
-
-func (f *frameChannelSource) Frames() <-chan []byte {
-	return f.framesCh
-}
-
-func (f *frameChannelSource) Meta() core.SourceMeta {
-	return f.meta
+func runCaptureTabsForSource(sourceType string) (*tui.CaptureConfig, error) {
+	captureConfig, err := tui.RunCaptureTabs()
+	if err != nil {
+		return nil, fmt.Errorf("interactive prompt failed: %w", err)
+	}
+	if captureConfig == nil {
+		return nil, fmt.Errorf("capture configuration cancelled")
+	}
+	if captureConfig.SourceType != sourceType {
+		return nil, fmt.Errorf("%s source required for this command, got: %s", sourceType, captureConfig.SourceType)
+	}
+	if sourceType == "serial" && captureConfig.SerialConfig == nil {
+		return nil, fmt.Errorf("serial configuration missing")
+	}
+	return captureConfig, nil
 }
