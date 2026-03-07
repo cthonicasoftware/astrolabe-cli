@@ -141,12 +141,11 @@ Examples:
 		case "csv":
 			csvCfg := normalize.DefaultCSVConfig()
 			csvCfg.HasHeaders = !fileNoHeaders
-			if fileDelimiter != "" {
-				if len(fileDelimiter) != 1 {
-					return fmt.Errorf("delimiter must be a single character")
-				}
-				csvCfg.Delimiter = rune(fileDelimiter[0])
+			delimiter, err := parseDelimiter(fileDelimiter)
+			if err != nil {
+				return err
 			}
+			csvCfg.Delimiter = delimiter
 			if len(fileColumnNames) > 0 {
 				csvCfg.ColumnNames = fileColumnNames
 			}
@@ -305,11 +304,32 @@ func isValidFormat(format string) bool {
 	}
 }
 
-func generateRunID() string {
-	// Format: run-YYYYMMDD-HHMMSS
-	// This matches the default from capture/pipeline.go
-	now := time.Now().UTC()
-	return fmt.Sprintf("run-%s", now.Format("20060102-150405"))
+func parseDelimiter(value string) (rune, error) {
+	if value == "" {
+		return ',', nil
+	}
+	switch value {
+	case `\t`:
+		return '\t', nil
+	case `\n`:
+		return '\n', nil
+	case `\r`:
+		return '\r', nil
+	}
+
+	if strings.HasPrefix(value, `\u`) && len(value) == 6 {
+		n, err := strconv.ParseInt(value[2:], 16, 32)
+		if err != nil {
+			return 0, fmt.Errorf("invalid unicode delimiter: %w", err)
+		}
+		return rune(n), nil
+	}
+
+	if utf8.RuneCountInString(value) != 1 {
+		return 0, fmt.Errorf("delimiter must be a single character")
+	}
+	r, _ := utf8.DecodeRuneInString(value)
+	return r, nil
 }
 
 func init() {
