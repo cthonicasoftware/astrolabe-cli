@@ -187,3 +187,66 @@ func TestFileSource_ChunkedMode(t *testing.T) {
 		t.Errorf("Expected first chunk to be '0123', got %q", chunks[0])
 	}
 }
+
+func TestFileSource_OpenTwiceWithoutCloseFails(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte("line1\n"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	f, err := NewFile(testFile)
+	if err != nil {
+		t.Fatalf("NewFile failed: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := f.Open(ctx); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer f.Close()
+
+	if err := f.Open(ctx); err == nil {
+		t.Fatalf("expected second open to fail, got nil")
+	}
+}
+
+func TestFileSource_ReopenAfterClose(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte("line1\nline2\n"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	f, err := NewFile(testFile)
+	if err != nil {
+		t.Fatalf("NewFile failed: %v", err)
+	}
+
+	readAll := func() []string {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if err := f.Open(ctx); err != nil {
+			t.Fatalf("Open failed: %v", err)
+		}
+		frames := []string{}
+		for frame := range f.Frames() {
+			frames = append(frames, string(frame))
+		}
+		if err := f.Close(); err != nil {
+			t.Fatalf("Close failed: %v", err)
+		}
+		return frames
+	}
+
+	first := readAll()
+	second := readAll()
+
+	if len(first) != 2 || len(second) != 2 {
+		t.Fatalf("expected two frames in each run, got %d and %d", len(first), len(second))
+	}
+	if first[0] != "line1\n" || second[0] != "line1\n" {
+		t.Fatalf("unexpected first frame values: %q and %q", first[0], second[0])
+	}
+}
