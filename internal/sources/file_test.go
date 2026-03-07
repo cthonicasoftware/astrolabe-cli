@@ -188,6 +188,60 @@ func TestFileSource_ChunkedMode(t *testing.T) {
 	}
 }
 
+func TestFileSource_CloseWhileReadLoopActive(t *testing.T) {
+	// Write enough data that the read loop won't finish before we cancel.
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.txt")
+	var content []byte
+	for i := 0; i < 1000; i++ {
+		content = append(content, []byte("line\n")...)
+	}
+	if err := os.WriteFile(testFile, content, 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	f, err := NewFile(testFile)
+	if err != nil {
+		t.Fatalf("NewFile failed: %v", err)
+	}
+
+	ctx := context.Background()
+	if err := f.Open(ctx); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+
+	// Read a few frames to confirm the loop is live, then close mid-stream.
+	ch := f.Frames()
+	for i := 0; i < 3; i++ {
+		select {
+		case _, ok := <-ch:
+			if !ok {
+				t.Fatalf("channel closed unexpectedly after %d frames", i)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("timed out waiting for frame %d", i)
+		}
+	}
+
+	// Close while readLoop is still running — must not double-close the fd.
+	if err := f.Close(); err != nil {
+		t.Fatalf("Close returned error: %v", err)
+	}
+
+	// Drain the channel to let readLoop finish; channel must close cleanly.
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for range f.Frames() {
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("channel did not close after Close()")
+	}
+}
+
 func TestFileSource_OpenTwiceWithoutCloseFails(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.txt")
