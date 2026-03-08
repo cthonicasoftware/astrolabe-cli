@@ -128,7 +128,6 @@ func (f *File) readLoop(ctx context.Context) {
 		if stillOwner {
 			f.file = nil
 		}
-		f.opened = false
 		f.mu.Unlock()
 		if stillOwner {
 			_ = file.Close()
