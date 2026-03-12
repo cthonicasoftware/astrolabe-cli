@@ -1,3 +1,5 @@
+// Package telemetry provides a global metrics registry with pluggable backends
+// (expvar, Prometheus, or no-op) for recording anonymous usage statistics.
 package telemetry
 
 import (
@@ -61,22 +63,27 @@ func Current() Metrics {
 
 // Helper functions for ergonomic access
 
+// RecordCapture increments the capture event counter for the given source kind.
 func RecordCapture(sourceKind string) {
 	Current().RecordCapture(sourceKind)
 }
 
+// RecordBytes records n bytes processed at the named pipeline stage.
 func RecordBytes(stage string, n int64) {
 	Current().RecordBytes(stage, n)
 }
 
+// RecordUpload records the outcome and duration of an upload attempt.
 func RecordUpload(success bool, durationMs int64) {
 	Current().RecordUpload(success, durationMs)
 }
 
+// RecordError increments the error counter for the given category.
 func RecordError(category string) {
 	Current().RecordError(category)
 }
 
+// Snapshot returns the current metric values as a plain map, useful for debugging.
 func Snapshot() map[string]any {
 	return Current().Snapshot()
 }

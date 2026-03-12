@@ -1,3 +1,6 @@
+// Package root wires together all CLI subcommands and provides the top-level
+// Execute entry point used by main. It also owns the styled help renderer
+// and Viper configuration bootstrap.
 package root
 
 import (
@@ -67,6 +70,8 @@ func initConfig() {
 	_ = viper.ReadInConfig()
 }
 
+// Execute runs the root cobra command and prints any error to stderr.
+// It is the sole entry point called by main.
 func Execute() error {
 	err := rootCmd.Execute()
 	if err != nil {

@@ -1,3 +1,5 @@
+// Package sources provides capture.Source implementations for serial ports,
+// TCP connections, and local files.
 package sources
 
 import (
@@ -67,6 +69,9 @@ var FlowControlOptions = []SerialOption{
 	{Code: "software", Label: "Software (XON/XOFF)"},
 }
 
+// Serial is a capture source that reads newline-delimited frames from a
+// hardware serial port. It opens the port in a background goroutine and
+// streams frames over the channel returned by Frames.
 type Serial struct {
 	Config
 
@@ -136,6 +141,8 @@ func (s *Serial) parseStopBits() serial.StopBits {
 	}
 }
 
+// Open configures and opens the serial port, then starts the background read loop.
+// The context controls the lifetime of the read loop; cancelling it stops reading.
 func (s *Serial) Open(ctx context.Context) error {
 	mode := &serial.Mode{
 		BaudRate: s.Baud,
@@ -220,14 +227,18 @@ func (s *Serial) readLoop(ctx context.Context) {
 	}
 }
 
+// Frames returns the channel on which raw byte frames are delivered.
+// The channel is closed when the read loop exits.
 func (s *Serial) Frames() <-chan []byte {
 	return s.ch
 }
 
+// Meta returns the source metadata (kind, port, baud) for this serial source.
 func (s *Serial) Meta() core.SourceMeta {
 	return core.SourceMeta{Kind: "serial", Port: s.Port, Baud: s.Baud}
 }
 
+// Close cancels the read loop and closes the underlying serial port.
 func (s *Serial) Close() error {
 	// Cancel the read loop
 	if s.cancel != nil {

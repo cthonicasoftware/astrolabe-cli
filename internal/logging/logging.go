@@ -1,3 +1,5 @@
+// Package logging provides lightweight structured logging helpers that write
+// timestamped key-value lines to stdout.
 package logging
 
 import (
@@ -5,6 +7,7 @@ import (
 	"time"
 )
 
+// Info logs an informational message with optional key-value pairs to stdout.
 func Info(msg string, kv ...any) {
 	fmt.Printf("[%s] %s", time.Now().Format(time.RFC3339), msg)
 	if len(kv) > 0 {
@@ -18,5 +21,8 @@ func Info(msg string, kv ...any) {
 	fmt.Println()
 }
 
+// Warn logs a warning message with optional key-value pairs to stdout.
 func Warn(msg string, kv ...any) { Info("WARN: "+msg, kv...) }
-func Err(msg string, kv ...any)  { Info("ERR: "+msg, kv...) }
+
+// Err logs an error message with optional key-value pairs to stdout.
+func Err(msg string, kv ...any) { Info("ERR: "+msg, kv...) }

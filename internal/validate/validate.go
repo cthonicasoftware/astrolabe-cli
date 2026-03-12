@@ -1,3 +1,5 @@
+// Package validate checks run directories for structural and data integrity
+// before they are submitted for upload.
 package validate
 
 import (
@@ -18,8 +20,11 @@ import (
 type CheckStatus string
 
 const (
-	StatusPassed  CheckStatus = "passed"
-	StatusFailed  CheckStatus = "failed"
+	// StatusPassed indicates the check completed without errors.
+	StatusPassed CheckStatus = "passed"
+	// StatusFailed indicates the check detected an error.
+	StatusFailed CheckStatus = "failed"
+	// StatusSkipped indicates the check was not run because a prerequisite failed.
 	StatusSkipped CheckStatus = "skipped"
 )
 
