@@ -1,3 +1,5 @@
+// Package config loads and exposes application configuration via Viper,
+// including API connection settings, upload tuning, and telemetry options.
 package config
 
 import (
@@ -7,16 +9,20 @@ import (
 	"github.com/spf13/viper"
 )
 
+// UploadCfg controls batching and retry behaviour for the upload subsystem.
 type UploadCfg struct {
 	BatchBytes int64
 	MaxRetries int
 }
 
+// TelemetryCfg controls the anonymous metrics collection backend.
 type TelemetryCfg struct {
 	Enabled bool   // opt-in for anonymous metrics
 	Backend string // "expvar" (default), "prometheus", or "none"
 }
 
+// Config is the top-level application configuration populated from the
+// connection.yml file, environment variables, and CLI flags.
 type Config struct {
 	APIURL       string
 	ProjectID    string
@@ -26,6 +32,8 @@ type Config struct {
 	Telemetry    TelemetryCfg
 }
 
+// Load reads the active Viper config and returns a fully populated Config.
+// Missing values fall back to sensible defaults (e.g. ~/.astrolabe/runs for OfflineCache).
 func Load() Config {
 	_ = viper.ReadInConfig()
 	home, _ := os.UserHomeDir()
