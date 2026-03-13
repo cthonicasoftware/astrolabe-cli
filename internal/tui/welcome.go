@@ -157,7 +157,7 @@ func (m *welcomeModel) View() string {
 		var line string
 
 		if i == m.cursor {
-			line = StyleMenuSelected.Render(fmt.Sprintf("%s %s %s", IconSelectedItem, item.icon, StyleMenuSelected.Render(label)))
+			line = StyleMenuSelected.Render(fmt.Sprintf("%s %s %s", IconSelectedItem, item.icon, label))
 		} else {
 			line = StyleMenuItem.Render(fmt.Sprintf("  %s %s", icon, label))
 		}
