@@ -1,0 +1,141 @@
+version: 2
+
+project_name: astrolabe
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: astrolabe
+    main: ./cmd/astrolabe
+    binary: astrolabe{{ .Ext }}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    overrides:
+      - goos: darwin
+        goarch: amd64
+        env:
+          - CGO_ENABLED=1
+      - goos: darwin
+        goarch: arm64
+        env:
+          - CGO_ENABLED=1
+    ldflags:
+      - -s -w -X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.Version={{ .Tag }} -X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.Commit={{ .ShortCommit }} -X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.BuildDate={{ .Date }}
+
+archives:
+  - id: astrolabe
+    ids:
+      - astrolabe
+    name_template: "astrolabe-{{ .Os }}-{{ .Arch }}"
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    wrap_in_directory: false
+
+checksum:
+  name_template: checksums.txt
+
+sboms:
+  - id: archives
+    artifacts: archive
+
+binary_signs:
+  - id: binaries
+    cmd: cosign
+    signature: "${artifact}.sigstore.json"
+    args:
+      - sign-blob
+      - "--bundle=${signature}"
+      - "${artifact}"
+      - "--yes"
+    output: true
+
+signs:
+  - id: checksums
+    cmd: cosign
+    signature: "${artifact}.sigstore.json"
+    args:
+      - sign-blob
+      - "--bundle=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+    output: true
+
+source:
+  enabled: false
+
+release:
+  name_template: "Astrolabe {{ .Tag }}"
+  prerelease: auto
+  draft: false
+  header: |
+    ## Installation
+
+    ### Linux (AMD64)
+    ```bash
+    curl -LO https://github.com/{{ .Env.GITHUB_REPOSITORY }}/releases/download/{{ .Tag }}/astrolabe-linux-amd64.tar.gz
+    tar -xzf astrolabe-linux-amd64.tar.gz
+    chmod +x astrolabe
+    sudo mv astrolabe /usr/local/bin/
+    ```
+
+    ### Linux (ARM64)
+    ```bash
+    curl -LO https://github.com/{{ .Env.GITHUB_REPOSITORY }}/releases/download/{{ .Tag }}/astrolabe-linux-arm64.tar.gz
+    tar -xzf astrolabe-linux-arm64.tar.gz
+    chmod +x astrolabe
+    sudo mv astrolabe /usr/local/bin/
+    ```
+
+    ### macOS (Intel)
+    ```bash
+    curl -LO https://github.com/{{ .Env.GITHUB_REPOSITORY }}/releases/download/{{ .Tag }}/astrolabe-darwin-amd64.tar.gz
+    tar -xzf astrolabe-darwin-amd64.tar.gz
+    chmod +x astrolabe
+    sudo mv astrolabe /usr/local/bin/
+    ```
+
+    ### macOS (Apple Silicon)
+    ```bash
+    curl -LO https://github.com/{{ .Env.GITHUB_REPOSITORY }}/releases/download/{{ .Tag }}/astrolabe-darwin-arm64.tar.gz
+    tar -xzf astrolabe-darwin-arm64.tar.gz
+    chmod +x astrolabe
+    sudo mv astrolabe /usr/local/bin/
+    ```
+
+    ### Windows
+    Download `astrolabe-windows-amd64.zip`, extract it, and add `astrolabe.exe` to your PATH.
+
+  footer: |
+    ## Verify Installation
+
+    ```bash
+    astrolabe version
+    ```
+
+    ## Checksums
+
+    See `checksums.txt` for SHA256 checksums of all binaries.
+
+    ## Signatures and SBOMs
+
+    Release assets also include:
+    - `checksums.txt.sigstore.json` for keyless cosign verification
+    - per-binary `*.sigstore.json` bundles
+    - per-archive `*.sbom.json` SBOM documents
