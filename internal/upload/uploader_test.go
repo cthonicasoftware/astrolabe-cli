@@ -247,6 +247,9 @@ func TestUploader_Upload_FileNotFound(t *testing.T) {
 	if result.Success {
 		t.Error("expected success=false")
 	}
+	if result.Attempts != 1 {
+		t.Errorf("expected 1 attempt for missing file, got %d", result.Attempts)
+	}
 }
 
 func TestUploader_ExponentialBackoff(t *testing.T) {
@@ -313,9 +316,9 @@ func TestUploader_ExponentialBackoff(t *testing.T) {
 
 func TestIsRetryable(t *testing.T) {
 	tests := []struct {
-		name       string
-		err        error
-		wantRetry  bool
+		name      string
+		err       error
+		wantRetry bool
 	}{
 		{
 			name:      "nil error",
@@ -335,7 +338,22 @@ func TestIsRetryable(t *testing.T) {
 		{
 			name:      "generic error",
 			err:       fmt.Errorf("network error"),
+			wantRetry: false,
+		},
+		{
+			name:      "too many requests",
+			err:       &uploadHTTPStatusError{StatusCode: http.StatusTooManyRequests},
 			wantRetry: true,
+		},
+		{
+			name:      "server error",
+			err:       &uploadHTTPStatusError{StatusCode: http.StatusServiceUnavailable},
+			wantRetry: true,
+		},
+		{
+			name:      "client error",
+			err:       &uploadHTTPStatusError{StatusCode: http.StatusBadRequest},
+			wantRetry: false,
 		},
 	}
 
@@ -349,3 +367,44 @@ func TestIsRetryable(t *testing.T) {
 	}
 }
 
+func TestUploader_Upload_DoesNotRetryClientErrors(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.json")
+	if err := os.WriteFile(testFile, []byte(`{"test": "data"}`), 0644); err != nil {
+		t.Fatalf("create test file: %v", err)
+	}
+
+	var attemptCount atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attemptCount.Add(1)
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer server.Close()
+
+	uploader := NewUploader(3)
+	artifact := core.Artifact{
+		Path:      testFile,
+		Name:      "test.json",
+		MediaType: "application/json",
+		SizeBytes: 16,
+		Checksum:  core.Checksum{Algorithm: "sha256", Value: "abc123"},
+	}
+
+	presignedURL := &ArtifactPresignResponse{
+		ArtifactID: "artifact-123",
+		URL:        server.URL,
+		Method:     "PUT",
+	}
+
+	result, err := uploader.Upload(context.Background(), artifact, presignedURL)
+
+	if err == nil {
+		t.Fatal("expected client error, got nil")
+	}
+	if result.Attempts != 1 {
+		t.Fatalf("expected 1 attempt, got %d", result.Attempts)
+	}
+	if got := attemptCount.Load(); got != 1 {
+		t.Fatalf("expected 1 server call, got %d", got)
+	}
+}

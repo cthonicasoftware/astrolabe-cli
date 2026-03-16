@@ -2,9 +2,10 @@ package upload
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
-	"math"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -30,11 +31,20 @@ func NewUploader(maxRetries int) *Uploader {
 
 // UploadResult tracks the outcome of an upload attempt.
 type UploadResult struct {
-	Artifact  core.Artifact
-	Success   bool
-	Attempts  int
-	Error     error
+	Artifact   core.Artifact
+	Success    bool
+	Attempts   int
+	Error      error
 	UploadedAt *time.Time
+}
+
+type uploadHTTPStatusError struct {
+	StatusCode int
+	Body       string
+}
+
+func (e *uploadHTTPStatusError) Error() string {
+	return fmt.Sprintf("upload failed: status=%d body=%s", e.StatusCode, e.Body)
 }
 
 // Upload uploads a single file to a presigned URL with automatic retry and exponential backoff.
@@ -52,7 +62,7 @@ func (u *Uploader) Upload(ctx context.Context, artifact core.Artifact, presigned
 
 		// Calculate backoff: 1s, 2s, 4s, 8s, 16s, etc.
 		if attempt > 0 {
-			backoff := time.Duration(math.Pow(2, float64(attempt-1))) * time.Second
+			backoff := time.Duration(1<<(attempt-1)) * time.Second
 			select {
 			case <-time.After(backoff):
 			case <-ctx.Done():
@@ -140,7 +150,10 @@ func (u *Uploader) uploadOnce(ctx context.Context, artifact core.Artifact, presi
 	// S3 presigned URLs typically return 200 OK on success
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusNoContent {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("upload failed: status=%d body=%s", resp.StatusCode, string(bodyBytes))
+		return &uploadHTTPStatusError{
+			StatusCode: resp.StatusCode,
+			Body:       string(bodyBytes),
+		}
 	}
 
 	return nil
@@ -154,16 +167,24 @@ func isRetryable(err error) bool {
 		return false
 	}
 
-	// Check for HTTP status code errors
-	// In a real implementation, you'd parse the error more carefully
-	// For now, we assume network errors and context errors are retryable
-	switch err {
-	case context.Canceled, context.DeadlineExceeded:
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return false
-	default:
-		// Assume most errors are retryable (network issues, temporary server problems)
-		// You could add more sophisticated logic here to parse HTTP status codes
+	}
+
+	var statusErr *uploadHTTPStatusError
+	if errors.As(err, &statusErr) {
+		return statusErr.StatusCode == http.StatusTooManyRequests || statusErr.StatusCode >= http.StatusInternalServerError
+	}
+
+	var pathErr *os.PathError
+	if errors.As(err, &pathErr) {
+		return false
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) {
 		return true
 	}
-}
 
+	return false
+}

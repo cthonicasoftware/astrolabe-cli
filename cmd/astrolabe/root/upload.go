@@ -22,6 +22,8 @@ var (
 	uploadForce bool
 )
 
+const defaultUploadTimeout = 30 * time.Minute
+
 var uploadCmd = &cobra.Command{
 	Use:   "upload",
 	Short: "Upload cached runs to the server",
@@ -58,9 +60,6 @@ var uploadCmd = &cobra.Command{
 			MaxRetries: maxRetries,
 		})
 
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-		defer cancel()
-
 		// Check if we should use TUI or text mode
 		isInteractive := term.IsTerminal(int(os.Stdout.Fd()))
 
@@ -73,7 +72,7 @@ var uploadCmd = &cobra.Command{
 				}
 			} else {
 				out.Step(fmt.Sprintf("Uploading run: %s", uploadRunID))
-				if err := client.UploadRun(ctx, uploadRunID); err != nil {
+				if err := uploadRunWithTimeout(context.Background(), defaultUploadTimeout, uploadRunID, client.UploadRun); err != nil {
 					return fmt.Errorf("upload run: %w", err)
 				}
 				out.Blank()
@@ -109,10 +108,11 @@ var uploadCmd = &cobra.Command{
 
 				for i, runID := range runs {
 					out.Step(fmt.Sprintf("[%d/%d] Uploading %s", i+1, len(runs), runID))
-					if err := client.UploadRun(ctx, runID); err != nil {
+					if err := uploadRunWithTimeout(context.Background(), defaultUploadTimeout, runID, client.UploadRun); err != nil {
 						out.Error(fmt.Sprintf("Failed: %v", err))
 						failed++
 					} else {
+						succeeded++
 						out.Success("Uploaded successfully")
 					}
 				}
@@ -129,6 +129,12 @@ var uploadCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+func uploadRunWithTimeout(parent context.Context, timeout time.Duration, runID string, fn func(context.Context, string) error) error {
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	defer cancel()
+	return fn(ctx, runID)
 }
 
 func init() {
