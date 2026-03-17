@@ -64,25 +64,29 @@ func (c *Client) UploadRun(ctx context.Context, runID string) error {
 		return fmt.Errorf("run %s already uploaded", runID)
 	}
 
-	// Update upload state to queued
-	run.Upload.Status = core.UploadStatusQueued
-	if err := c.saveRunState(run); err != nil {
-		return fmt.Errorf("save queued state: %w", err)
+	remoteRunID := run.Upload.RemoteRunID
+	if remoteRunID == "" {
+		// Queue a brand new upload before creating the remote run.
+		run.Upload.Status = core.UploadStatusQueued
+		if err := c.saveRunState(run); err != nil {
+			return fmt.Errorf("save queued state: %w", err)
+		}
+
+		// Create run record on server
+		remoteRunID, err = c.apiClient.CreateRun(ctx, run)
+		if err != nil {
+			run.Upload.Status = core.UploadStatusFailed
+			run.Upload.LastError = err.Error()
+			now := time.Now()
+			run.Upload.LastAttempt = &now
+			run.Upload.Attempts++
+			_ = c.saveRunState(run)
+			return fmt.Errorf("create run on server: %w", err)
+		}
+
+		run.Upload.RemoteRunID = remoteRunID
 	}
 
-	// Create run record on server
-	remoteRunID, err := c.apiClient.CreateRun(ctx, run)
-	if err != nil {
-		run.Upload.Status = core.UploadStatusFailed
-		run.Upload.LastError = err.Error()
-		now := time.Now()
-		run.Upload.LastAttempt = &now
-		run.Upload.Attempts++
-		_ = c.saveRunState(run)
-		return fmt.Errorf("create run on server: %w", err)
-	}
-
-	run.Upload.RemoteRunID = remoteRunID
 	run.Upload.Status = core.UploadStatusInFlight
 	if err := c.saveRunState(run); err != nil {
 		return fmt.Errorf("save in-flight state: %w", err)
@@ -172,14 +176,17 @@ func (c *Client) loadRun(runID string) (*core.Run, error) {
 	uploadStatePath := filepath.Join(runDir, "upload_state.json")
 	var uploadState core.UploadState
 
-	//TODO: refactor to handle potential unmarshalling errors
 	if stateData, err := os.ReadFile(uploadStatePath); err == nil {
-		_ = json.Unmarshal(stateData, &uploadState)
-	} else {
+		if err := json.Unmarshal(stateData, &uploadState); err != nil {
+			return nil, fmt.Errorf("parse upload state: %w", err)
+		}
+	} else if os.IsNotExist(err) {
 		// Initialize default state
 		uploadState = core.UploadState{
 			Status: core.UploadStatusPending,
 		}
+	} else {
+		return nil, fmt.Errorf("read upload state: %w", err)
 	}
 
 	// Reconstruct artifacts list
@@ -276,4 +283,3 @@ func computeFileSHA256(filePath string) (string, error) {
 
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
-
