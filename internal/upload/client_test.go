@@ -8,12 +8,58 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/storage"
 )
+
+func writeTestRun(t *testing.T, root, runID string) string {
+	t.Helper()
+
+	runDir := filepath.Join(root, runID)
+	if err := os.MkdirAll(runDir, 0o755); err != nil {
+		t.Fatalf("create run dir: %v", err)
+	}
+
+	manifest := storage.ManifestDocument{
+		RunID:  runID,
+		Schema: "v1alpha1",
+		Source: core.SourceMeta{
+			Kind: "serial",
+			Port: "/dev/ttyUSB0",
+			Baud: 115200,
+		},
+		Manifest: core.Manifest{
+			SchemaVersion: "v1alpha1",
+			Device: core.DeviceInfo{
+				ID: "device-001",
+			},
+			Test: core.TestInfo{
+				Plan: "smoke-test",
+			},
+		},
+		Capture: core.CaptureSettings{
+			Channels: []string{"serial"},
+		},
+		Started:      time.Now(),
+		RecordsCount: 1,
+		PrimaryData:  filepath.Join(runDir, "data.jsonl"),
+	}
+
+	manifestData, _ := json.MarshalIndent(manifest, "", "  ")
+	if err := os.WriteFile(filepath.Join(runDir, "manifest.json"), manifestData, 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(runDir, "data.jsonl"), []byte(`{"ts":"2024-01-01T00:00:00Z","seq":1,"type":"test","payload":{}}`+"\n"), 0o644); err != nil {
+		t.Fatalf("write data: %v", err)
+	}
+
+	return runDir
+}
 
 // TestUploadRun_Integration demonstrates the full upload flow.
 // This test shows how the upload system works end-to-end.
@@ -167,3 +213,94 @@ func TestUploadRun_Integration(t *testing.T) {
 	}
 }
 
+func TestUploadRun_ReusesExistingRemoteRunID(t *testing.T) {
+	tmpDir := t.TempDir()
+	runID := "test-run-resume"
+	runDir := writeTestRun(t, tmpDir, runID)
+
+	stateData, _ := json.Marshal(core.UploadState{
+		Status:      core.UploadStatusInFlight,
+		RemoteRunID: "remote-run-existing",
+	})
+	if err := os.WriteFile(filepath.Join(runDir, "upload_state.json"), stateData, 0o644); err != nil {
+		t.Fatalf("write upload state: %v", err)
+	}
+
+	createRunCalls := 0
+	presignCalls := 0
+
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/runs/":
+			createRunCalls++
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(CreateRunResponse{RunID: "should-not-be-used"})
+		case "/api/v1/runs/remote-run-existing/artifacts/presign":
+			presignCalls++
+			var req PresignedURLRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Fatalf("decode presign request: %v", err)
+			}
+			var artifacts []ArtifactPresignResponse
+			for i, art := range req.Artifacts {
+				artifacts = append(artifacts, ArtifactPresignResponse{
+					ArtifactID: fmt.Sprintf("artifact-%d-%s", i, art.Filename),
+					URL:        server.URL + "/upload",
+					Method:     http.MethodPut,
+				})
+			}
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(PresignedURLResponse{Artifacts: artifacts})
+		case "/upload":
+			w.WriteHeader(http.StatusOK)
+		case "/api/v1/runs/remote-run-existing/artifacts/confirm":
+			w.WriteHeader(http.StatusOK)
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(Config{
+		APIURL:     server.URL,
+		AuthToken:  "test-token",
+		ProjectID:  "test-project",
+		CacheRoot:  tmpDir,
+		MaxRetries: 1,
+	})
+
+	if err := client.UploadRun(context.Background(), runID); err != nil {
+		t.Fatalf("upload run: %v", err)
+	}
+
+	if createRunCalls != 0 {
+		t.Fatalf("expected CreateRun to be skipped, got %d calls", createRunCalls)
+	}
+	if presignCalls == 0 {
+		t.Fatal("expected presign calls when resuming upload")
+	}
+}
+
+func TestUploadRun_InvalidUploadStateFails(t *testing.T) {
+	tmpDir := t.TempDir()
+	runID := "test-run-invalid-state"
+	runDir := writeTestRun(t, tmpDir, runID)
+
+	if err := os.WriteFile(filepath.Join(runDir, "upload_state.json"), []byte("not-json"), 0o644); err != nil {
+		t.Fatalf("write upload state: %v", err)
+	}
+
+	client := NewClient(Config{
+		APIURL:    "https://example.invalid",
+		CacheRoot: tmpDir,
+	})
+
+	err := client.UploadRun(context.Background(), runID)
+	if err == nil {
+		t.Fatal("expected invalid upload_state.json to fail")
+	}
+	if got := err.Error(); got == "" || !strings.Contains(got, "parse upload state") {
+		t.Fatalf("expected parse upload state error, got %v", err)
+	}
+}
