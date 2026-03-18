@@ -16,7 +16,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/runs"
 )
 
@@ -85,36 +84,15 @@ type runsViewModel struct {
 	payloadCheckedPaths []string
 }
 
-// RunRunsViewer launches the runs viewer TUI.
-func RunRunsViewer(status *StatusMessage) (*StatusMessage, error) {
-	cfg, err := config.Load()
-	if err != nil {
-		return status, err
-	}
-	model := &runsViewModel{
-		cacheRoot:       cfg.OfflineCache,
+// NewRunsViewer constructs the runs viewer TUI model.
+func NewRunsViewer(cacheRoot string) tea.Model {
+	return &runsViewModel{
+		cacheRoot:       cacheRoot,
 		loading:         true,
 		table:           newRunsTable(nil),
 		mode:            modeTable,
 		payloadViewport: viewport.New(0, 0),
 	}
-	p := tea.NewProgram(model, tea.WithAltScreen())
-	finalModel, err := p.Run()
-	if err != nil {
-		return status, err
-	}
-
-	if model, ok := finalModel.(*runsViewModel); ok {
-		switch {
-		case model.err != nil:
-			status = NewStatusMessage(StatusError, "Load Runs Failed", model.err.Error())
-		case len(model.result.Runs) == 0:
-			status = NewStatusMessage(StatusInfo, "No Runs", "No cached runs available yet. Capture data to populate this view.")
-		default:
-			status = NewStatusMessage(StatusSuccess, "Runs Available", fmt.Sprintf("%d cached run(s) available.", len(model.result.Runs)))
-		}
-	}
-	return status, nil
 }
 
 func (m *runsViewModel) Init() tea.Cmd {
@@ -267,7 +245,7 @@ func (m *runsViewModel) handleRunsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case modeTable:
 		switch msg.String() {
 		case "ctrl+c", "q", "esc":
-			return m, tea.Quit
+			return m, func() tea.Msg { return NavigateMsg{To: ScreenWelcome} }
 		case "r":
 			m.loading = true
 			m.err = nil

@@ -37,13 +37,21 @@ var tuiCmd = &cobra.Command{
 				},
 
 				tui.ScreenMetadata: func(ctx tui.ScreenContext) (tea.Model, func(), error) {
-					// TODO: wire in next slice
-					return tui.NewWelcome(tui.NewStatusMessage(tui.StatusInfo, "Not yet wired", "Metadata coming soon")), nil, nil
+					repo := config.NewFileMetadataRepository(nil)
+					meta, loadErr := repo.Load()
+					var path string
+					if p, perr := repo.Path(); perr == nil {
+						path = p
+					}
+					return tui.NewMetadataEditor(repo, meta, path, loadErr), nil, nil
 				},
 
 				tui.ScreenRuns: func(ctx tui.ScreenContext) (tea.Model, func(), error) {
-					// TODO: wire in next slice
-					return tui.NewWelcome(tui.NewStatusMessage(tui.StatusInfo, "Not yet wired", "View Runs coming soon")), nil, nil
+					cfg, err := config.Load()
+					if err != nil {
+						return nil, nil, err
+					}
+					return tui.NewRunsViewer(cfg.OfflineCache), nil, nil
 				},
 
 				tui.ScreenUpload: func(ctx tui.ScreenContext) (tea.Model, func(), error) {
