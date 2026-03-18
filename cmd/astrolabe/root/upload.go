@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
@@ -70,7 +71,7 @@ var uploadCmd = &cobra.Command{
 		if uploadRunID != "" {
 			// Upload single run
 			if isInteractive {
-				if err := tui.RunUploadTUI(client, []string{uploadRunID}); err != nil {
+				if _, err := tea.NewProgram(tui.NewUploadModel(client, []string{uploadRunID})).Run(); err != nil {
 					return fmt.Errorf("upload run: %w", err)
 				}
 			} else {
@@ -98,7 +99,7 @@ var uploadCmd = &cobra.Command{
 
 			if isInteractive {
 				// Use TUI for interactive mode
-				if err := tui.RunUploadTUI(client, runs); err != nil {
+				if _, err := tea.NewProgram(tui.NewUploadModel(client, runs)).Run(); err != nil {
 					return err
 				}
 			} else {

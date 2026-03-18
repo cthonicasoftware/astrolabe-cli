@@ -1,8 +1,12 @@
 package root
 
 import (
+	"fmt"
+
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/tui"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/upload"
 	"github.com/spf13/cobra"
 )
 
@@ -43,8 +47,41 @@ var tuiCmd = &cobra.Command{
 				},
 
 				tui.ScreenUpload: func(ctx tui.ScreenContext) (tea.Model, func(), error) {
-					// TODO: wire in next slice
-					return tui.NewWelcome(tui.NewStatusMessage(tui.StatusInfo, "Not yet wired", "Upload coming soon")), nil, nil
+					// Load and validate configuration
+					appCfg, err := config.Load()
+					if err != nil {
+						return nil, nil, fmt.Errorf("load config: %w", err)
+					}
+
+					if appCfg.APIURL == "" || appCfg.AuthToken == "" || appCfg.ProjectID == "" {
+						return nil, nil, fmt.Errorf("upload configuration incomplete: configure connection settings before uploading")
+					}
+
+					maxRetries := appCfg.Upload.MaxRetries
+					if maxRetries == 0 {
+						maxRetries = 3
+					}
+
+					// Build upload client
+					client := upload.NewClient(upload.Config{
+						APIURL:     appCfg.APIURL,
+						AuthToken:  appCfg.AuthToken,
+						ProjectID:  appCfg.ProjectID,
+						CacheRoot:  appCfg.OfflineCache,
+						MaxRetries: maxRetries,
+					})
+
+					// Find pending runs
+					runs, err := findPendingRuns(appCfg.OfflineCache)
+					if err != nil {
+						return nil, nil, fmt.Errorf("find pending runs: %w", err)
+					}
+
+					if len(runs) == 0 {
+						return nil, nil, fmt.Errorf("no pending runs: all runs have been uploaded")
+					}
+
+					return tui.NewUploadModel(client, runs), nil, nil
 				},
 			},
 		})
