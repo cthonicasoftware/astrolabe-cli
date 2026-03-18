@@ -187,10 +187,20 @@ func (a *App) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, keys.Quit):
 		a.saveRequested = false
-		return a, tea.Quit
+		return a, func() tea.Msg {
+			return NavigateMsg{
+				To:     ScreenWelcome,
+				Status: NewStatusMessage(StatusInfo, "Discarded", "Capture exited without saving."),
+			}
+		}
 	case key.Matches(msg, keys.Save):
 		a.saveRequested = true
-		return a, tea.Quit
+		return a, func() tea.Msg {
+			return NavigateMsg{
+				To:     ScreenWelcome,
+				Status: NewStatusMessage(StatusSuccess, "Saved", "Capture session saved successfully."),
+			}
+		}
 	case key.Matches(msg, keys.Help):
 		a.help.ShowAll = !a.help.ShowAll
 		return a, nil
