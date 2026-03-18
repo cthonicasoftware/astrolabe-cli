@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Astrolabe Documentation
+    url: https://github.com/cthonicasoftware/astrolabe-cli/tree/main/docs
+    about: Review the operator and user documentation before opening an issue.

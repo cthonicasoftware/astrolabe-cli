@@ -1,0 +1,92 @@
+name: Feature request
+description: Request a new capability or workflow improvement from the end-user's perspective.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for end-user needs and workflow gaps.
+
+        Feature requests are intentionally framed around user problems rather than implementation details. These requests often become the motivating input for RFCs.
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: What is hard, slow, missing, or frustrating for the user today?
+      placeholder: Operators have to re-enter the same metadata every time they ingest files from the same bench, which slows down repetitive QA runs.
+    validations:
+      required: true
+  - type: textarea
+    id: user
+    attributes:
+      label: Who is asking for this?
+      description: Describe the user or role that benefits from this request.
+      placeholder: Bench operators running repeated validation cycles throughout the day.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What should the user be able to do that they cannot do now?
+      placeholder: Reuse recent metadata defaults during file capture without manually typing every field again.
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Current workflow
+      description: Describe the current workaround or process.
+      placeholder: Operators keep metadata in a separate text file and copy/paste values into each capture command.
+    validations:
+      required: true
+  - type: textarea
+    id: value
+    attributes:
+      label: Why this matters
+      description: What benefit would this create for users or the team?
+      placeholder: Reduces repetitive entry, shortens capture setup time, and lowers the chance of metadata mistakes.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution or ideas
+      description: Optional. Share a rough idea if you have one, but implementation detail is not required.
+      placeholder: Perhaps recent metadata values could be offered in the TUI or saved as named presets.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional. What do users do today, and why is that not enough?
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of Astrolabe would this most likely affect?
+      options:
+        - Capture - Serial
+        - Capture - TCP
+        - Capture - File ingestion
+        - Validation
+        - Upload
+        - TUI / UX
+        - Configuration
+        - Installation / Packaging
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched for existing issues covering this request.
+          required: true
+        - label: I described the request from the end-user's perspective.
+          required: true
+        - label: I explained the user problem or workflow gap this request addresses.
+          required: true

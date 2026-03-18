@@ -1,0 +1,106 @@
+name: Bug report
+description: Report an end-user problem, regression, or workflow failure in Astrolabe.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for problems that operators or users hit while using Astrolabe.
+
+        Bug reports are one of the main inputs for future RFCs. Focus on the user-visible problem, impact, and reproduction details.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of Astrolabe is affected?
+      options:
+        - Capture - Serial
+        - Capture - TCP
+        - Capture - File ingestion
+        - Validation
+        - Upload
+        - TUI / UX
+        - Configuration
+        - Installation / Packaging
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Briefly describe the bug from the user's perspective.
+      placeholder: When I try to upload a cached run from the TUI, the upload fails and the run stays pending with no useful error message.
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: User impact
+      description: What does this prevent the user from doing, and how severe is it?
+      placeholder: Operators cannot finish their QA workflow because completed runs never make it to the backend.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Provide a reliable sequence someone else can follow.
+      placeholder: |
+        1. Run `astrolabe tui`
+        2. Open the pending runs view
+        3. Select a cached run
+        4. Choose Upload
+        5. Observe the failure
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: The run uploads successfully and is removed from the pending queue.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      placeholder: Upload returns to the previous screen, the run remains pending, and the error shown is "request failed".
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Logs, screenshots, or sample data
+      description: Paste terminal output, stack traces, screenshots, or attach sanitized sample files if available.
+      render: shell
+  - type: input
+    id: version
+    attributes:
+      label: Astrolabe version
+      description: Output of `astrolabe version`, release tag, or commit SHA.
+      placeholder: v0.4.2
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, device/source type, backend environment, or anything else relevant.
+      placeholder: Windows 11, serial capture at 115200 baud, staging API
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched for existing issues covering the same bug.
+          required: true
+        - label: I included enough detail for someone else to reproduce the problem.
+          required: true
+        - label: I described the user-visible impact, not just the suspected implementation issue.
+          required: true
