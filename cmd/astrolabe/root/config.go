@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/tui"
@@ -29,8 +30,17 @@ var configEditCmd = &cobra.Command{
 - Upload retry settings`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		_, err := tui.RunConfigEditor(nil)
-		return err
+		return tui.RunTUI(tui.RouterConfig{
+			InitialScreen: tui.ScreenConfig,
+			Factories: map[tui.ScreenID]tui.ScreenFactory{
+				tui.ScreenWelcome: func(ctx tui.ScreenContext) (tea.Model, func(), error) {
+					return tui.NewWelcome(ctx.Status), nil, nil
+				},
+				tui.ScreenConfig: func(ctx tui.ScreenContext) (tea.Model, func(), error) {
+					return tui.NewConfigEditor(), nil, nil
+				},
+			},
+		})
 	},
 }
 
