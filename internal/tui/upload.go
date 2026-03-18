@@ -53,6 +53,11 @@ func newUploadModel(client upload.UploadClient, runIDs []string) uploadModel {
 	}
 }
 
+// NewUploadModel constructs an upload screen model for use with the router.
+func NewUploadModel(client upload.UploadClient, runIDs []string) tea.Model {
+	return newUploadModel(client, runIDs)
+}
+
 func (m uploadModel) Init() tea.Cmd {
 	return tea.Batch(
 		uploadRun(m.client, m.ctx, m.runIDs[m.index]),
@@ -68,10 +73,10 @@ func (m uploadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c", "esc", "q":
+		case "esc", "q":
 			m.cancelled = true
 			m.done = true
-			return m, tea.Quit
+			return m, navigateToWelcomeCmd(m.buildStatus())
 		}
 
 	case uploadedRunMsg:
@@ -99,7 +104,7 @@ func (m uploadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.aborted = true
 			return m, tea.Sequence(
 				tea.Printf("%s %s", symbol, runID),
-				tea.Quit,
+				navigateToWelcomeCmd(m.buildStatus()),
 			)
 		}
 
@@ -108,7 +113,7 @@ func (m uploadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.done = true
 			return m, tea.Sequence(
 				tea.Printf("%s %s", symbol, runID),
-				tea.Quit,
+				navigateToWelcomeCmd(m.buildStatus()),
 			)
 		}
 
@@ -212,61 +217,17 @@ func uploadRun(client upload.UploadClient, ctx context.Context, runID string) te
 	}
 }
 
-// RunUploadTUI launches the upload progress TUI.
-func RunUploadTUI(client *upload.Client, runIDs []string) error {
-	return runUploadTUIWithClient(client, runIDs)
-}
-
-// runUploadTUIWithClient launches the upload progress TUI with any UploadClient implementation.
-// This is exported for testing purposes.
-func runUploadTUIWithClient(client upload.UploadClient, runIDs []string) error {
-	if len(runIDs) == 0 {
-		return nil
-	}
-
-	model := newUploadModel(client, runIDs)
-	if _, err := tea.NewProgram(model).Run(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// RunUploadWithStatus launches the upload process and returns a status message for the TUI.
-// This integrates with the welcome screen status message pattern.
-func RunUploadWithStatus(client *upload.Client, runIDs []string, currentStatus *StatusMessage) (*StatusMessage, error) {
-	// If no runs to upload, return info status
-	if len(runIDs) == 0 {
-		return NewStatusMessage(
-			StatusInfo,
-			"No Runs to Upload",
-			"All runs have been uploaded. Capture new data to upload more runs.",
-		), nil
-	}
-
-	// Run the upload TUI
-	model := newUploadModel(client, runIDs)
-	finalModel, err := tea.NewProgram(model).Run()
-	if err != nil {
-		return nil, err
-	}
-
-	// Extract results from the final model
-	uploadModel, ok := finalModel.(uploadModel)
-	if !ok {
-		return nil, fmt.Errorf("unexpected model type: %T", finalModel)
-	}
-
-	// Generate status message based on results
-	totalRuns := len(runIDs)
-	succeeded := uploadModel.succeeded
-	failed := uploadModel.failed
+// buildStatus generates a StatusMessage reflecting the final upload state.
+func (m uploadModel) buildStatus() *StatusMessage {
+	totalRuns := len(m.runIDs)
+	succeeded := m.succeeded
+	failed := m.failed
 	remaining := totalRuns - succeeded - failed
 
 	// Handle early termination due to consecutive failures
-	if uploadModel.aborted {
+	if m.aborted {
 		lines := []string{
-			fmt.Sprintf("Stopped after %d consecutive failures.", uploadModel.maxConsecutiveFails),
+			fmt.Sprintf("Stopped after %d consecutive failures.", m.maxConsecutiveFails),
 		}
 		if succeeded > 0 {
 			lines = append(lines, fmt.Sprintf("%d succeeded, %d failed, %d not attempted.", succeeded, failed, remaining))
@@ -274,26 +235,17 @@ func RunUploadWithStatus(client *upload.Client, runIDs []string, currentStatus *
 			lines = append(lines, fmt.Sprintf("%d failed, %d not attempted.", failed, remaining))
 		}
 		lines = append(lines, "Check your connection settings.")
-
-		return NewStatusMessage(
-			StatusError,
-			"Upload Stopped",
-			strings.Join(lines, "\n"),
-		), nil
+		return NewStatusMessage(StatusError, "Upload Stopped", strings.Join(lines, "\n"))
 	}
 
 	// Handle cancellation
-	if uploadModel.cancelled {
+	if m.cancelled {
 		if succeeded == 0 {
 			lines := []string{
 				"Upload cancelled.",
 				fmt.Sprintf("No runs were uploaded. %d pending.", remaining),
 			}
-			return NewStatusMessage(
-				StatusInfo,
-				"Upload Cancelled",
-				strings.Join(lines, "\n"),
-			), nil
+			return NewStatusMessage(StatusInfo, "Upload Cancelled", strings.Join(lines, "\n"))
 		}
 		lines := []string{"Upload cancelled."}
 		if failed > 0 {
@@ -301,49 +253,36 @@ func RunUploadWithStatus(client *upload.Client, runIDs []string, currentStatus *
 		} else {
 			lines = append(lines, fmt.Sprintf("%d succeeded, %d not attempted.", succeeded, remaining))
 		}
-		return NewStatusMessage(
-			StatusWarning,
-			"Upload Cancelled",
-			strings.Join(lines, "\n"),
-		), nil
+		return NewStatusMessage(StatusWarning, "Upload Cancelled", strings.Join(lines, "\n"))
 	}
 
 	// Normal completion
 	if failed == 0 {
-		// All succeeded
 		var msg string
 		if totalRuns == 1 {
 			msg = "1 run uploaded successfully."
 		} else {
 			msg = fmt.Sprintf("%d runs uploaded successfully.", succeeded)
 		}
-		return NewStatusMessage(
-			StatusSuccess,
-			"Upload Complete",
-			msg,
-		), nil
+		return NewStatusMessage(StatusSuccess, "Upload Complete", msg)
 	} else if succeeded == 0 {
-		// All failed
 		lines := []string{
 			fmt.Sprintf("All %d uploads failed.", totalRuns),
 			"Check your connection settings and try again.",
 		}
-		return NewStatusMessage(
-			StatusError,
-			"Upload Failed",
-			strings.Join(lines, "\n"),
-		), nil
-	} else {
-		// Partial failure
-		lines := []string{
-			fmt.Sprintf("%d succeeded, %d failed.", succeeded, failed),
-			"Check your connection for failed runs.",
-		}
-		return NewStatusMessage(
-			StatusWarning,
-			"Upload Partially Complete",
-			strings.Join(lines, "\n"),
-		), nil
+		return NewStatusMessage(StatusError, "Upload Failed", strings.Join(lines, "\n"))
+	}
+	lines := []string{
+		fmt.Sprintf("%d succeeded, %d failed.", succeeded, failed),
+		"Check your connection for failed runs.",
+	}
+	return NewStatusMessage(StatusWarning, "Upload Partially Complete", strings.Join(lines, "\n"))
+}
+
+// navigateToWelcomeCmd returns a Cmd that emits a NavigateMsg back to the welcome screen.
+func navigateToWelcomeCmd(status *StatusMessage) tea.Cmd {
+	return func() tea.Msg {
+		return NavigateMsg{To: ScreenWelcome, Status: status}
 	}
 }
 

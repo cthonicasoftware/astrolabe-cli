@@ -9,12 +9,11 @@ import (
 )
 
 type welcomeModel struct {
-	cursor         int
-	menuItems      []menuItem
-	width          int
-	height         int
-	selectedAction string
-	status         *StatusMessage
+	cursor    int
+	menuItems []menuItem
+	width     int
+	height    int
+	status    *StatusMessage
 }
 
 type menuItem struct {
@@ -22,10 +21,6 @@ type menuItem struct {
 	label    string
 	shortcut string
 	action   string
-}
-
-type executeActionMsg struct {
-	action string
 }
 
 var (
@@ -73,14 +68,12 @@ func (m *welcomeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		return m, nil
 
-	case executeActionMsg:
-		m.selectedAction = msg.action
-		return m, tea.Quit
-
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q", "esc":
-			return m, tea.Quit
+			return m, func() tea.Msg {
+				return NavigateMsg{To: ""}
+			}
 
 		case "up", "k":
 			if m.cursor > 0 {
@@ -102,29 +95,29 @@ func (m *welcomeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			action := m.menuItems[m.cursor].action
 			switch action {
 			case "capture":
-				// Launch capture source selection
 				return m, func() tea.Msg {
-					return executeActionMsg{action: "capture"}
+					return NavigateMsg{To: ScreenCaptureTabs}
 				}
 			case "metadata":
 				return m, func() tea.Msg {
-					return executeActionMsg{action: "metadata"}
+					return NavigateMsg{To: ScreenMetadata}
 				}
 			case "view-runs":
 				return m, func() tea.Msg {
-					return executeActionMsg{action: "view-runs"}
+					return NavigateMsg{To: ScreenRuns}
 				}
 			case "upload":
 				return m, func() tea.Msg {
-					return executeActionMsg{action: "upload"}
+					return NavigateMsg{To: ScreenUpload}
 				}
 			case "config-connection":
 				return m, func() tea.Msg {
-					return executeActionMsg{action: "config-connection"}
+					return NavigateMsg{To: ScreenConfig}
 				}
 			default:
-				// Not implemented yet
-				return m, tea.Quit
+				return m, func() tea.Msg {
+					return NavigateMsg{To: ""}
+				}
 			}
 		}
 	}
@@ -182,18 +175,3 @@ func (m *welcomeModel) View() string {
 	return lipgloss.PlaceVertical(m.height, lipgloss.Center, content)
 }
 
-// RunWelcome launches the welcome screen and returns the selected action
-func RunWelcome(status *StatusMessage) (string, error) {
-	p := tea.NewProgram(NewWelcome(status), tea.WithAltScreen())
-	finalModel, err := p.Run()
-	if err != nil {
-		return "", err
-	}
-
-	model, ok := finalModel.(*welcomeModel)
-	if !ok {
-		return "", nil
-	}
-
-	return model.selectedAction, nil
-}

@@ -1,15 +1,16 @@
 package root
 
 import (
+	"context"
 	"fmt"
-	"strconv"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
-	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/tui"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/upload"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var tuiCmd = &cobra.Command{
@@ -17,199 +18,110 @@ var tuiCmd = &cobra.Command{
 	Short: "Launch the interactive Text UI",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		jsonMode, _ := cmd.Flags().GetBool("json")
-		out := cliout.DefaultPrinter(jsonMode)
-
-		// Main TUI loop - keep showing welcome screen until user quits
-		var status *tui.StatusMessage
-		for {
-			action, err := tui.RunWelcome(status)
-			if err != nil {
-				return err
-			}
-			status = nil
-			// If no action selected (user quit), exit
-			if action == "" {
-				return nil
-			}
-			// Handle the selected action
-			switch action {
-			case "capture":
-				var err error
-				status, err = runTUICaptureAction(out)
-				if err != nil {
-					return err
-				}
-
-			case "metadata":
-				var err error
-				status, err = tui.RunMetadataEditor(status)
-				if err != nil {
-					return err
-				}
-			case "view-runs":
-				var err error
-				status, err = tui.RunRunsViewer(status)
-				if err != nil {
-					return err
-				}
-			case "upload":
-				// Load configuration and create upload client
-				appCfg, err := config.Load()
-				if err != nil {
-					return err
-				}
-
-				// Validate configuration
-				if appCfg.APIURL == "" || appCfg.AuthToken == "" || appCfg.ProjectID == "" {
-					status = tui.NewStatusMessage(
-						tui.StatusError,
-						"Upload Configuration Missing",
-						"Configure connection settings before uploading. Select 'Configure Connection'.",
-					)
-					continue
-				}
-
-				maxRetries := appCfg.Upload.MaxRetries
-				if maxRetries == 0 {
-					maxRetries = 3
-				}
-
-				// Create upload client
-				client := upload.NewClient(upload.Config{
-					APIURL:     appCfg.APIURL,
-					AuthToken:  appCfg.AuthToken,
-					ProjectID:  appCfg.ProjectID,
-					CacheRoot:  appCfg.OfflineCache,
-					MaxRetries: maxRetries,
-				})
-
-				// Find pending runs
-				runs, err := findPendingRuns(appCfg.OfflineCache)
-				if err != nil {
-					return fmt.Errorf("find pending runs: %w", err)
-				}
-
-				// Run upload with status
-				status, err = tui.RunUploadWithStatus(client, runs, status)
-				if err != nil {
-					return err
-				}
-			case "config-connection":
-				var err error
-				status, err = tui.RunConfigEditor(status)
-				if err != nil {
-					return err
-				}
-			default:
-				// Unknown action, return to welcome screen
-			}
+		appCfg, err := config.Load()
+		if err != nil {
+			return fmt.Errorf("load config: %w", err)
 		}
+		out := cliout.DefaultPrinter(viper.GetBool("json"))
+		capturePort := newCaptureAdapter(out, appCfg.OfflineCache)
+
+		return tui.RunTUI(tui.RouterConfig{
+			InitialScreen: tui.ScreenWelcome,
+			CapturePort:   capturePort,
+			Factories: map[tui.ScreenID]tui.ScreenFactory{
+				tui.ScreenWelcome: func(ctx tui.ScreenContext) (tea.Model, func(), error) {
+					return tui.NewWelcome(ctx.Status), nil, nil
+				},
+
+				tui.ScreenConfig: func(ctx tui.ScreenContext) (tea.Model, func(), error) {
+					return tui.NewConfigEditor(), nil, nil
+				},
+
+				tui.ScreenCaptureTabs: func(ctx tui.ScreenContext) (tea.Model, func(), error) {
+					return tui.NewCaptureTabs(), nil, nil
+				},
+
+				tui.ScreenCaptureLive: func(ctx tui.ScreenContext) (tea.Model, func(), error) {
+					cfg, ok := ctx.Args.(tui.CaptureConfig)
+					if !ok {
+						return nil, nil, fmt.Errorf("capture live: missing or invalid CaptureConfig in Args")
+					}
+					session, err := capturePort.Start(context.Background(), cfg)
+					if err != nil {
+						return nil, nil, fmt.Errorf("start capture: %w", err)
+					}
+					title := "Live Capture"
+					appModel := tui.NewApp(title, session.Feed())
+					cleanup := func() {
+						if appModel.SaveRequested() {
+							session.RequestSave()
+						}
+						session.Stop()
+						go func() {
+							capturePort.Collect(session)
+						}()
+					}
+					return appModel, cleanup, nil
+				},
+
+				tui.ScreenMetadata: func(ctx tui.ScreenContext) (tea.Model, func(), error) {
+					repo := config.NewFileMetadataRepository(nil)
+					meta, loadErr := repo.Load()
+					var path string
+					if p, perr := repo.Path(); perr == nil {
+						path = p
+					}
+					return tui.NewMetadataEditor(repo, meta, path, loadErr), nil, nil
+				},
+
+				tui.ScreenRuns: func(ctx tui.ScreenContext) (tea.Model, func(), error) {
+					cfg, err := config.Load()
+					if err != nil {
+						return nil, nil, err
+					}
+					return tui.NewRunsViewer(cfg.OfflineCache), nil, nil
+				},
+
+				tui.ScreenUpload: func(ctx tui.ScreenContext) (tea.Model, func(), error) {
+					// Load and validate configuration
+					appCfg, err := config.Load()
+					if err != nil {
+						return nil, nil, fmt.Errorf("load config: %w", err)
+					}
+
+					if appCfg.APIURL == "" || appCfg.AuthToken == "" || appCfg.ProjectID == "" {
+						return nil, nil, fmt.Errorf("upload configuration incomplete: configure connection settings before uploading")
+					}
+
+					maxRetries := appCfg.Upload.MaxRetries
+					if maxRetries == 0 {
+						maxRetries = 3
+					}
+
+					// Build upload client
+					client := upload.NewClient(upload.Config{
+						APIURL:     appCfg.APIURL,
+						AuthToken:  appCfg.AuthToken,
+						ProjectID:  appCfg.ProjectID,
+						CacheRoot:  appCfg.OfflineCache,
+						MaxRetries: maxRetries,
+					})
+
+					// Find pending runs
+					runs, err := findPendingRuns(appCfg.OfflineCache)
+					if err != nil {
+						return nil, nil, fmt.Errorf("find pending runs: %w", err)
+					}
+
+					if len(runs) == 0 {
+						return nil, nil, fmt.Errorf("no pending runs: all runs have been uploaded")
+					}
+
+					return tui.NewUploadModel(client, runs), nil, nil
+				},
+			},
+		})
 	},
-}
-
-func runTUICaptureAction(out *cliout.Printer) (*tui.StatusMessage, error) {
-	captureConfig, err := tui.RunCaptureTabs()
-	if err != nil {
-		return nil, err
-	}
-	if captureConfig == nil {
-		return nil, nil
-	}
-
-	savedMetadata, metaErr := config.LoadMetadata()
-	if metaErr != nil {
-		out.Warning(fmt.Sprintf("Failed to load metadata: %v", metaErr))
-	}
-	meta := buildManifestOptions(captureMetadataInput{}, savedMetadata, nil, metaErr == nil)
-	appCfg, err := config.Load()
-	if err != nil {
-		return nil, err
-	}
-
-	switch captureConfig.SourceType {
-	case "serial":
-		if captureConfig.SerialConfig == nil {
-			return nil, nil
-		}
-		serialCfg := captureConfig.SerialConfig
-		serial := sources.NewSerialWithConfig(*serialCfg)
-		run, saved, err := runInteractiveCapture(
-			out,
-			serial,
-			fmt.Sprintf("Serial Capture - %s @ %d", serialCfg.Port, serialCfg.Baud),
-			appCfg.OfflineCache,
-			buildSerialManifest(*serialCfg, "", meta),
-			buildSerialCaptureSettings(*serialCfg),
-		)
-		if err != nil {
-			return nil, err
-		}
-		if !saved {
-			out.Blank()
-			out.Muted("Exited without saving.")
-			return tui.NewStatusMessage(tui.StatusInfo, "Run Discarded", "Capture discarded. Start a new run when you are ready."), nil
-		}
-
-		out.Blank()
-		out.Success("Serial capture saved")
-		out.KeyValue("Records", fmt.Sprintf("%d", run.RecordsCount))
-		out.KeyValue("Run ID", run.ID)
-		out.KeyValue("Cache dir", appCfg.OfflineCache)
-		for _, artifact := range run.Artifacts {
-			out.Muted(fmt.Sprintf("  - %s (%s)", artifact.Path, artifact.Role))
-		}
-		return tui.NewStatusMessage(tui.StatusSuccess, "Run Saved", fmt.Sprintf("Run %s saved. Select 'View Runs' to inspect artifacts.", run.ID)), nil
-
-	case "tcp":
-		if captureConfig.TCPHost == "" || captureConfig.TCPPort == "" {
-			return nil, nil
-		}
-		tcpPort, err := strconv.Atoi(captureConfig.TCPPort)
-		if err != nil {
-			return tui.NewStatusMessage(tui.StatusError, "Invalid Port", fmt.Sprintf("TCP port must be a number: %v", err)), nil
-		}
-
-		tcpCfg := sources.DefaultTCPConfig()
-		tcpCfg.Host = captureConfig.TCPHost
-		tcpCfg.Port = tcpPort
-		tcpSource, err := sources.NewTCPWithConfig(tcpCfg)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create TCP source: %w", err)
-		}
-
-		run, saved, err := runInteractiveCapture(
-			out,
-			tcpSource,
-			fmt.Sprintf("TCP Capture - %s:%d", tcpCfg.Host, tcpCfg.Port),
-			appCfg.OfflineCache,
-			buildTCPManifest(tcpCfg, "", meta),
-			buildTCPCaptureSettings(tcpCfg),
-		)
-		if err != nil {
-			return nil, err
-		}
-		if !saved {
-			out.Blank()
-			out.Muted("Exited without saving.")
-			return tui.NewStatusMessage(tui.StatusInfo, "Run Discarded", "Capture discarded. Start a new run when you are ready."), nil
-		}
-
-		out.Blank()
-		out.Success("TCP capture saved")
-		out.KeyValue("Records", fmt.Sprintf("%d", run.RecordsCount))
-		out.KeyValue("Run ID", run.ID)
-		out.KeyValue("Cache dir", appCfg.OfflineCache)
-		for _, artifact := range run.Artifacts {
-			out.Muted(fmt.Sprintf("  - %s (%s)", artifact.Path, artifact.Role))
-		}
-		return tui.NewStatusMessage(tui.StatusSuccess, "Run Saved", fmt.Sprintf("Run %s saved. Select 'View Runs' to inspect artifacts.", run.ID)), nil
-
-	case "file":
-		return tui.NewStatusMessage(tui.StatusInfo, "Not Implemented", "File source capture is not yet implemented."), nil
-	default:
-		return nil, nil
-	}
 }
 
 func init() {

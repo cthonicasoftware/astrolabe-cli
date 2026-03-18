@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
@@ -279,7 +280,7 @@ func cloneStringMap(src map[string]string) map[string]string {
 }
 
 func runCaptureTabsForSource(sourceType string) (*tui.CaptureConfig, error) {
-	captureConfig, err := tui.RunCaptureTabs()
+	captureConfig, err := runCaptureTabs()
 	if err != nil {
 		return nil, fmt.Errorf("interactive prompt failed: %w", err)
 	}
@@ -293,4 +294,53 @@ func runCaptureTabsForSource(sourceType string) (*tui.CaptureConfig, error) {
 		return nil, fmt.Errorf("serial configuration missing")
 	}
 	return captureConfig, nil
+}
+
+// runCaptureTabs launches NewCaptureTabs in a standalone program and returns
+// the confirmed CaptureConfig, or nil if the user cancelled.
+func runCaptureTabs() (*tui.CaptureConfig, error) {
+	p := tea.NewProgram(newCaptureTabsStandalone(), tea.WithAltScreen())
+	finalModel, err := p.Run()
+	if err != nil {
+		return nil, err
+	}
+	m, ok := finalModel.(*captureTabsStandalone)
+	if !ok || m.cfg == nil {
+		return nil, nil
+	}
+	return m.cfg, nil
+}
+
+// captureTabsStandalone wraps NewCaptureTabs for use outside the router.
+// It intercepts NavigateMsg to extract the CaptureConfig on confirm or quit on cancel.
+type captureTabsStandalone struct {
+	inner tea.Model
+	cfg   *tui.CaptureConfig
+}
+
+func newCaptureTabsStandalone() *captureTabsStandalone {
+	return &captureTabsStandalone{inner: tui.NewCaptureTabs()}
+}
+
+func (s *captureTabsStandalone) Init() tea.Cmd {
+	return s.inner.Init()
+}
+
+func (s *captureTabsStandalone) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch m := msg.(type) {
+	case tui.NavigateMsg:
+		if m.To == tui.ScreenCaptureLive {
+			if cfg, ok := m.Args.(tui.CaptureConfig); ok {
+				s.cfg = &cfg
+			}
+		}
+		return s, tea.Quit
+	}
+	newInner, cmd := s.inner.Update(msg)
+	s.inner = newInner
+	return s, cmd
+}
+
+func (s *captureTabsStandalone) View() string {
+	return s.inner.View()
 }

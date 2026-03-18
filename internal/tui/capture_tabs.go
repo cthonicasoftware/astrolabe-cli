@@ -286,9 +286,11 @@ func (m *captureTabsModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case "q", "esc":
-		// Cancel and quit
+		// Cancel and return to welcome
 		m.confirmed = false
-		return m, tea.Quit
+		return m, func() tea.Msg {
+			return NavigateMsg{To: ScreenWelcome}
+		}
 
 	case "a":
 		// Open advanced settings for current tab
@@ -494,7 +496,13 @@ func (m *captureTabsModel) handleEnter() (tea.Model, tea.Cmd) {
 				// User will stay on this tab and can navigate away
 				return m, nil
 			}
-			return m, tea.Quit
+			cfg := m.buildCaptureConfig()
+			return m, func() tea.Msg {
+				return NavigateMsg{
+					To:   ScreenCaptureLive,
+					Args: cfg,
+				}
+			}
 		} else {
 			// Reset
 			m.resetCurrentTab()
@@ -939,35 +947,22 @@ func (m *captureTabsModel) renderHelp(s *strings.Builder) {
 	s.WriteString(lipgloss.PlaceHorizontal(m.width, lipgloss.Center, help))
 }
 
-// RunCaptureTabs launches the capture source configuration interface
-func RunCaptureTabs() (*CaptureConfig, error) {
-	p := tea.NewProgram(NewCaptureTabs(), tea.WithAltScreen())
-	finalModel, err := p.Run()
-	if err != nil {
-		return nil, err
+// buildCaptureConfig constructs a CaptureConfig from the current model state.
+func (m *captureTabsModel) buildCaptureConfig() CaptureConfig {
+	cfg := CaptureConfig{
+		SourceType: m.selectedSource,
 	}
-
-	model, ok := finalModel.(*captureTabsModel)
-	if !ok || !model.confirmed {
-		return nil, nil
-	}
-
-	// Build configuration based on selected source
-	config := &CaptureConfig{
-		SourceType: model.selectedSource,
-	}
-
-	switch model.selectedSource {
+	switch m.selectedSource {
 	case SourceTypeSerial:
-		config.SerialConfig = &model.serialConfig
+		serialCfg := m.serialConfig
+		cfg.SerialConfig = &serialCfg
 	case SourceTypeTCP:
-		config.TCPHost = model.tcpHost
-		config.TCPPort = model.tcpPort
+		cfg.TCPHost = m.tcpHost
+		cfg.TCPPort = m.tcpPort
 	case SourceTypeSCPI:
-		config.SCPIAddress = model.scpiAddress
+		cfg.SCPIAddress = m.scpiAddress
 	}
-
-	return config, nil
+	return cfg
 }
 
 // CaptureConfig holds the configuration for any capture source

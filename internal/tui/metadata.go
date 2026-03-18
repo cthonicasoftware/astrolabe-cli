@@ -123,7 +123,7 @@ func (m *metadataModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc":
-			return m, tea.Quit
+			return m, func() tea.Msg { return NavigateMsg{To: ScreenWelcome} }
 		case "tab", "shift+tab", "up", "down":
 			step := 1
 			if msg.String() == "shift+tab" || msg.String() == "up" {
@@ -143,10 +143,15 @@ func (m *metadataModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.clearMessages()
 			if err := m.save(); err != nil {
 				m.errorMsg = err.Error()
-			} else {
-				m.statusMsg = fmt.Sprintf("Metadata saved to %s", m.configPath)
+				return m, nil
 			}
-			return m, nil
+			savedPath := m.configPath
+			return m, func() tea.Msg {
+				return NavigateMsg{
+					To:     ScreenWelcome,
+					Status: NewStatusMessage(StatusSuccess, "Metadata Saved", fmt.Sprintf("Metadata saved to %s", savedPath)),
+				}
+			}
 		}
 
 		m.clearMessages()
@@ -321,27 +326,4 @@ func (m *metadataModel) save() error {
 	return nil
 }
 
-// RunMetadataEditor launches the metadata configuration TUI.
-func RunMetadataEditor(status *StatusMessage) (*StatusMessage, error) {
-	repo := config.NewFileMetadataRepository(nil)
-
-	meta, err := repo.Load()
-	var path string
-	if p, perr := repo.Path(); perr == nil {
-		path = p
-	}
-
-	model := NewMetadataEditor(repo, meta, path, err)
-	p := tea.NewProgram(model, tea.WithAltScreen())
-	finalModel, runErr := p.Run()
-	if runErr != nil {
-		return status, runErr
-	}
-
-	editor, ok := finalModel.(*metadataModel)
-	if ok && editor != nil && editor.statusMsg != "" {
-		status = NewStatusMessage(StatusSuccess, "Metadata Saved", editor.statusMsg)
-	}
-	return status, nil
-}
 

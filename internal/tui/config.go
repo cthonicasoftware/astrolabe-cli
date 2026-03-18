@@ -111,7 +111,9 @@ func (m *configModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc":
-			return m, tea.Quit
+			return m, func() tea.Msg {
+				return NavigateMsg{To: ScreenWelcome, Status: nil}
+			}
 		case "tab", "shift+tab", "up", "down":
 			step := 1
 			if msg.String() == "shift+tab" || msg.String() == "up" {
@@ -128,10 +130,12 @@ func (m *configModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.clearMessages()
 			if err := m.save(); err != nil {
 				m.errorMsg = err.Error()
-			} else {
-				m.statusMsg = fmt.Sprintf("Configuration saved to %s", m.configPath)
+				return m, nil
 			}
-			return m, nil
+			statusMsg := NewStatusMessage(StatusSuccess, "Configuration Updated", fmt.Sprintf("Configuration saved to %s", m.configPath))
+			return m, func() tea.Msg {
+				return NavigateMsg{To: ScreenWelcome, Status: statusMsg}
+			}
 		case "ctrl+t":
 			// Toggle auth token visibility
 			if m.focusIndex == configFieldAuthToken {
@@ -302,18 +306,3 @@ func (m *configModel) save() error {
 	return nil
 }
 
-// RunConfigEditor launches the configuration TUI.
-func RunConfigEditor(status *StatusMessage) (*StatusMessage, error) {
-	model := NewConfigEditor()
-	p := tea.NewProgram(model, tea.WithAltScreen())
-	finalModel, err := p.Run()
-	if err != nil {
-		return status, err
-	}
-
-	editor, ok := finalModel.(*configModel)
-	if ok && editor != nil && editor.statusMsg != "" {
-		status = NewStatusMessage(StatusSuccess, "Configuration Updated", editor.statusMsg)
-	}
-	return status, nil
-}
