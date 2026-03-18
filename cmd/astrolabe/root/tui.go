@@ -55,7 +55,10 @@ var tuiCmd = &cobra.Command{
 				}
 			case "upload":
 				// Load configuration and create upload client
-				appCfg := config.Load()
+				appCfg, err := config.Load()
+				if err != nil {
+					return err
+				}
 
 				// Validate configuration
 				if appCfg.APIURL == "" || appCfg.AuthToken == "" || appCfg.ProjectID == "" {
@@ -119,7 +122,10 @@ func runTUICaptureAction(out *cliout.Printer) (*tui.StatusMessage, error) {
 		out.Warning(fmt.Sprintf("Failed to load metadata: %v", metaErr))
 	}
 	meta := buildManifestOptions(captureMetadataInput{}, savedMetadata, nil, metaErr == nil)
-	appCfg := config.Load()
+	appCfg, err := config.Load()
+	if err != nil {
+		return nil, err
+	}
 
 	switch captureConfig.SourceType {
 	case "serial":

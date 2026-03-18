@@ -20,7 +20,10 @@ func TestLoadDefaults(t *testing.T) {
 	t.Setenv("HOME", tmp)
 	t.Setenv("USERPROFILE", tmp)
 
-	cfg := Load()
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
 
 	home, _ := os.UserHomeDir()
 	wantCache := filepath.Join(home, ".astrolabe", "runs")
@@ -49,7 +52,10 @@ func TestLoadFromViperValues(t *testing.T) {
 	viper.Set("telemetry.enabled", true)
 	viper.Set("telemetry.backend", "prometheus")
 
-	cfg := Load()
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
 
 	if cfg.APIURL != "https://api.example.com" {
 		t.Fatalf("APIURL = %q", cfg.APIURL)
@@ -93,5 +99,29 @@ func TestFirstNonEmpty(t *testing.T) {
 		if got != tc.want {
 			t.Fatalf("firstNonEmpty(%v) = %q, want %q", tc.vals, got, tc.want)
 		}
+	}
+}
+
+func TestReadInConfig_InvalidExplicitFile(t *testing.T) {
+	resetViper(t)
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "connection.yml")
+	if err := os.WriteFile(configPath, []byte("api_url: [broken"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	if err := ReadInConfig(configPath); err == nil {
+		t.Fatal("expected invalid config error, got nil")
+	}
+}
+
+func TestReadInConfig_MissingDefaultFileAllowed(t *testing.T) {
+	resetViper(t)
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("USERPROFILE", tmpDir)
+
+	if err := ReadInConfig(""); err != nil {
+		t.Fatalf("ReadInConfig() error = %v", err)
 	}
 }

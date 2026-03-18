@@ -132,7 +132,10 @@ var captureTCPCmd = &cobra.Command{
 
 		manifest := buildTCPManifest(tcpCfg, tcpName, meta)
 		captureSettings := buildTCPCaptureSettings(tcpCfg)
-		appCfg := config.Load()
+		appCfg, err := config.Load()
+		if err != nil {
+			return err
+		}
 
 		if launchTUI {
 			title := fmt.Sprintf("TCP Capture - %s:%d", tcpCfg.Host, tcpCfg.Port)

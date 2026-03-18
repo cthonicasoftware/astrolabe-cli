@@ -3,6 +3,8 @@
 package config
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -32,10 +34,35 @@ type Config struct {
 	Telemetry    TelemetryCfg
 }
 
-// Load reads the active Viper config and returns a fully populated Config.
+// ReadInConfig configures Viper for Astrolabe and reads the active config file.
+// Missing default config files are tolerated; explicit config paths must resolve cleanly.
+func ReadInConfig(explicitPath string) error {
+	if explicitPath != "" {
+		viper.SetConfigFile(explicitPath)
+	} else {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			viper.AddConfigPath(filepath.Join(home, ".astrolabe"))
+		}
+		viper.SetConfigName("connection")
+		viper.SetConfigType("yaml")
+	}
+	viper.SetEnvPrefix("ASTROLABE")
+	viper.AutomaticEnv()
+
+	if err := viper.ReadInConfig(); err != nil {
+		var notFound viper.ConfigFileNotFoundError
+		if explicitPath == "" && errors.As(err, &notFound) {
+			return nil
+		}
+		return fmt.Errorf("read config: %w", err)
+	}
+	return nil
+}
+
+// Load returns the active configuration from Viper.
 // Missing values fall back to sensible defaults (e.g. ~/.astrolabe/runs for OfflineCache).
-func Load() Config {
-	_ = viper.ReadInConfig()
+func Load() (Config, error) {
 	home, _ := os.UserHomeDir()
 	return Config{
 		APIURL:       viper.GetString("api_url"),
@@ -50,7 +77,7 @@ func Load() Config {
 			Enabled: viper.GetBool("telemetry.enabled"),
 			Backend: firstNonEmpty(viper.GetString("telemetry.backend"), "expvar"),
 		},
-	}
+	}, nil
 }
 
 func firstNonEmpty(vals ...string) string {

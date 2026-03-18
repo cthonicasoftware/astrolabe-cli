@@ -157,7 +157,10 @@ Examples:
 		}
 
 		// Setup storage
-		appCfg := config.Load()
+		appCfg, err := config.Load()
+		if err != nil {
+			return err
+		}
 		if err := os.MkdirAll(appCfg.OfflineCache, 0o755); err != nil {
 			return fmt.Errorf("ensure offline cache: %w", err)
 		}

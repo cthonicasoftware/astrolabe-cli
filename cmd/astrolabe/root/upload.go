@@ -33,7 +33,10 @@ var uploadCmd = &cobra.Command{
 		jsonMode, _ := cmd.Flags().GetBool("json")
 		out := cliout.DefaultPrinter(jsonMode)
 
-		cfg := config.Load()
+		cfg, err := config.Load()
+		if err != nil {
+			return err
+		}
 
 		// Validate configuration
 		if cfg.APIURL == "" {

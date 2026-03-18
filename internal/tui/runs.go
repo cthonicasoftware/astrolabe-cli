@@ -87,7 +87,10 @@ type runsViewModel struct {
 
 // RunRunsViewer launches the runs viewer TUI.
 func RunRunsViewer(status *StatusMessage) (*StatusMessage, error) {
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		return status, err
+	}
 	model := &runsViewModel{
 		cacheRoot:       cfg.OfflineCache,
 		loading:         true,
@@ -883,4 +886,3 @@ func formatBytes(size int64) string {
 		return fmt.Sprintf("%d B", size)
 	}
 }
-

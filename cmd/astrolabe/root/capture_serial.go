@@ -109,7 +109,10 @@ var captureSerialCmd = &cobra.Command{
 		manifest := buildSerialManifest(*serialCfg, serialName, meta)
 		captureSettings := buildSerialCaptureSettings(*serialCfg)
 		serial := sources.NewSerialWithConfig(*serialCfg)
-		appCfg := config.Load()
+		appCfg, err := config.Load()
+		if err != nil {
+			return err
+		}
 
 		if launchTUI {
 			title := fmt.Sprintf("Serial Capture - %s @ %d", serialCfg.Port, serialCfg.Baud)
