@@ -29,14 +29,16 @@ func newCaptureAdapter(out *cliout.Printer, cacheRoot string) *captureAdapter {
 
 // captureSession implements tui.CaptureSession.
 type captureSession struct {
-	feed    chan string
-	cancel  context.CancelFunc
-	done    chan tui.CaptureSessionResult
-	tempRoot string
+	feed         chan string
+	cancel       context.CancelFunc
+	done         chan tui.CaptureSessionResult
+	tempRoot     string
+	saveRequested bool
 }
 
 func (s *captureSession) Feed() <-chan string { return s.feed }
 func (s *captureSession) Stop()               { s.cancel() }
+func (s *captureSession) RequestSave()        { s.saveRequested = true }
 
 // Start opens the source described by cfg and launches the fan-out goroutines.
 // It returns immediately; data flows through Feed() and the result is collected
@@ -156,7 +158,7 @@ func (a *captureAdapter) Collect(session tui.CaptureSession) tui.CaptureSessionR
 		return result
 	}
 
-	if !result.Saved {
+	if !sess.saveRequested {
 		// Discard: clean up temp artifacts.
 		_ = os.RemoveAll(sess.tempRoot)
 		return result

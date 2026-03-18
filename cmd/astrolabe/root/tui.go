@@ -1,13 +1,16 @@
 package root
 
 import (
+	"context"
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/tui"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/upload"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var tuiCmd = &cobra.Command{
@@ -15,8 +18,16 @@ var tuiCmd = &cobra.Command{
 	Short: "Launch the interactive Text UI",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		appCfg, err := config.Load()
+		if err != nil {
+			return fmt.Errorf("load config: %w", err)
+		}
+		out := cliout.DefaultPrinter(viper.GetBool("json"))
+		capturePort := newCaptureAdapter(out, appCfg.OfflineCache)
+
 		return tui.RunTUI(tui.RouterConfig{
 			InitialScreen: tui.ScreenWelcome,
+			CapturePort:   capturePort,
 			Factories: map[tui.ScreenID]tui.ScreenFactory{
 				tui.ScreenWelcome: func(ctx tui.ScreenContext) (tea.Model, func(), error) {
 					return tui.NewWelcome(ctx.Status), nil, nil
@@ -27,13 +38,30 @@ var tuiCmd = &cobra.Command{
 				},
 
 				tui.ScreenCaptureTabs: func(ctx tui.ScreenContext) (tea.Model, func(), error) {
-					// TODO: wire in next slice
-					return tui.NewWelcome(tui.NewStatusMessage(tui.StatusInfo, "Not yet wired", "Capture coming soon")), nil, nil
+					return tui.NewCaptureTabs(), nil, nil
 				},
 
 				tui.ScreenCaptureLive: func(ctx tui.ScreenContext) (tea.Model, func(), error) {
-					// TODO: wire in next slice
-					return tui.NewWelcome(tui.NewStatusMessage(tui.StatusInfo, "Not yet wired", "Capture live coming soon")), nil, nil
+					cfg, ok := ctx.Args.(tui.CaptureConfig)
+					if !ok {
+						return nil, nil, fmt.Errorf("capture live: missing or invalid CaptureConfig in Args")
+					}
+					session, err := capturePort.Start(context.Background(), cfg)
+					if err != nil {
+						return nil, nil, fmt.Errorf("start capture: %w", err)
+					}
+					title := "Live Capture"
+					appModel := tui.NewApp(title, session.Feed())
+					cleanup := func() {
+						if appModel.SaveRequested() {
+							session.RequestSave()
+						}
+						session.Stop()
+						go func() {
+							capturePort.Collect(session)
+						}()
+					}
+					return appModel, cleanup, nil
 				},
 
 				tui.ScreenMetadata: func(ctx tui.ScreenContext) (tea.Model, func(), error) {

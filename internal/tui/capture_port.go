@@ -13,6 +13,8 @@ type CaptureSessionPort interface {
 type CaptureSession interface {
 	Feed() <-chan string
 	Stop()
+	// RequestSave marks the session so that Collect promotes artifacts instead of discarding them.
+	RequestSave()
 }
 
 // CaptureSessionResult holds the outcome after a capture session ends.
