@@ -1,0 +1,94 @@
+name: RFC
+description: Propose a substantial change, shaped by motivating bug reports or feature requests.
+title: "[RFC]: "
+labels:
+  - rfc
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for substantial changes that need design review, tradeoff discussion, or implementation planning.
+
+        RFCs should usually be grounded in one or more bug reports and/or feature requests. If there is no motivating issue yet, create that first unless this is an exceptional case.
+  - type: input
+    id: motivation
+    attributes:
+      label: Motivating issue(s)
+      description: Link the bug report(s) and/or feature request(s) that led to this RFC.
+      placeholder: "#123, #145"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What user or system problem are we trying to solve?
+      placeholder: Astrolabe lacks a reliable way for operators to resume interrupted uploads, which leads to repeated manual recovery steps.
+    validations:
+      required: true
+  - type: textarea
+    id: goals
+    attributes:
+      label: Goals
+      description: What outcomes should this RFC achieve?
+      placeholder: |
+        - Make upload recovery predictable for operators
+        - Preserve pending runs safely across interruptions
+        - Improve visibility into retry status
+    validations:
+      required: true
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-goals
+      description: What is explicitly out of scope?
+      placeholder: Replacing the backend upload API is not part of this RFC.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Describe the design at a level that reviewers can evaluate.
+      placeholder: Explain the proposed user experience, technical approach, and how the system would behave.
+    validations:
+      required: true
+  - type: textarea
+    id: tradeoffs
+    attributes:
+      label: Tradeoffs and risks
+      description: What are the downsides, constraints, or open risks?
+      placeholder: Adds local state management complexity and may require migration handling for existing cached runs.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What other approaches were considered and why were they not chosen?
+    validations:
+      required: true
+  - type: textarea
+    id: rollout
+    attributes:
+      label: Rollout and validation plan
+      description: How should this be implemented, tested, and introduced?
+      placeholder: Include milestones, migration concerns, testing strategy, docs updates, and how success will be evaluated.
+    validations:
+      required: true
+  - type: textarea
+    id: open_questions
+    attributes:
+      label: Open questions
+      description: What still needs to be decided before implementation starts?
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I linked the bug report(s) and/or feature request(s) motivating this RFC.
+          required: true
+        - label: I described user impact and design tradeoffs, not just implementation tasks.
+          required: true
+        - label: I identified rollout or validation considerations for the proposal.
+          required: true
