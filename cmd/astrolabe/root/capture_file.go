@@ -22,20 +22,6 @@ var (
 	fileDelimiter   string
 	fileNoHeaders   bool
 	fileColumnNames []string
-
-	// Metadata flags (same as serial)
-	fileOperator        string
-	fileLocation        string
-	fileDeviceID        string
-	fileDeviceSerial    string
-	fileDeviceFirmware  string
-	fileDeviceFWHash    string
-	fileDeviceHWVersion string
-	fileTestPlan        string
-	fileTestVariant     string
-	fileTestRun         string
-	fileTags            []string
-	fileAttributes      = map[string]string{}
 )
 
 var captureFileCmd = &cobra.Command{
@@ -111,11 +97,11 @@ Examples:
 		}
 
 		// Parse flags
-		flagTags, err := parseTagFlags(fileTags)
+		flagTags, err := parseTagFlags(captureTags)
 		if err != nil {
 			return fmt.Errorf("invalid --tag value: %w", err)
 		}
-		flagAttrs, err := parseAttributeFlags(fileAttributes)
+		flagAttrs, err := parseAttributeFlags(captureAttributes)
 		if err != nil {
 			return fmt.Errorf("invalid --attr value: %w", err)
 		}
@@ -167,16 +153,16 @@ Examples:
 
 		// Build manifest
 		meta := buildManifestOptions(captureMetadataInput{
-			Operator:        fileOperator,
-			Location:        fileLocation,
-			DeviceID:        fileDeviceID,
-			DeviceSerial:    fileDeviceSerial,
-			DeviceFirmware:  fileDeviceFirmware,
-			DeviceFWHash:    fileDeviceFWHash,
-			DeviceHWVersion: fileDeviceHWVersion,
-			TestPlan:        fileTestPlan,
-			TestVariant:     fileTestVariant,
-			TestRun:         fileTestRun,
+			Operator:        captureOperator,
+			Location:        captureLocation,
+			DeviceID:        captureDeviceID,
+			DeviceSerial:    captureDeviceSerial,
+			DeviceFirmware:  captureDeviceFirmware,
+			DeviceFWHash:    captureDeviceFWHash,
+			DeviceHWVersion: captureDeviceHWVersion,
+			TestPlan:        captureTestPlan,
+			TestVariant:     captureTestVariant,
+			TestRun:         captureTestRun,
 			Tags:            flagTags,
 			Attributes:      flagAttrs,
 		}, savedMetadata, cmd.Flags(), true)
@@ -287,17 +273,4 @@ func init() {
 	captureFileCmd.Flags().BoolVar(&fileNoHeaders, "no-headers", false, "CSV has no header row (auto-generate column names)")
 	captureFileCmd.Flags().StringSliceVar(&fileColumnNames, "columns", nil, "CSV column names (overrides header row)")
 
-	// Metadata flags (mirror serial command)
-	captureFileCmd.Flags().StringVar(&fileOperator, "operator", "", "Operator name")
-	captureFileCmd.Flags().StringVar(&fileLocation, "location", "", "Test location/bench identifier")
-	captureFileCmd.Flags().StringVar(&fileDeviceID, "device-id", "", "Device identifier")
-	captureFileCmd.Flags().StringVar(&fileDeviceSerial, "device-serial", "", "Device serial number")
-	captureFileCmd.Flags().StringVar(&fileDeviceFirmware, "device-firmware", "", "Device firmware version")
-	captureFileCmd.Flags().StringVar(&fileDeviceFWHash, "device-firmware-hash", "", "Device firmware hash")
-	captureFileCmd.Flags().StringVar(&fileDeviceHWVersion, "device-hardware-version", "", "Device hardware version")
-	captureFileCmd.Flags().StringVar(&fileTestPlan, "test-plan", "", "Test plan name")
-	captureFileCmd.Flags().StringVar(&fileTestVariant, "test-variant", "", "Test variant")
-	captureFileCmd.Flags().StringVar(&fileTestRun, "test-run", "", "Test run identifier")
-	captureFileCmd.Flags().StringSliceVar(&fileTags, "tag", nil, "Tag (can be repeated)")
-	captureFileCmd.Flags().StringToStringVar(&fileAttributes, "attr", nil, "Custom attribute key=value (can be repeated)")
 }

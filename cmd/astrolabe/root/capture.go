@@ -9,6 +9,21 @@ import (
 	"github.com/spf13/pflag"
 )
 
+var (
+	captureOperator        string
+	captureLocation        string
+	captureDeviceID        string
+	captureDeviceSerial    string
+	captureDeviceFirmware  string
+	captureDeviceFWHash    string
+	captureDeviceHWVersion string
+	captureTestPlan        string
+	captureTestVariant     string
+	captureTestRun         string
+	captureTags            []string
+	captureAttributes      = map[string]string{}
+)
+
 var captureCmd = &cobra.Command{
 	Use:   "capture",
 	Short: "Start a capture from a source",
@@ -16,7 +31,18 @@ var captureCmd = &cobra.Command{
 }
 
 func init() {
-	// subcommands are defined in separate files (serial, tcp, file)
+	captureCmd.PersistentFlags().StringVar(&captureOperator, "operator", "", "operator assigned to this run")
+	captureCmd.PersistentFlags().StringVar(&captureLocation, "location", "", "physical location or bench identifier")
+	captureCmd.PersistentFlags().StringVar(&captureDeviceID, "device-id", "", "device identifier")
+	captureCmd.PersistentFlags().StringVar(&captureDeviceSerial, "device-serial", "", "device serial number")
+	captureCmd.PersistentFlags().StringVar(&captureDeviceFirmware, "device-firmware", "", "device firmware version")
+	captureCmd.PersistentFlags().StringVar(&captureDeviceFWHash, "device-firmware-hash", "", "device firmware hash or build id")
+	captureCmd.PersistentFlags().StringVar(&captureDeviceHWVersion, "device-hardware-version", "", "device hardware revision")
+	captureCmd.PersistentFlags().StringVar(&captureTestPlan, "test-plan", "unspecified", "test plan identifier")
+	captureCmd.PersistentFlags().StringVar(&captureTestVariant, "test-variant", "", "test plan variant")
+	captureCmd.PersistentFlags().StringVar(&captureTestRun, "test-run", "", "test plan run identifier")
+	captureCmd.PersistentFlags().StringSliceVar(&captureTags, "tag", nil, "tag to apply to this run (repeatable)")
+	captureCmd.PersistentFlags().StringToStringVar(&captureAttributes, "attr", map[string]string{}, "additional manifest attribute (key=value, repeatable)")
 }
 
 // applyMetadataDefaults fills in fields on opts from saved config for any flag

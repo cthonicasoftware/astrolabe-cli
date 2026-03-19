@@ -24,19 +24,6 @@ var (
 	serialBaud int
 	serialName string
 	serialTUI  bool
-
-	serialOperator        string
-	serialLocation        string
-	serialDeviceID        string
-	serialDeviceSerial    string
-	serialDeviceFirmware  string
-	serialDeviceFWHash    string
-	serialDeviceHWVersion string
-	serialTestPlan        string
-	serialTestVariant     string
-	serialTestRun         string
-	serialTags            []string
-	serialAttributes      = map[string]string{}
 )
 
 var captureSerialCmd = &cobra.Command{
@@ -83,26 +70,26 @@ var captureSerialCmd = &cobra.Command{
 			out.Step(fmt.Sprintf("Starting serial capture: %s @ %d baud", serialCfg.Port, serialCfg.Baud))
 		}
 
-		flagTags, err := parseTagFlags(serialTags)
+		flagTags, err := parseTagFlags(captureTags)
 		if err != nil {
 			return fmt.Errorf("invalid --tag value: %w", err)
 		}
-		flagAttrs, err := parseAttributeFlags(serialAttributes)
+		flagAttrs, err := parseAttributeFlags(captureAttributes)
 		if err != nil {
 			return fmt.Errorf("invalid --attr value: %w", err)
 		}
 
 		meta := buildManifestOptions(captureMetadataInput{
-			Operator:        serialOperator,
-			Location:        serialLocation,
-			DeviceID:        serialDeviceID,
-			DeviceSerial:    serialDeviceSerial,
-			DeviceFirmware:  serialDeviceFirmware,
-			DeviceFWHash:    serialDeviceFWHash,
-			DeviceHWVersion: serialDeviceHWVersion,
-			TestPlan:        serialTestPlan,
-			TestVariant:     serialTestVariant,
-			TestRun:         serialTestRun,
+			Operator:        captureOperator,
+			Location:        captureLocation,
+			DeviceID:        captureDeviceID,
+			DeviceSerial:    captureDeviceSerial,
+			DeviceFirmware:  captureDeviceFirmware,
+			DeviceFWHash:    captureDeviceFWHash,
+			DeviceHWVersion: captureDeviceHWVersion,
+			TestPlan:        captureTestPlan,
+			TestVariant:     captureTestVariant,
+			TestRun:         captureTestRun,
 			Tags:            flagTags,
 			Attributes:      flagAttrs,
 		}, savedMetadata, cmd.Flags(), metaErr == nil)
@@ -165,18 +152,6 @@ func init() {
 	captureSerialCmd.Flags().IntVarP(&serialBaud, "baud", "b", 115200, "baud rate")
 	captureSerialCmd.Flags().StringVar(&serialName, "name", "", "optional run name")
 	captureSerialCmd.Flags().BoolVar(&serialTUI, "tui", false, "launch a live TUI")
-	captureSerialCmd.Flags().StringVar(&serialOperator, "operator", "", "operator assigned to this run")
-	captureSerialCmd.Flags().StringVar(&serialLocation, "location", "", "physical location or bench identifier")
-	captureSerialCmd.Flags().StringVar(&serialDeviceID, "device-id", "", "device identifier")
-	captureSerialCmd.Flags().StringVar(&serialDeviceSerial, "device-serial", "", "device serial number")
-	captureSerialCmd.Flags().StringVar(&serialDeviceFirmware, "device-firmware", "", "device firmware version")
-	captureSerialCmd.Flags().StringVar(&serialDeviceFWHash, "device-firmware-hash", "", "device firmware hash or build id")
-	captureSerialCmd.Flags().StringVar(&serialDeviceHWVersion, "device-hardware-version", "", "device hardware revision")
-	captureSerialCmd.Flags().StringVar(&serialTestPlan, "test-plan", "unspecified", "test plan identifier")
-	captureSerialCmd.Flags().StringVar(&serialTestVariant, "test-variant", "", "test plan variant")
-	captureSerialCmd.Flags().StringVar(&serialTestRun, "test-run", "", "test plan run identifier")
-	captureSerialCmd.Flags().StringSliceVar(&serialTags, "tag", nil, "tag to apply to this run (repeatable)")
-	captureSerialCmd.Flags().StringToStringVar(&serialAttributes, "attr", map[string]string{}, "additional manifest attribute (key=value, repeatable)")
 }
 
 func buildSerialManifest(cfg sources.Config, name string, opts core.ManifestOptions) core.Manifest {

@@ -24,19 +24,6 @@ var (
 	tcpBufferSize     int
 	tcpName           string
 	tcpTUI            bool
-
-	tcpOperator        string
-	tcpLocation        string
-	tcpDeviceID        string
-	tcpDeviceSerial    string
-	tcpDeviceFirmware  string
-	tcpDeviceFWHash    string
-	tcpDeviceHWVersion string
-	tcpTestPlan        string
-	tcpTestVariant     string
-	tcpTestRun         string
-	tcpTags            []string
-	tcpAttributes      = map[string]string{}
 )
 
 var captureTCPCmd = &cobra.Command{
@@ -106,26 +93,26 @@ var captureTCPCmd = &cobra.Command{
 			return fmt.Errorf("create TCP source: %w", err)
 		}
 
-		flagTags, err := parseTagFlags(tcpTags)
+		flagTags, err := parseTagFlags(captureTags)
 		if err != nil {
 			return fmt.Errorf("invalid --tag value: %w", err)
 		}
-		flagAttrs, err := parseAttributeFlags(tcpAttributes)
+		flagAttrs, err := parseAttributeFlags(captureAttributes)
 		if err != nil {
 			return fmt.Errorf("invalid --attr value: %w", err)
 		}
 
 		meta := buildManifestOptions(captureMetadataInput{
-			Operator:        tcpOperator,
-			Location:        tcpLocation,
-			DeviceID:        tcpDeviceID,
-			DeviceSerial:    tcpDeviceSerial,
-			DeviceFirmware:  tcpDeviceFirmware,
-			DeviceFWHash:    tcpDeviceFWHash,
-			DeviceHWVersion: tcpDeviceHWVersion,
-			TestPlan:        tcpTestPlan,
-			TestVariant:     tcpTestVariant,
-			TestRun:         tcpTestRun,
+			Operator:        captureOperator,
+			Location:        captureLocation,
+			DeviceID:        captureDeviceID,
+			DeviceSerial:    captureDeviceSerial,
+			DeviceFirmware:  captureDeviceFirmware,
+			DeviceFWHash:    captureDeviceFWHash,
+			DeviceHWVersion: captureDeviceHWVersion,
+			TestPlan:        captureTestPlan,
+			TestVariant:     captureTestVariant,
+			TestRun:         captureTestRun,
 			Tags:            flagTags,
 			Attributes:      flagAttrs,
 		}, savedMetadata, cmd.Flags(), metaErr == nil)
@@ -192,19 +179,6 @@ func init() {
 
 	captureTCPCmd.Flags().StringVar(&tcpName, "name", "", "optional run name")
 	captureTCPCmd.Flags().BoolVar(&tcpTUI, "tui", false, "launch a live TUI")
-
-	captureTCPCmd.Flags().StringVar(&tcpOperator, "operator", "", "operator assigned to this run")
-	captureTCPCmd.Flags().StringVar(&tcpLocation, "location", "", "physical location or bench identifier")
-	captureTCPCmd.Flags().StringVar(&tcpDeviceID, "device-id", "", "device identifier")
-	captureTCPCmd.Flags().StringVar(&tcpDeviceSerial, "device-serial", "", "device serial number")
-	captureTCPCmd.Flags().StringVar(&tcpDeviceFirmware, "device-firmware", "", "device firmware version")
-	captureTCPCmd.Flags().StringVar(&tcpDeviceFWHash, "device-firmware-hash", "", "device firmware hash or build id")
-	captureTCPCmd.Flags().StringVar(&tcpDeviceHWVersion, "device-hardware-version", "", "device hardware revision")
-	captureTCPCmd.Flags().StringVar(&tcpTestPlan, "test-plan", "unspecified", "test plan identifier")
-	captureTCPCmd.Flags().StringVar(&tcpTestVariant, "test-variant", "", "test plan variant")
-	captureTCPCmd.Flags().StringVar(&tcpTestRun, "test-run", "", "test plan run identifier")
-	captureTCPCmd.Flags().StringSliceVar(&tcpTags, "tag", nil, "tag to apply to this run (repeatable)")
-	captureTCPCmd.Flags().StringToStringVar(&tcpAttributes, "attr", map[string]string{}, "additional manifest attribute (key=value, repeatable)")
 }
 
 func buildTCPManifest(cfg sources.TCPConfig, name string, opts core.ManifestOptions) core.Manifest {
