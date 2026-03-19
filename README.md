@@ -114,6 +114,7 @@ Detailed guides are in [`docs/`](docs):
 - [`docs/OPERATOR_QUICKSTART.md`](docs/OPERATOR_QUICKSTART.md)
 - [`docs/OPERATOR_WORKFLOWS.md`](docs/OPERATOR_WORKFLOWS.md)
 - [`docs/OPERATOR_TROUBLESHOOTING.md`](docs/OPERATOR_TROUBLESHOOTING.md)
+- [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md)
 - [`docs/UPLOAD_GUIDE.md`](docs/UPLOAD_GUIDE.md)
 - [`docs/FILE_INGESTION.md`](docs/FILE_INGESTION.md)
 - [`docs/TCP_CAPTURE.md`](docs/TCP_CAPTURE.md)
