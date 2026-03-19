@@ -148,7 +148,9 @@ This allows the system to:
 
 ## Backend API Endpoints
 
-The upload client expects these endpoints on your backend server:
+The upload client expects these endpoints on your backend server.
+
+For the full backend contract, including headers, status codes, field notes, and per-request examples, see [API_REFERENCE.md](API_REFERENCE.md).
 
 ### 1. Create Run
 
