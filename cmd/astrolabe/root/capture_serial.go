@@ -17,101 +17,105 @@ import (
 	"golang.org/x/term"
 )
 
-var (
-	serialPort string
-	serialBaud int
-	serialName string
-)
-
-var captureSerialCmd = &cobra.Command{
-	Use:   "serial",
-	Short: "Capture from a serial port",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		jsonMode, _ := cmd.Flags().GetBool("json")
-		out := cliout.DefaultPrinter(jsonMode)
-
-		portFlagSet := cmd.Flags().Changed("port")
-		isInteractive := term.IsTerminal(int(os.Stdin.Fd())) && !portFlagSet
-
-		if isInteractive {
-			return runCaptureTUI(out)
-		}
-
-		if serialPort == "" {
-			return fmt.Errorf("serial port is required (use --port flag or run interactively)")
-		}
-		defaults := sources.DefaultConfig()
-		defaults.Port = serialPort
-		defaults.Baud = serialBaud
-		serialCfg := &defaults
-
-		out.Step(fmt.Sprintf("Starting serial capture: %s @ %d baud", serialCfg.Port, serialCfg.Baud))
-
-		savedMetadata, metaErr := config.LoadMetadata()
-		if metaErr != nil {
-			out.Warning(fmt.Sprintf("Failed to load metadata: %v", metaErr))
-		}
-
-		flagTags, err := parseTagFlags(captureTags)
-		if err != nil {
-			return fmt.Errorf("invalid --tag value: %w", err)
-		}
-		flagAttrs, err := parseAttributeFlags(captureAttributes)
-		if err != nil {
-			return fmt.Errorf("invalid --attr value: %w", err)
-		}
-
-		meta := buildManifestOptions(captureMetadataInput{
-			Operator:        captureOperator,
-			Location:        captureLocation,
-			DeviceID:        captureDeviceID,
-			DeviceSerial:    captureDeviceSerial,
-			DeviceFirmware:  captureDeviceFirmware,
-			DeviceFWHash:    captureDeviceFWHash,
-			DeviceHWVersion: captureDeviceHWVersion,
-			TestPlan:        captureTestPlan,
-			TestVariant:     captureTestVariant,
-			TestRun:         captureTestRun,
-			Tags:            flagTags,
-			Attributes:      flagAttrs,
-		}, savedMetadata, cmd.Flags(), metaErr == nil)
-
-		manifest := buildSerialManifest(*serialCfg, serialName, meta)
-		captureSettings := buildSerialCaptureSettings(*serialCfg)
-		serial := sources.NewSerialWithConfig(*serialCfg)
-		appCfg, err := config.Load()
-		if err != nil {
-			return err
-		}
-
-		out.Info("Capturing... (press Ctrl+C to stop)")
-		out.Blank()
-		run, interrupted, err := runHeadlessCapture(out, serial, normalize.NewLineJSON(), appCfg.OfflineCache, manifest, captureSettings)
-		if err != nil {
-			return err
-		}
-
-		out.Blank()
-		if interrupted {
-			out.Warning("Serial capture interrupted (partial run saved)")
-		} else {
-			out.Success("Serial capture complete")
-		}
-		out.KeyValue("Run ID", run.ID)
-		out.KeyValue("Records", fmt.Sprintf("%d", run.RecordsCount))
-		out.KeyValue("Location", filepath.Join(appCfg.OfflineCache, run.ID))
-		out.Blank()
-		out.Muted("Run 'astrolabe upload' to upload to server.")
-		return nil
-	},
+type serialFlags struct {
+	port string
+	baud int
+	name string
 }
 
-func init() {
-	captureCmd.AddCommand(captureSerialCmd)
-	captureSerialCmd.Flags().StringVarP(&serialPort, "port", "p", "/dev/ttyUSB0", "serial port path")
-	captureSerialCmd.Flags().IntVarP(&serialBaud, "baud", "b", 115200, "baud rate")
-	captureSerialCmd.Flags().StringVar(&serialName, "name", "", "optional run name")
+func newCaptureSerialCmd(meta *captureMetadataFlags) *cobra.Command {
+	var flags serialFlags
+	cmd := &cobra.Command{
+		Use:   "serial",
+		Short: "Capture from a serial port",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runCaptureSerial(cmd, flags, meta)
+		},
+	}
+	cmd.Flags().StringVarP(&flags.port, "port", "p", "/dev/ttyUSB0", "serial port path")
+	cmd.Flags().IntVarP(&flags.baud, "baud", "b", 115200, "baud rate")
+	cmd.Flags().StringVar(&flags.name, "name", "", "optional run name")
+	return cmd
+}
+
+func runCaptureSerial(cmd *cobra.Command, flags serialFlags, meta *captureMetadataFlags) error {
+	jsonMode, _ := cmd.Flags().GetBool("json")
+	out := cliout.DefaultPrinter(jsonMode)
+
+	portFlagSet := cmd.Flags().Changed("port")
+	isInteractive := term.IsTerminal(int(os.Stdin.Fd())) && !portFlagSet
+
+	if isInteractive {
+		return runCaptureTUI(out)
+	}
+
+	if flags.port == "" {
+		return fmt.Errorf("serial port is required (use --port flag or run interactively)")
+	}
+	defaults := sources.DefaultConfig()
+	defaults.Port = flags.port
+	defaults.Baud = flags.baud
+	serialCfg := &defaults
+
+	out.Step(fmt.Sprintf("Starting serial capture: %s @ %d baud", serialCfg.Port, serialCfg.Baud))
+
+	savedMetadata, metaErr := config.LoadMetadata()
+	if metaErr != nil {
+		out.Warning(fmt.Sprintf("Failed to load metadata: %v", metaErr))
+	}
+
+	flagTags, err := parseTagFlags(meta.tags)
+	if err != nil {
+		return fmt.Errorf("invalid --tag value: %w", err)
+	}
+	flagAttrs, err := parseAttributeFlags(meta.attributes)
+	if err != nil {
+		return fmt.Errorf("invalid --attr value: %w", err)
+	}
+
+	metaOpts := buildManifestOptions(captureMetadataInput{
+		Operator:        meta.operator,
+		Location:        meta.location,
+		DeviceID:        meta.deviceID,
+		DeviceSerial:    meta.deviceSerial,
+		DeviceFirmware:  meta.deviceFirmware,
+		DeviceFWHash:    meta.deviceFWHash,
+		DeviceHWVersion: meta.deviceHWVersion,
+		TestPlan:        meta.testPlan,
+		TestVariant:     meta.testVariant,
+		TestRun:         meta.testRun,
+		Tags:            flagTags,
+		Attributes:      flagAttrs,
+	}, savedMetadata, cmd.Flags(), metaErr == nil)
+
+	manifest := buildSerialManifest(*serialCfg, flags.name, metaOpts)
+	captureSettings := buildSerialCaptureSettings(*serialCfg)
+	serial := sources.NewSerialWithConfig(*serialCfg)
+	appCfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+
+	out.Info("Capturing... (press Ctrl+C to stop)")
+	out.Blank()
+	run, interrupted, err := runHeadlessCapture(out, serial, normalize.NewLineJSON(), appCfg.OfflineCache, manifest, captureSettings)
+	if err != nil {
+		return err
+	}
+
+	out.Blank()
+	if interrupted {
+		out.Warning("Serial capture interrupted (partial run saved)")
+	} else {
+		out.Success("Serial capture complete")
+	}
+	out.KeyValue("Run ID", run.ID)
+	out.KeyValue("Records", fmt.Sprintf("%d", run.RecordsCount))
+	out.KeyValue("Location", filepath.Join(appCfg.OfflineCache, run.ID))
+	out.Blank()
+	out.Muted("Run 'astrolabe upload' to upload to server.")
+	return nil
 }
 
 func buildSerialManifest(cfg sources.Config, name string, opts core.ManifestOptions) core.Manifest {

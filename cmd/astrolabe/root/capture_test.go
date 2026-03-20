@@ -1,14 +1,13 @@
 package root
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 	"github.com/spf13/pflag"
 )
-
-var _ = captureSerialCmd // ensure subcommands are referenced
 
 // TestCaptureCmd_PersistentMetadataFlags verifies that all shared metadata flags
 // are registered on captureCmd.PersistentFlags() and thus inherited by all subcommands.
@@ -35,10 +34,11 @@ func TestCaptureSubcmds_NoLocalMetadataFlags(t *testing.T) {
 		"test-plan", "test-variant", "test-run",
 		"tag", "attr",
 	}
+	meta := &captureMetadataFlags{}
 	cmds := map[string]interface{ LocalFlags() *pflag.FlagSet }{
-		"serial": captureSerialCmd,
-		"tcp":    captureTCPCmd,
-		"file":   captureFileCmd,
+		"serial": newCaptureSerialCmd(meta),
+		"tcp":    newCaptureTCPCmd(meta),
+		"file":   newCaptureFileCmd(meta),
 	}
 	for cmdName, cmd := range cmds {
 		for _, flagName := range metadataFlags {
@@ -178,5 +178,51 @@ func TestApplyMetadataDefaults_FlagChangedPreventsSavedOverride(t *testing.T) {
 	// Because the flag was explicitly set (Changed), saved config must not win
 	if opts.Operator != "" {
 		t.Errorf("operator: got %q, want empty string (CLI explicit empty wins)", opts.Operator)
+	}
+}
+
+// TestRunCaptureSerial_RequiresPort verifies that runCaptureSerial returns an error
+// when no port is specified and not running interactively.
+func TestRunCaptureSerial_RequiresPort(t *testing.T) {
+	meta := &captureMetadataFlags{}
+	cmd := newCaptureSerialCmd(meta)
+	// port is empty string (zero value), term.IsTerminal returns false in test context
+	err := runCaptureSerial(cmd, serialFlags{}, meta)
+	if err == nil || !strings.Contains(err.Error(), "serial port is required") {
+		t.Errorf("expected 'serial port is required' error, got %v", err)
+	}
+}
+
+// TestRunCaptureTCP_RequiresHost verifies that runCaptureTCP returns an error
+// when no host is specified and not running interactively.
+func TestRunCaptureTCP_RequiresHost(t *testing.T) {
+	meta := &captureMetadataFlags{}
+	cmd := newCaptureTCPCmd(meta)
+	err := runCaptureTCP(cmd, tcpFlags{}, meta)
+	if err == nil || !strings.Contains(err.Error(), "tcp host is required") {
+		t.Errorf("expected 'tcp host is required' error, got %v", err)
+	}
+}
+
+// TestRunCaptureTCP_InvalidPort verifies that runCaptureTCP rejects out-of-range ports.
+func TestRunCaptureTCP_InvalidPort(t *testing.T) {
+	meta := &captureMetadataFlags{}
+	cmd := newCaptureTCPCmd(meta)
+	for _, port := range []int{0, -1, 65536, 99999} {
+		err := runCaptureTCP(cmd, tcpFlags{host: "localhost", port: port}, meta)
+		if err == nil || !strings.Contains(err.Error(), "tcp port must be between") {
+			t.Errorf("port %d: expected port range error, got %v", port, err)
+		}
+	}
+}
+
+// TestRunCaptureFile_InvalidPath verifies that runCaptureFile returns an error
+// when the file path does not exist.
+func TestRunCaptureFile_InvalidPath(t *testing.T) {
+	meta := &captureMetadataFlags{}
+	cmd := newCaptureFileCmd(meta)
+	err := runCaptureFile(cmd, "/nonexistent/path/to/file.csv", fileFlags{}, meta)
+	if err == nil || !strings.Contains(err.Error(), "cannot access file") {
+		t.Errorf("expected 'cannot access file' error, got %v", err)
 	}
 }

@@ -16,118 +16,121 @@ import (
 	"golang.org/x/term"
 )
 
-var (
-	tcpHost           string
-	tcpPort           int
-	tcpConnectTimeout time.Duration
-	tcpReadTimeout    time.Duration
-	tcpBufferSize     int
-	tcpName           string
-)
-
-var captureTCPCmd = &cobra.Command{
-	Use:   "tcp",
-	Short: "Capture from a TCP network source",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		jsonMode, _ := cmd.Flags().GetBool("json")
-		out := cliout.DefaultPrinter(jsonMode)
-
-		hostFlagSet := cmd.Flags().Changed("host")
-		isInteractive := term.IsTerminal(int(os.Stdin.Fd())) && !hostFlagSet
-
-		if isInteractive {
-			return runCaptureTUI(out)
-		}
-
-		if tcpHost == "" {
-			return fmt.Errorf("tcp host is required (use --host flag or run interactively)")
-		}
-		if tcpPort <= 0 || tcpPort > 65535 {
-			return fmt.Errorf("tcp port must be between 1 and 65535, got %d", tcpPort)
-		}
-		tcpCfg := sources.TCPConfig{
-			Host:           tcpHost,
-			Port:           tcpPort,
-			ConnectTimeout: tcpConnectTimeout,
-			ReadTimeout:    tcpReadTimeout,
-			BufferSize:     tcpBufferSize,
-		}
-
-		out.Step(fmt.Sprintf("Starting TCP capture: %s:%d", tcpCfg.Host, tcpCfg.Port))
-
-		tcpSource, err := sources.NewTCPWithConfig(tcpCfg)
-		if err != nil {
-			return fmt.Errorf("create TCP source: %w", err)
-		}
-
-		savedMetadata, metaErr := config.LoadMetadata()
-		if metaErr != nil {
-			out.Warning(fmt.Sprintf("Failed to load metadata: %v", metaErr))
-		}
-
-		flagTags, err := parseTagFlags(captureTags)
-		if err != nil {
-			return fmt.Errorf("invalid --tag value: %w", err)
-		}
-		flagAttrs, err := parseAttributeFlags(captureAttributes)
-		if err != nil {
-			return fmt.Errorf("invalid --attr value: %w", err)
-		}
-
-		meta := buildManifestOptions(captureMetadataInput{
-			Operator:        captureOperator,
-			Location:        captureLocation,
-			DeviceID:        captureDeviceID,
-			DeviceSerial:    captureDeviceSerial,
-			DeviceFirmware:  captureDeviceFirmware,
-			DeviceFWHash:    captureDeviceFWHash,
-			DeviceHWVersion: captureDeviceHWVersion,
-			TestPlan:        captureTestPlan,
-			TestVariant:     captureTestVariant,
-			TestRun:         captureTestRun,
-			Tags:            flagTags,
-			Attributes:      flagAttrs,
-		}, savedMetadata, cmd.Flags(), metaErr == nil)
-
-		manifest := buildTCPManifest(tcpCfg, tcpName, meta)
-		captureSettings := buildTCPCaptureSettings(tcpCfg)
-		appCfg, err := config.Load()
-		if err != nil {
-			return err
-		}
-
-		out.Info("Capturing... (press Ctrl+C to stop)")
-		out.Blank()
-		run, interrupted, err := runHeadlessCapture(out, tcpSource, normalize.NewLineJSON(), appCfg.OfflineCache, manifest, captureSettings)
-		if err != nil {
-			return err
-		}
-
-		out.Blank()
-		if interrupted {
-			out.Warning("TCP capture interrupted (partial run saved)")
-		} else {
-			out.Success("TCP capture complete")
-		}
-		out.KeyValue("Run ID", run.ID)
-		out.KeyValue("Records", fmt.Sprintf("%d", run.RecordsCount))
-		out.KeyValue("Location", filepath.Join(appCfg.OfflineCache, run.ID))
-		out.Blank()
-		out.Muted("Run 'astrolabe upload' to upload to server.")
-		return nil
-	},
+type tcpFlags struct {
+	host           string
+	port           int
+	connectTimeout time.Duration
+	readTimeout    time.Duration
+	bufferSize     int
+	name           string
 }
 
-func init() {
-	captureCmd.AddCommand(captureTCPCmd)
+func newCaptureTCPCmd(meta *captureMetadataFlags) *cobra.Command {
+	var flags tcpFlags
+	cmd := &cobra.Command{
+		Use:   "tcp",
+		Short: "Capture from a TCP network source",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runCaptureTCP(cmd, flags, meta)
+		},
+	}
+	cmd.Flags().StringVarP(&flags.host, "host", "H", "localhost", "TCP host (hostname or IP address)")
+	cmd.Flags().IntVarP(&flags.port, "port", "p", 9000, "TCP port")
+	cmd.Flags().DurationVar(&flags.connectTimeout, "connect-timeout", 10*time.Second, "connection timeout")
+	cmd.Flags().DurationVar(&flags.readTimeout, "read-timeout", 0, "read timeout (0 = no timeout)")
+	cmd.Flags().IntVar(&flags.bufferSize, "buffer-size", 4096, "read buffer size in bytes")
+	cmd.Flags().StringVar(&flags.name, "name", "", "optional run name")
+	return cmd
+}
 
-	captureTCPCmd.Flags().StringVarP(&tcpHost, "host", "H", "localhost", "TCP host (hostname or IP address)")
-	captureTCPCmd.Flags().IntVarP(&tcpPort, "port", "p", 9000, "TCP port")
-	captureTCPCmd.Flags().DurationVar(&tcpConnectTimeout, "connect-timeout", 10*time.Second, "connection timeout")
-	captureTCPCmd.Flags().DurationVar(&tcpReadTimeout, "read-timeout", 0, "read timeout (0 = no timeout)")
-	captureTCPCmd.Flags().IntVar(&tcpBufferSize, "buffer-size", 4096, "read buffer size in bytes")
-	captureTCPCmd.Flags().StringVar(&tcpName, "name", "", "optional run name")
+func runCaptureTCP(cmd *cobra.Command, flags tcpFlags, meta *captureMetadataFlags) error {
+	jsonMode, _ := cmd.Flags().GetBool("json")
+	out := cliout.DefaultPrinter(jsonMode)
+
+	hostFlagSet := cmd.Flags().Changed("host")
+	isInteractive := term.IsTerminal(int(os.Stdin.Fd())) && !hostFlagSet
+
+	if isInteractive {
+		return runCaptureTUI(out)
+	}
+
+	if flags.host == "" {
+		return fmt.Errorf("tcp host is required (use --host flag or run interactively)")
+	}
+	if flags.port <= 0 || flags.port > 65535 {
+		return fmt.Errorf("tcp port must be between 1 and 65535, got %d", flags.port)
+	}
+	tcpCfg := sources.TCPConfig{
+		Host:           flags.host,
+		Port:           flags.port,
+		ConnectTimeout: flags.connectTimeout,
+		ReadTimeout:    flags.readTimeout,
+		BufferSize:     flags.bufferSize,
+	}
+
+	out.Step(fmt.Sprintf("Starting TCP capture: %s:%d", tcpCfg.Host, tcpCfg.Port))
+
+	tcpSource, err := sources.NewTCPWithConfig(tcpCfg)
+	if err != nil {
+		return fmt.Errorf("create TCP source: %w", err)
+	}
+
+	savedMetadata, metaErr := config.LoadMetadata()
+	if metaErr != nil {
+		out.Warning(fmt.Sprintf("Failed to load metadata: %v", metaErr))
+	}
+
+	flagTags, err := parseTagFlags(meta.tags)
+	if err != nil {
+		return fmt.Errorf("invalid --tag value: %w", err)
+	}
+	flagAttrs, err := parseAttributeFlags(meta.attributes)
+	if err != nil {
+		return fmt.Errorf("invalid --attr value: %w", err)
+	}
+
+	metaOpts := buildManifestOptions(captureMetadataInput{
+		Operator:        meta.operator,
+		Location:        meta.location,
+		DeviceID:        meta.deviceID,
+		DeviceSerial:    meta.deviceSerial,
+		DeviceFirmware:  meta.deviceFirmware,
+		DeviceFWHash:    meta.deviceFWHash,
+		DeviceHWVersion: meta.deviceHWVersion,
+		TestPlan:        meta.testPlan,
+		TestVariant:     meta.testVariant,
+		TestRun:         meta.testRun,
+		Tags:            flagTags,
+		Attributes:      flagAttrs,
+	}, savedMetadata, cmd.Flags(), metaErr == nil)
+
+	manifest := buildTCPManifest(tcpCfg, flags.name, metaOpts)
+	captureSettings := buildTCPCaptureSettings(tcpCfg)
+	appCfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+
+	out.Info("Capturing... (press Ctrl+C to stop)")
+	out.Blank()
+	run, interrupted, err := runHeadlessCapture(out, tcpSource, normalize.NewLineJSON(), appCfg.OfflineCache, manifest, captureSettings)
+	if err != nil {
+		return err
+	}
+
+	out.Blank()
+	if interrupted {
+		out.Warning("TCP capture interrupted (partial run saved)")
+	} else {
+		out.Success("TCP capture complete")
+	}
+	out.KeyValue("Run ID", run.ID)
+	out.KeyValue("Records", fmt.Sprintf("%d", run.RecordsCount))
+	out.KeyValue("Location", filepath.Join(appCfg.OfflineCache, run.ID))
+	out.Blank()
+	out.Muted("Run 'astrolabe upload' to upload to server.")
+	return nil
 }
 
 func buildTCPManifest(cfg sources.TCPConfig, name string, opts core.ManifestOptions) core.Manifest {
