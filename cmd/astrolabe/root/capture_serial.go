@@ -8,13 +8,11 @@ import (
 	"strconv"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/normalize"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
-	"github.com/cthonicasoftware/astrolabe-cli/internal/tui"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -23,7 +21,6 @@ var (
 	serialPort string
 	serialBaud int
 	serialName string
-	serialTUI  bool
 )
 
 var captureSerialCmd = &cobra.Command{
@@ -37,37 +34,23 @@ var captureSerialCmd = &cobra.Command{
 		portFlagSet := cmd.Flags().Changed("port")
 		isInteractive := term.IsTerminal(int(os.Stdin.Fd())) && !portFlagSet
 
+		if isInteractive {
+			return runCaptureTUI(out)
+		}
+
+		if serialPort == "" {
+			return fmt.Errorf("serial port is required (use --port flag or run interactively)")
+		}
+		defaults := sources.DefaultConfig()
+		defaults.Port = serialPort
+		defaults.Baud = serialBaud
+		serialCfg := &defaults
+
+		out.Step(fmt.Sprintf("Starting serial capture: %s @ %d baud", serialCfg.Port, serialCfg.Baud))
+
 		savedMetadata, metaErr := config.LoadMetadata()
 		if metaErr != nil {
 			out.Warning(fmt.Sprintf("Failed to load metadata: %v", metaErr))
-		}
-
-		var (
-			serialCfg *sources.Config
-			launchTUI = serialTUI
-		)
-		if isInteractive {
-			captureConfig, err := runCaptureTabsForSource("serial")
-			if err != nil {
-				return err
-			}
-			serialCfg = captureConfig.SerialConfig
-			serialPort = serialCfg.Port
-			serialBaud = serialCfg.Baud
-			launchTUI = true
-			serialTUI = true
-		} else {
-			if serialPort == "" {
-				return fmt.Errorf("serial port is required (use --port flag or run interactively)")
-			}
-			defaults := sources.DefaultConfig()
-			defaults.Port = serialPort
-			defaults.Baud = serialBaud
-			serialCfg = &defaults
-		}
-
-		if !launchTUI {
-			out.Step(fmt.Sprintf("Starting serial capture: %s @ %d baud", serialCfg.Port, serialCfg.Baud))
 		}
 
 		flagTags, err := parseTagFlags(captureTags)
@@ -102,28 +85,6 @@ var captureSerialCmd = &cobra.Command{
 			return err
 		}
 
-		if launchTUI {
-			title := fmt.Sprintf("Serial Capture - %s @ %d", serialCfg.Port, serialCfg.Baud)
-			run, saved, err := runInteractiveCapture(out, serial, title, appCfg.OfflineCache, manifest, captureSettings)
-			if err != nil {
-				return err
-			}
-
-			out.Blank()
-			if saved {
-				out.Success("Serial capture saved")
-				out.KeyValue("Run ID", run.ID)
-				out.KeyValue("Records", fmt.Sprintf("%d", run.RecordsCount))
-				out.KeyValue("Location", filepath.Join(appCfg.OfflineCache, run.ID))
-				out.Blank()
-				out.Muted("Run 'astrolabe upload' to upload to server.")
-				return nil
-			}
-
-			out.Muted("Exited without saving.")
-			return nil
-		}
-
 		out.Info("Capturing... (press Ctrl+C to stop)")
 		out.Blank()
 		run, interrupted, err := runHeadlessCapture(out, serial, normalize.NewLineJSON(), appCfg.OfflineCache, manifest, captureSettings)
@@ -151,7 +112,6 @@ func init() {
 	captureSerialCmd.Flags().StringVarP(&serialPort, "port", "p", "/dev/ttyUSB0", "serial port path")
 	captureSerialCmd.Flags().IntVarP(&serialBaud, "baud", "b", 115200, "baud rate")
 	captureSerialCmd.Flags().StringVar(&serialName, "name", "", "optional run name")
-	captureSerialCmd.Flags().BoolVar(&serialTUI, "tui", false, "launch a live TUI")
 }
 
 func buildSerialManifest(cfg sources.Config, name string, opts core.ManifestOptions) core.Manifest {
@@ -252,70 +212,4 @@ func cloneStringMap(src map[string]string) map[string]string {
 	dst := make(map[string]string, len(src))
 	maps.Copy(dst, src)
 	return dst
-}
-
-func runCaptureTabsForSource(sourceType string) (*tui.CaptureConfig, error) {
-	captureConfig, err := runCaptureTabs()
-	if err != nil {
-		return nil, fmt.Errorf("interactive prompt failed: %w", err)
-	}
-	if captureConfig == nil {
-		return nil, fmt.Errorf("capture configuration cancelled")
-	}
-	if captureConfig.SourceType != sourceType {
-		return nil, fmt.Errorf("%s source required for this command, got: %s", sourceType, captureConfig.SourceType)
-	}
-	if sourceType == "serial" && captureConfig.SerialConfig == nil {
-		return nil, fmt.Errorf("serial configuration missing")
-	}
-	return captureConfig, nil
-}
-
-// runCaptureTabs launches NewCaptureTabs in a standalone program and returns
-// the confirmed CaptureConfig, or nil if the user cancelled.
-func runCaptureTabs() (*tui.CaptureConfig, error) {
-	p := tea.NewProgram(newCaptureTabsStandalone(), tea.WithAltScreen())
-	finalModel, err := p.Run()
-	if err != nil {
-		return nil, err
-	}
-	m, ok := finalModel.(*captureTabsStandalone)
-	if !ok || m.cfg == nil {
-		return nil, nil
-	}
-	return m.cfg, nil
-}
-
-// captureTabsStandalone wraps NewCaptureTabs for use outside the router.
-// It intercepts NavigateMsg to extract the CaptureConfig on confirm or quit on cancel.
-type captureTabsStandalone struct {
-	inner tea.Model
-	cfg   *tui.CaptureConfig
-}
-
-func newCaptureTabsStandalone() *captureTabsStandalone {
-	return &captureTabsStandalone{inner: tui.NewCaptureTabs()}
-}
-
-func (s *captureTabsStandalone) Init() tea.Cmd {
-	return s.inner.Init()
-}
-
-func (s *captureTabsStandalone) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch m := msg.(type) {
-	case tui.NavigateMsg:
-		if m.To == tui.ScreenCaptureLive {
-			if cfg, ok := m.Args.(tui.CaptureConfig); ok {
-				s.cfg = &cfg
-			}
-		}
-		return s, tea.Quit
-	}
-	newInner, cmd := s.inner.Update(msg)
-	s.inner = newInner
-	return s, cmd
-}
-
-func (s *captureTabsStandalone) View() string {
-	return s.inner.View()
 }
