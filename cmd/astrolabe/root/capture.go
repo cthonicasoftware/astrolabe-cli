@@ -9,20 +9,22 @@ import (
 	"github.com/spf13/pflag"
 )
 
-var (
-	captureOperator        string
-	captureLocation        string
-	captureDeviceID        string
-	captureDeviceSerial    string
-	captureDeviceFirmware  string
-	captureDeviceFWHash    string
-	captureDeviceHWVersion string
-	captureTestPlan        string
-	captureTestVariant     string
-	captureTestRun         string
-	captureTags            []string
-	captureAttributes      = map[string]string{}
-)
+type captureMetadataFlags struct {
+	operator        string
+	location        string
+	deviceID        string
+	deviceSerial    string
+	deviceFirmware  string
+	deviceFWHash    string
+	deviceHWVersion string
+	testPlan        string
+	testVariant     string
+	testRun         string
+	tags            []string
+	attributes      map[string]string
+}
+
+var captureSharedFlags = captureMetadataFlags{attributes: map[string]string{}}
 
 var captureCmd = &cobra.Command{
 	Use:   "capture",
@@ -31,18 +33,24 @@ var captureCmd = &cobra.Command{
 }
 
 func init() {
-	captureCmd.PersistentFlags().StringVar(&captureOperator, "operator", "", "operator assigned to this run")
-	captureCmd.PersistentFlags().StringVar(&captureLocation, "location", "", "physical location or bench identifier")
-	captureCmd.PersistentFlags().StringVar(&captureDeviceID, "device-id", "", "device identifier")
-	captureCmd.PersistentFlags().StringVar(&captureDeviceSerial, "device-serial", "", "device serial number")
-	captureCmd.PersistentFlags().StringVar(&captureDeviceFirmware, "device-firmware", "", "device firmware version")
-	captureCmd.PersistentFlags().StringVar(&captureDeviceFWHash, "device-firmware-hash", "", "device firmware hash or build id")
-	captureCmd.PersistentFlags().StringVar(&captureDeviceHWVersion, "device-hardware-version", "", "device hardware revision")
-	captureCmd.PersistentFlags().StringVar(&captureTestPlan, "test-plan", "unspecified", "test plan identifier")
-	captureCmd.PersistentFlags().StringVar(&captureTestVariant, "test-variant", "", "test plan variant")
-	captureCmd.PersistentFlags().StringVar(&captureTestRun, "test-run", "", "test plan run identifier")
-	captureCmd.PersistentFlags().StringSliceVar(&captureTags, "tag", nil, "tag to apply to this run (repeatable)")
-	captureCmd.PersistentFlags().StringToStringVar(&captureAttributes, "attr", map[string]string{}, "additional manifest attribute (key=value, repeatable)")
+	captureCmd.PersistentFlags().StringVar(&captureSharedFlags.operator, "operator", "", "operator assigned to this run")
+	captureCmd.PersistentFlags().StringVar(&captureSharedFlags.location, "location", "", "physical location or bench identifier")
+	captureCmd.PersistentFlags().StringVar(&captureSharedFlags.deviceID, "device-id", "", "device identifier")
+	captureCmd.PersistentFlags().StringVar(&captureSharedFlags.deviceSerial, "device-serial", "", "device serial number")
+	captureCmd.PersistentFlags().StringVar(&captureSharedFlags.deviceFirmware, "device-firmware", "", "device firmware version")
+	captureCmd.PersistentFlags().StringVar(&captureSharedFlags.deviceFWHash, "device-firmware-hash", "", "device firmware hash or build id")
+	captureCmd.PersistentFlags().StringVar(&captureSharedFlags.deviceHWVersion, "device-hardware-version", "", "device hardware revision")
+	captureCmd.PersistentFlags().StringVar(&captureSharedFlags.testPlan, "test-plan", "unspecified", "test plan identifier")
+	captureCmd.PersistentFlags().StringVar(&captureSharedFlags.testVariant, "test-variant", "", "test plan variant")
+	captureCmd.PersistentFlags().StringVar(&captureSharedFlags.testRun, "test-run", "", "test plan run identifier")
+	captureCmd.PersistentFlags().StringSliceVar(&captureSharedFlags.tags, "tag", nil, "tag to apply to this run (repeatable)")
+	captureCmd.PersistentFlags().StringToStringVar(&captureSharedFlags.attributes, "attr", map[string]string{}, "additional manifest attribute (key=value, repeatable)")
+
+	captureCmd.AddCommand(
+		newCaptureSerialCmd(&captureSharedFlags),
+		newCaptureTCPCmd(&captureSharedFlags),
+		newCaptureFileCmd(&captureSharedFlags),
+	)
 }
 
 // applyMetadataDefaults fills in fields on opts from saved config for any flag

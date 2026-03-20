@@ -16,18 +16,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	fileFormat      string
-	fileSkipLines   int
-	fileDelimiter   string
-	fileNoHeaders   bool
-	fileColumnNames []string
-)
+type fileFlags struct {
+	format      string
+	skipLines   int
+	delimiter   string
+	noHeaders   bool
+	columnNames []string
+}
 
-var captureFileCmd = &cobra.Command{
-	Use:   "file <path>",
-	Short: "Ingest data from a file (CSV, JSONL, or raw logs)",
-	Long: `Import existing data files into the Astrolabe system.
+func newCaptureFileCmd(meta *captureMetadataFlags) *cobra.Command {
+	var flags fileFlags
+	cmd := &cobra.Command{
+		Use:   "file <path>",
+		Short: "Ingest data from a file (CSV, JSONL, or raw logs)",
+		Long: `Import existing data files into the Astrolabe system.
 
 Supported formats:
   - csv:    Comma-separated values with optional headers
@@ -52,144 +54,144 @@ Examples:
 
   # Skip first 2 lines (e.g., comments in file)
   astrolabe capture file data.csv --format csv --skip-lines 2`,
-	Args: cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		filePath := args[0]
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runCaptureFile(cmd, args[0], flags, meta)
+		},
+	}
+	cmd.Flags().StringVar(&flags.format, "format", "", "File format: csv, jsonl, or raw (auto-detected if not specified)")
+	cmd.Flags().IntVar(&flags.skipLines, "skip-lines", 0, "Number of lines to skip at start of file")
+	cmd.Flags().StringVar(&flags.delimiter, "delimiter", ",", "CSV field delimiter")
+	cmd.Flags().BoolVar(&flags.noHeaders, "no-headers", false, "CSV has no header row (auto-generate column names)")
+	cmd.Flags().StringSliceVar(&flags.columnNames, "columns", nil, "CSV column names (overrides header row)")
+	return cmd
+}
 
-		// Create styled printer (check for --json flag from root command)
-		jsonMode, _ := cmd.Flags().GetBool("json")
-		out := cliout.DefaultPrinter(jsonMode)
+func runCaptureFile(cmd *cobra.Command, filePath string, flags fileFlags, meta *captureMetadataFlags) error {
+	jsonMode, _ := cmd.Flags().GetBool("json")
+	out := cliout.DefaultPrinter(jsonMode)
 
-		// Validate file exists
-		absPath, err := filepath.Abs(filePath)
-		if err != nil {
-			return fmt.Errorf("invalid file path: %w", err)
-		}
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return fmt.Errorf("invalid file path: %w", err)
+	}
 
-		info, err := os.Stat(absPath)
-		if err != nil {
-			return fmt.Errorf("cannot access file: %w", err)
-		}
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return fmt.Errorf("cannot access file: %w", err)
+	}
 
-		if info.IsDir() {
-			return fmt.Errorf("path is a directory, not a file: %s", absPath)
-		}
+	if info.IsDir() {
+		return fmt.Errorf("path is a directory, not a file: %s", absPath)
+	}
 
-		// Auto-detect format if not specified
-		if fileFormat == "" {
-			fileFormat = detectFormat(absPath)
-			out.Muted(fmt.Sprintf("Auto-detected format: %s", fileFormat))
-		}
+	format := flags.format
+	if format == "" {
+		format = detectFormat(absPath)
+		out.Muted(fmt.Sprintf("Auto-detected format: %s", format))
+	}
 
-		// Validate format
-		if !isValidFormat(fileFormat) {
-			return fmt.Errorf("invalid format: %s (must be csv, jsonl, or raw)", fileFormat)
-		}
+	if !isValidFormat(format) {
+		return fmt.Errorf("invalid format: %s (must be csv, jsonl, or raw)", format)
+	}
 
-		out.Step(fmt.Sprintf("Ingesting file: %s (format: %s)", absPath, fileFormat))
+	out.Step(fmt.Sprintf("Ingesting file: %s (format: %s)", absPath, format))
 
-		// Load metadata defaults
-		var savedMetadata config.Metadata
-		if meta, err := config.LoadMetadata(); err == nil {
-			savedMetadata = meta
-		} else {
-			out.Warning(fmt.Sprintf("Failed to load metadata: %v", err))
-		}
+	var savedMetadata config.Metadata
+	if loaded, err := config.LoadMetadata(); err == nil {
+		savedMetadata = loaded
+	} else {
+		out.Warning(fmt.Sprintf("Failed to load metadata: %v", err))
+	}
 
-		// Parse flags
-		flagTags, err := parseTagFlags(captureTags)
-		if err != nil {
-			return fmt.Errorf("invalid --tag value: %w", err)
-		}
-		flagAttrs, err := parseAttributeFlags(captureAttributes)
-		if err != nil {
-			return fmt.Errorf("invalid --attr value: %w", err)
-		}
+	flagTags, err := parseTagFlags(meta.tags)
+	if err != nil {
+		return fmt.Errorf("invalid --tag value: %w", err)
+	}
+	flagAttrs, err := parseAttributeFlags(meta.attributes)
+	if err != nil {
+		return fmt.Errorf("invalid --attr value: %w", err)
+	}
 
-		// Create file source
-		fileCfg := sources.FileConfig{
-			Path:      absPath,
-			ChunkSize: 0, // line-by-line
-			SkipLines: fileSkipLines,
-			Follow:    false,
-		}
+	fileCfg := sources.FileConfig{
+		Path:      absPath,
+		ChunkSize: 0, // line-by-line
+		SkipLines: flags.skipLines,
+		Follow:    false,
+	}
 
-		fileSource, err := sources.NewFileWithConfig(fileCfg)
-		if err != nil {
-			return fmt.Errorf("failed to create file source: %w", err)
-		}
+	fileSource, err := sources.NewFileWithConfig(fileCfg)
+	if err != nil {
+		return fmt.Errorf("failed to create file source: %w", err)
+	}
 
-		// Create normalizer based on format
-		var normalizer normalize.Normalizer
-		switch fileFormat {
-		case "csv":
-			csvCfg := normalize.DefaultCSVConfig()
-			csvCfg.HasHeaders = !fileNoHeaders
-			delimiter, err := parseDelimiter(fileDelimiter)
-			if err != nil {
-				return err
-			}
-			csvCfg.Delimiter = delimiter
-			if len(fileColumnNames) > 0 {
-				csvCfg.ColumnNames = fileColumnNames
-			}
-			normalizer = normalize.NewCSVWithConfig(csvCfg)
-		case "jsonl":
-			normalizer = normalize.NewLineJSON()
-		case "raw":
-			normalizer = normalize.NewRaw()
-		default:
-			return fmt.Errorf("unsupported format: %s", fileFormat)
-		}
-
-		// Setup storage
-		appCfg, err := config.Load()
+	var normalizer normalize.Normalizer
+	switch format {
+	case "csv":
+		csvCfg := normalize.DefaultCSVConfig()
+		csvCfg.HasHeaders = !flags.noHeaders
+		delimiter, err := parseDelimiter(flags.delimiter)
 		if err != nil {
 			return err
 		}
-		if err := os.MkdirAll(appCfg.OfflineCache, 0o755); err != nil {
-			return fmt.Errorf("ensure offline cache: %w", err)
+		csvCfg.Delimiter = delimiter
+		if len(flags.columnNames) > 0 {
+			csvCfg.ColumnNames = flags.columnNames
 		}
+		normalizer = normalize.NewCSVWithConfig(csvCfg)
+	case "jsonl":
+		normalizer = normalize.NewLineJSON()
+	case "raw":
+		normalizer = normalize.NewRaw()
+	default:
+		return fmt.Errorf("unsupported format: %s", format)
+	}
 
-		// Build manifest
-		meta := buildManifestOptions(captureMetadataInput{
-			Operator:        captureOperator,
-			Location:        captureLocation,
-			DeviceID:        captureDeviceID,
-			DeviceSerial:    captureDeviceSerial,
-			DeviceFirmware:  captureDeviceFirmware,
-			DeviceFWHash:    captureDeviceFWHash,
-			DeviceHWVersion: captureDeviceHWVersion,
-			TestPlan:        captureTestPlan,
-			TestVariant:     captureTestVariant,
-			TestRun:         captureTestRun,
-			Tags:            flagTags,
-			Attributes:      flagAttrs,
-		}, savedMetadata, cmd.Flags(), true)
+	appCfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(appCfg.OfflineCache, 0o755); err != nil {
+		return fmt.Errorf("ensure offline cache: %w", err)
+	}
 
-		manifest := buildFileManifest(absPath, fileFormat, meta)
-		captureSettings := buildFileCaptureSettings(absPath, fileFormat)
+	metaOpts := buildManifestOptions(captureMetadataInput{
+		Operator:        meta.operator,
+		Location:        meta.location,
+		DeviceID:        meta.deviceID,
+		DeviceSerial:    meta.deviceSerial,
+		DeviceFirmware:  meta.deviceFirmware,
+		DeviceFWHash:    meta.deviceFWHash,
+		DeviceHWVersion: meta.deviceHWVersion,
+		TestPlan:        meta.testPlan,
+		TestVariant:     meta.testVariant,
+		TestRun:         meta.testRun,
+		Tags:            flagTags,
+		Attributes:      flagAttrs,
+	}, savedMetadata, cmd.Flags(), true)
 
-		out.Step("Processing file...")
-		run, interrupted, err := runHeadlessCapture(out, fileSource, normalizer, appCfg.OfflineCache, manifest, captureSettings)
-		if err != nil {
-			return err
-		}
+	manifest := buildFileManifest(absPath, format, metaOpts)
+	captureSettings := buildFileCaptureSettings(absPath, format)
 
-		out.Blank()
-		if interrupted {
-			out.Warning("File ingestion interrupted (partial run saved)")
-		} else {
-			out.Success("File ingestion complete")
-		}
-		out.KeyValue("Run ID", run.ID)
-		out.KeyValue("Records", fmt.Sprintf("%d", run.RecordsCount))
-		out.KeyValue("Location", filepath.Join(appCfg.OfflineCache, run.ID))
-		out.Blank()
-		out.Muted("Run 'astrolabe upload' to upload to server.")
+	out.Step("Processing file...")
+	run, interrupted, err := runHeadlessCapture(out, fileSource, normalizer, appCfg.OfflineCache, manifest, captureSettings)
+	if err != nil {
+		return err
+	}
 
-		return nil
-	},
+	out.Blank()
+	if interrupted {
+		out.Warning("File ingestion interrupted (partial run saved)")
+	} else {
+		out.Success("File ingestion complete")
+	}
+	out.KeyValue("Run ID", run.ID)
+	out.KeyValue("Records", fmt.Sprintf("%d", run.RecordsCount))
+	out.KeyValue("Location", filepath.Join(appCfg.OfflineCache, run.ID))
+	out.Blank()
+	out.Muted("Run 'astrolabe upload' to upload to server.")
+
+	return nil
 }
 
 func buildFileManifest(filePath, format string, opts core.ManifestOptions) core.Manifest {
@@ -219,7 +221,6 @@ func detectFormat(filePath string) string {
 	case ".log", ".txt":
 		return "raw"
 	default:
-		// Default to raw for unknown extensions
 		return "raw"
 	}
 }
@@ -259,18 +260,4 @@ func parseDelimiter(value string) (rune, error) {
 	}
 	r, _ := utf8.DecodeRuneInString(value)
 	return r, nil
-}
-
-func init() {
-	captureCmd.AddCommand(captureFileCmd)
-
-	// File-specific flags
-	captureFileCmd.Flags().StringVar(&fileFormat, "format", "", "File format: csv, jsonl, or raw (auto-detected if not specified)")
-	captureFileCmd.Flags().IntVar(&fileSkipLines, "skip-lines", 0, "Number of lines to skip at start of file")
-
-	// CSV-specific flags
-	captureFileCmd.Flags().StringVar(&fileDelimiter, "delimiter", ",", "CSV field delimiter")
-	captureFileCmd.Flags().BoolVar(&fileNoHeaders, "no-headers", false, "CSV has no header row (auto-generate column names)")
-	captureFileCmd.Flags().StringSliceVar(&fileColumnNames, "columns", nil, "CSV column names (overrides header row)")
-
 }
