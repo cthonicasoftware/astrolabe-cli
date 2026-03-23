@@ -85,6 +85,7 @@ func (r *router) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		// Global quit on ctrl+c
 		if msg.Type == tea.KeyCtrlC {
+			r.runCleanup()
 			return r, tea.Quit
 		}
 	}
@@ -100,10 +101,7 @@ func (r *router) View() string {
 
 func (r *router) navigate(msg NavigateMsg) tea.Cmd {
 	// Clean up current screen
-	if r.cleanup != nil {
-		r.cleanup()
-		r.cleanup = nil
-	}
+	r.runCleanup()
 
 	// Quit if navigating to empty screen (welcome quit path)
 	if msg.To == "" {
@@ -137,6 +135,13 @@ func (r *router) navigate(msg NavigateMsg) tea.Cmd {
 			return tea.WindowSizeMsg{Width: r.width, Height: r.height}
 		},
 	)
+}
+
+func (r *router) runCleanup() {
+	if r.cleanup != nil {
+		r.cleanup()
+		r.cleanup = nil
+	}
 }
 
 // RunTUI launches the single Bubble Tea program for the entire application lifetime.

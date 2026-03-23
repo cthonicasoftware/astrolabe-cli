@@ -75,10 +75,7 @@ func runTUI(out *cliout.Printer, appCfg config.Config, initialScreen tui.ScreenI
 					if appModel.SaveRequested() {
 						session.RequestSave()
 					}
-					session.Stop()
-					go func() {
-						capturePort.Collect(session)
-					}()
+					_ = session.Stop()
 				}
 				return appModel, cleanup, nil
 			},
