@@ -21,11 +21,16 @@ import (
 type captureAdapter struct {
 	out       *cliout.Printer
 	cacheRoot string
+	svc       CaptureService
 }
 
 // newCaptureAdapter constructs a captureAdapter.
 func newCaptureAdapter(out *cliout.Printer, cacheRoot string) *captureAdapter {
-	return &captureAdapter{out: out, cacheRoot: cacheRoot}
+	return &captureAdapter{
+		out:       out,
+		cacheRoot: cacheRoot,
+		svc:       newCaptureService(out, cacheRoot),
+	}
 }
 
 // captureSession implements tui.CaptureSession.
@@ -85,8 +90,12 @@ func (a *captureAdapter) Start(ctx context.Context, cfg tui.CaptureConfig) (tui.
 		return nil, fmt.Errorf("create temp run dir: %w", err)
 	}
 
-	// Build the managed source from the capture configuration.
-	src, manifest, captureSettings, err := a.buildSource(cfg)
+	req, err := captureRequestFromConfig(cfg)
+	if err != nil {
+		_ = os.RemoveAll(tempRoot)
+		return nil, err
+	}
+	components, err := a.svc.BuildComponents(req)
 	if err != nil {
 		_ = os.RemoveAll(tempRoot)
 		return nil, err
@@ -94,7 +103,7 @@ func (a *captureAdapter) Start(ctx context.Context, cfg tui.CaptureConfig) (tui.
 
 	sessionCtx, cancel := context.WithCancel(ctx)
 
-	if err := src.Open(sessionCtx); err != nil {
+	if err := components.Source.Open(sessionCtx); err != nil {
 		cancel()
 		_ = os.RemoveAll(tempRoot)
 		return nil, fmt.Errorf("open source: %w", err)
@@ -106,18 +115,18 @@ func (a *captureAdapter) Start(ctx context.Context, cfg tui.CaptureConfig) (tui.
 	pipelineOpts := capture.Options{
 		Source: &frameChannelSource{
 			framesCh: pipelineFramesCh,
-			meta:     src.Meta(),
+			meta:     components.Source.Meta(),
 		},
 		Normalizer: normalize.NewLineJSON(),
 		Store:      storage.NewFS(tempRoot),
-		Manifest:   manifest,
-		Capture:    captureSettings,
+		Manifest:   components.Manifest,
+		Capture:    components.CaptureSettings,
 	}
 
 	pipeline, err := capture.NewPipeline(pipelineOpts)
 	if err != nil {
 		cancel()
-		_ = src.Close()
+		_ = components.Source.Close()
 		_ = os.RemoveAll(tempRoot)
 		return nil, fmt.Errorf("build pipeline: %w", err)
 	}
@@ -136,11 +145,11 @@ func (a *captureAdapter) Start(ctx context.Context, cfg tui.CaptureConfig) (tui.
 		defer close(feedCh)
 		defer close(pipelineFramesCh)
 		defer func() {
-			if err := src.Close(); err != nil {
+			if err := components.Source.Close(); err != nil {
 				a.out.Warning(fmt.Sprintf("Failed to close source: %v", err))
 			}
 		}()
-		for frame := range src.Frames() {
+		for frame := range components.Source.Frames() {
 			if len(frame) == 0 {
 				continue
 			}
@@ -175,37 +184,30 @@ func (a *captureAdapter) Start(ctx context.Context, cfg tui.CaptureConfig) (tui.
 	return sess, nil
 }
 
-// buildSource constructs the concrete capture source, manifest, and settings
-// from the TUI CaptureConfig.
-func (a *captureAdapter) buildSource(cfg tui.CaptureConfig) (captureManagedSource, core.Manifest, core.CaptureSettings, error) {
+func captureRequestFromConfig(cfg tui.CaptureConfig) (CaptureRequest, error) {
 	switch cfg.SourceType {
 	case tui.SourceTypeSerial:
 		if cfg.SerialConfig == nil {
-			return nil, core.Manifest{}, core.CaptureSettings{}, fmt.Errorf("serial config missing")
+			return CaptureRequest{}, fmt.Errorf("serial config missing")
 		}
-		src := sources.NewSerialWithConfig(*cfg.SerialConfig)
-		manifest := buildSerialManifest(*cfg.SerialConfig, "", core.ManifestOptions{})
-		settings := buildSerialCaptureSettings(*cfg.SerialConfig)
-		return src, manifest, settings, nil
+		return CaptureRequest{
+			SerialConfig: cfg.SerialConfig,
+		}, nil
 
 	case tui.SourceTypeTCP:
 		portNum, err := strconv.Atoi(cfg.TCPPort)
 		if err != nil {
-			return nil, core.Manifest{}, core.CaptureSettings{}, fmt.Errorf("invalid TCP port %q: %w", cfg.TCPPort, err)
+			return CaptureRequest{}, fmt.Errorf("invalid TCP port %q: %w", cfg.TCPPort, err)
 		}
-		tcpCfg := sources.TCPConfig{
+		tcpCfg := &sources.TCPConfig{
 			Host: cfg.TCPHost,
 			Port: portNum,
 		}
-		src, err := sources.NewTCPWithConfig(tcpCfg)
-		if err != nil {
-			return nil, core.Manifest{}, core.CaptureSettings{}, fmt.Errorf("create TCP source: %w", err)
-		}
-		manifest := buildTCPManifest(tcpCfg, "", core.ManifestOptions{})
-		settings := buildTCPCaptureSettings(tcpCfg)
-		return src, manifest, settings, nil
+		return CaptureRequest{
+			TCPConfig: tcpCfg,
+		}, nil
 
 	default:
-		return nil, core.Manifest{}, core.CaptureSettings{}, fmt.Errorf("unsupported source type: %q", cfg.SourceType)
+		return CaptureRequest{}, fmt.Errorf("unsupported source type: %q", cfg.SourceType)
 	}
 }

@@ -4,13 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
-	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
-	"github.com/cthonicasoftware/astrolabe-cli/internal/normalize"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -71,11 +68,6 @@ func runCaptureTCP(cmd *cobra.Command, flags tcpFlags, meta *captureMetadataFlag
 
 	out.Step(fmt.Sprintf("Starting TCP capture: %s:%d", tcpCfg.Host, tcpCfg.Port))
 
-	tcpSource, err := sources.NewTCPWithConfig(tcpCfg)
-	if err != nil {
-		return fmt.Errorf("create TCP source: %w", err)
-	}
-
 	savedMetadata, metaErr := config.LoadMetadata()
 	if metaErr != nil {
 		out.Warning(fmt.Sprintf("Failed to load metadata: %v", metaErr))
@@ -105,22 +97,26 @@ func runCaptureTCP(cmd *cobra.Command, flags tcpFlags, meta *captureMetadataFlag
 		Attributes:      flagAttrs,
 	}, savedMetadata, cmd.Flags(), metaErr == nil)
 
-	manifest := buildTCPManifest(tcpCfg, flags.name, metaOpts)
-	captureSettings := buildTCPCaptureSettings(tcpCfg)
 	appCfg, err := config.Load()
 	if err != nil {
 		return err
 	}
+	svc := newCaptureService(out, appCfg.OfflineCache)
 
 	out.Info("Capturing... (press Ctrl+C to stop)")
 	out.Blank()
-	run, interrupted, err := runHeadlessCapture(out, tcpSource, normalize.NewLineJSON(), appCfg.OfflineCache, manifest, captureSettings)
+	result, err := svc.Run(cmd.Context(), CaptureRequest{
+		TCPConfig: &tcpCfg,
+		RunLabel:  flags.name,
+		Meta:      metaOpts,
+	})
 	if err != nil {
 		return err
 	}
+	run := result.Run
 
 	out.Blank()
-	if interrupted {
+	if result.Interrupted {
 		out.Warning("TCP capture interrupted (partial run saved)")
 	} else {
 		out.Success("TCP capture complete")
@@ -131,26 +127,4 @@ func runCaptureTCP(cmd *cobra.Command, flags tcpFlags, meta *captureMetadataFlag
 	out.Blank()
 	out.Muted("Run 'astrolabe upload' to upload to server.")
 	return nil
-}
-
-func buildTCPManifest(cfg sources.TCPConfig, name string, opts core.ManifestOptions) core.Manifest {
-	attrs := map[string]string{
-		"source_kind":     "tcp",
-		"host":            cfg.Host,
-		"port":            strconv.Itoa(cfg.Port),
-		"connect_timeout": cfg.ConnectTimeout.String(),
-		"read_timeout":    cfg.ReadTimeout.String(),
-		"buffer_size":     strconv.Itoa(cfg.BufferSize),
-	}
-	if name != "" {
-		attrs["run_label"] = name
-	}
-	return buildCaptureManifest(opts, attrs)
-}
-
-func buildTCPCaptureSettings(cfg sources.TCPConfig) core.CaptureSettings {
-	return core.CaptureSettings{
-		Channels: []string{"tcp"},
-		Notes:    fmt.Sprintf("tcp capture from %s:%d", cfg.Host, cfg.Port),
-	}
 }
