@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"sync"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/capture"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
@@ -29,20 +30,51 @@ func newCaptureAdapter(out *cliout.Printer, cacheRoot string) *captureAdapter {
 
 // captureSession implements tui.CaptureSession.
 type captureSession struct {
-	feed         chan string
-	cancel       context.CancelFunc
-	done         chan tui.CaptureSessionResult
-	tempRoot     string
+	feed          chan string
+	cancel        context.CancelFunc
+	done          chan tui.CaptureSessionResult
+	tempRoot      string
+	cacheRoot     string
 	saveRequested bool
+	stopOnce      sync.Once
+	result        tui.CaptureSessionResult
 }
 
 func (s *captureSession) Feed() <-chan string { return s.feed }
-func (s *captureSession) Stop()               { s.cancel() }
 func (s *captureSession) RequestSave()        { s.saveRequested = true }
 
+func (s *captureSession) Stop() tui.CaptureSessionResult {
+	s.stopOnce.Do(func() {
+		s.cancel()
+
+		result := <-s.done
+		if result.Err != nil {
+			_ = os.RemoveAll(s.tempRoot)
+			s.result = result
+			return
+		}
+
+		if !s.saveRequested {
+			_ = os.RemoveAll(s.tempRoot)
+			s.result = result
+			return
+		}
+
+		run := &core.Run{ID: result.RunID}
+		if err := promoteRunArtifacts(run, s.tempRoot, s.cacheRoot); err != nil {
+			_ = os.RemoveAll(s.tempRoot)
+			s.result = tui.CaptureSessionResult{Err: fmt.Errorf("finalize run artifacts: %w", err)}
+			return
+		}
+		_ = os.RemoveAll(s.tempRoot)
+		s.result = tui.CaptureSessionResult{Saved: true, RunID: run.ID}
+	})
+
+	return s.result
+}
+
 // Start opens the source described by cfg and launches the fan-out goroutines.
-// It returns immediately; data flows through Feed() and the result is collected
-// later via Collect().
+// It returns immediately; data flows through Feed() until Stop finalizes it.
 func (a *captureAdapter) Start(ctx context.Context, cfg tui.CaptureConfig) (tui.CaptureSession, error) {
 	if err := os.MkdirAll(a.cacheRoot, 0o755); err != nil {
 		return nil, fmt.Errorf("ensure offline cache: %w", err)
@@ -91,10 +123,11 @@ func (a *captureAdapter) Start(ctx context.Context, cfg tui.CaptureConfig) (tui.
 	}
 
 	sess := &captureSession{
-		feed:     feedCh,
-		cancel:   cancel,
-		done:     make(chan tui.CaptureSessionResult, 1),
-		tempRoot: tempRoot,
+		feed:      feedCh,
+		cancel:    cancel,
+		done:      make(chan tui.CaptureSessionResult, 1),
+		tempRoot:  tempRoot,
+		cacheRoot: a.cacheRoot,
 	}
 
 	// Fan-out goroutine: forward source frames to both the TUI feed and the
@@ -140,39 +173,6 @@ func (a *captureAdapter) Start(ctx context.Context, cfg tui.CaptureConfig) (tui.
 	}()
 
 	return sess, nil
-}
-
-// Collect blocks until the pipeline finishes and returns the session outcome.
-// If the session was saved (SaveRequested), it promotes the artifacts from the
-// temp directory to the offline cache.
-func (a *captureAdapter) Collect(session tui.CaptureSession) tui.CaptureSessionResult {
-	sess, ok := session.(*captureSession)
-	if !ok {
-		return tui.CaptureSessionResult{Err: fmt.Errorf("unexpected session type: %T", session)}
-	}
-
-	result := <-sess.done
-
-	if result.Err != nil {
-		_ = os.RemoveAll(sess.tempRoot)
-		return result
-	}
-
-	if !sess.saveRequested {
-		// Discard: clean up temp artifacts.
-		_ = os.RemoveAll(sess.tempRoot)
-		return result
-	}
-
-	// Promote artifacts to the permanent cache.
-	run := &core.Run{ID: result.RunID}
-	if err := promoteRunArtifacts(run, sess.tempRoot, a.cacheRoot); err != nil {
-		_ = os.RemoveAll(sess.tempRoot)
-		return tui.CaptureSessionResult{Err: fmt.Errorf("finalize run artifacts: %w", err)}
-	}
-	_ = os.RemoveAll(sess.tempRoot)
-
-	return tui.CaptureSessionResult{Saved: true, RunID: run.ID}
 }
 
 // buildSource constructs the concrete capture source, manifest, and settings

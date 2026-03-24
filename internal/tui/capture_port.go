@@ -3,17 +3,17 @@ package tui
 import "context"
 
 // CaptureSessionPort abstracts the live capture subsystem so the router can
-// start and collect sessions without importing concrete source implementations.
+// start sessions without importing concrete source implementations.
 type CaptureSessionPort interface {
 	Start(ctx context.Context, cfg CaptureConfig) (CaptureSession, error)
-	Collect(session CaptureSession) CaptureSessionResult
 }
 
 // CaptureSession represents an active capture session from the TUI's perspective.
 type CaptureSession interface {
 	Feed() <-chan string
-	Stop()
-	// RequestSave marks the session so that Collect promotes artifacts instead of discarding them.
+	// Stop cancels the session, waits for finalization, and returns the outcome.
+	Stop() CaptureSessionResult
+	// RequestSave marks the session so that Stop promotes artifacts instead of discarding them.
 	RequestSave()
 }
 
