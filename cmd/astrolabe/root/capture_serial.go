@@ -5,13 +5,11 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
-	"github.com/cthonicasoftware/astrolabe-cli/internal/normalize"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -89,23 +87,26 @@ func runCaptureSerial(cmd *cobra.Command, flags serialFlags, meta *captureMetada
 		Attributes:      flagAttrs,
 	}, savedMetadata, cmd.Flags(), metaErr == nil)
 
-	manifest := buildSerialManifest(*serialCfg, flags.name, metaOpts)
-	captureSettings := buildSerialCaptureSettings(*serialCfg)
-	serial := sources.NewSerialWithConfig(*serialCfg)
 	appCfg, err := config.Load()
 	if err != nil {
 		return err
 	}
+	svc := newCaptureService(out, appCfg.OfflineCache)
 
 	out.Info("Capturing... (press Ctrl+C to stop)")
 	out.Blank()
-	run, interrupted, err := runHeadlessCapture(out, serial, normalize.NewLineJSON(), appCfg.OfflineCache, manifest, captureSettings)
+	result, err := svc.Run(cmd.Context(), CaptureRequest{
+		SerialConfig: serialCfg,
+		RunLabel:     flags.name,
+		Meta:         metaOpts,
+	})
 	if err != nil {
 		return err
 	}
+	run := result.Run
 
 	out.Blank()
-	if interrupted {
+	if result.Interrupted {
 		out.Warning("Serial capture interrupted (partial run saved)")
 	} else {
 		out.Success("Serial capture complete")
@@ -116,25 +117,6 @@ func runCaptureSerial(cmd *cobra.Command, flags serialFlags, meta *captureMetada
 	out.Blank()
 	out.Muted("Run 'astrolabe upload' to upload to server.")
 	return nil
-}
-
-func buildSerialManifest(cfg sources.Config, name string, opts core.ManifestOptions) core.Manifest {
-	attrs := map[string]string{
-		"source_kind": "serial",
-		"port":        cfg.Port,
-		"baud":        strconv.Itoa(cfg.Baud),
-	}
-	if name != "" {
-		attrs["run_label"] = name
-	}
-	return buildCaptureManifest(opts, attrs)
-}
-
-func buildSerialCaptureSettings(cfg sources.Config) core.CaptureSettings {
-	return core.CaptureSettings{
-		Channels: []string{"serial"},
-		Notes:    fmt.Sprintf("serial capture from %s @ %d baud", cfg.Port, cfg.Baud),
-	}
 }
 
 func parseTagFlags(values []string) ([]string, error) {
