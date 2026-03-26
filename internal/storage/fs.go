@@ -219,6 +219,7 @@ func (f *FS) writeArtifacts() error {
 		if err != nil {
 			return fmt.Errorf("fs store: relativize artifact path %s: %w", artifact.Name, err)
 		}
+		relPath = filepath.ToSlash(relPath)
 		doc.Artifacts = append(doc.Artifacts, ArtifactRecord{
 			Name:      artifact.Name,
 			RelPath:   relPath,

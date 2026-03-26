@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
+	stdpath "path"
 	"strings"
 	"time"
 
@@ -31,8 +31,8 @@ type ArtifactRecord struct {
 }
 
 // LoadArtifacts reads an artifacts.json file from disk.
-func LoadArtifacts(path string) (ArtifactsDocument, error) {
-	payload, err := os.ReadFile(path)
+func LoadArtifacts(filePath string) (ArtifactsDocument, error) {
+	payload, err := os.ReadFile(filePath)
 	if err != nil {
 		return ArtifactsDocument{}, fmt.Errorf("read artifacts: %w", err)
 	}
@@ -49,10 +49,12 @@ func LoadArtifacts(path string) (ArtifactsDocument, error) {
 		if artifact.RelPath == "" {
 			return ArtifactsDocument{}, fmt.Errorf("decode artifacts: rel_path missing for %s", artifact.Name)
 		}
-		clean := filepath.Clean(artifact.RelPath)
-		if clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) || filepath.IsAbs(clean) {
+		normalized := strings.ReplaceAll(artifact.RelPath, "\\", "/")
+		clean := stdpath.Clean(normalized)
+		if strings.HasPrefix(normalized, "/") || clean == ".." || strings.HasPrefix(clean, "../") {
 			return ArtifactsDocument{}, fmt.Errorf("decode artifacts: invalid rel_path for %s", artifact.Name)
 		}
+		doc.Artifacts[i].RelPath = clean
 	}
 
 	return doc, nil

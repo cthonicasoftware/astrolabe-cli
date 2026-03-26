@@ -387,41 +387,45 @@ func TestLoadRun_LegacyArtifactsFallback(t *testing.T) {
 }
 
 func TestLoadRun_RejectsUnsafeArtifactsRelPath(t *testing.T) {
-	tmpDir := t.TempDir()
-	runID := "test-run-unsafe-artifacts"
-	runDir := writeTestRun(t, tmpDir, runID)
+	for _, relPath := range []string{"../manifest.json", "..\\manifest.json"} {
+		t.Run(relPath, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			runID := "test-run-unsafe-artifacts"
+			runDir := writeTestRun(t, tmpDir, runID)
 
-	doc := storage.ArtifactsDocument{
-		SchemaVersion: "1",
-		Artifacts: []storage.ArtifactRecord{
-			{
-				Name:      "manifest.json",
-				RelPath:   "..\\manifest.json",
-				MediaType: "application/json",
-				Role:      core.ArtifactRoleManifest,
-				Checksum:  core.Checksum{Algorithm: "sha256", Value: "abc"},
-				CreatedAt: time.Now(),
-			},
-		},
-	}
-	data, err := json.Marshal(doc)
-	if err != nil {
-		t.Fatalf("marshal artifacts: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(runDir, storage.ArtifactsFileName), data, 0o644); err != nil {
-		t.Fatalf("write artifacts: %v", err)
-	}
+			doc := storage.ArtifactsDocument{
+				SchemaVersion: "1",
+				Artifacts: []storage.ArtifactRecord{
+					{
+						Name:      "manifest.json",
+						RelPath:   relPath,
+						MediaType: "application/json",
+						Role:      core.ArtifactRoleManifest,
+						Checksum:  core.Checksum{Algorithm: "sha256", Value: "abc"},
+						CreatedAt: time.Now(),
+					},
+				},
+			}
+			data, err := json.Marshal(doc)
+			if err != nil {
+				t.Fatalf("marshal artifacts: %v", err)
+			}
+			if err := os.WriteFile(filepath.Join(runDir, storage.ArtifactsFileName), data, 0o644); err != nil {
+				t.Fatalf("write artifacts: %v", err)
+			}
 
-	client := NewClient(Config{
-		APIURL:    "https://example.invalid",
-		CacheRoot: tmpDir,
-	})
+			client := NewClient(Config{
+				APIURL:    "https://example.invalid",
+				CacheRoot: tmpDir,
+			})
 
-	_, err = client.loadRun(runID)
-	if err == nil {
-		t.Fatal("expected invalid artifacts rel_path to fail")
-	}
-	if !strings.Contains(err.Error(), "invalid rel_path") {
-		t.Fatalf("expected invalid rel_path error, got %v", err)
+			_, err = client.loadRun(runID)
+			if err == nil {
+				t.Fatal("expected invalid artifacts rel_path to fail")
+			}
+			if !strings.Contains(err.Error(), "invalid rel_path") {
+				t.Fatalf("expected invalid rel_path error, got %v", err)
+			}
+		})
 	}
 }

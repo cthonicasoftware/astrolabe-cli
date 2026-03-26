@@ -213,7 +213,7 @@ func (c *Client) loadArtifacts(runDir string, started time.Time) ([]core.Artifac
 		for _, artifact := range doc.Artifacts {
 			artifacts = append(artifacts, core.Artifact{
 				Name:      artifact.Name,
-				Path:      filepath.Join(runDir, artifact.RelPath),
+				Path:      filepath.Join(runDir, filepath.FromSlash(artifact.RelPath)),
 				MediaType: artifact.MediaType,
 				Role:      artifact.Role,
 				SizeBytes: artifact.SizeBytes,
