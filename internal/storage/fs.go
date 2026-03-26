@@ -140,6 +140,9 @@ func (f *FS) Finalize(run *core.Run) (retErr error) {
 	if err := f.writeManifest(run); err != nil {
 		return err
 	}
+	if err := f.writeArtifacts(); err != nil {
+		return err
+	}
 
 	run.Artifacts = f.Artifacts()
 
@@ -205,3 +208,39 @@ func (f *FS) writeManifest(run *core.Run) error {
 	return nil
 }
 
+func (f *FS) writeArtifacts() error {
+	doc := ArtifactsDocument{
+		SchemaVersion: "1",
+		Artifacts:     make([]ArtifactRecord, 0, len(f.artifacts)),
+	}
+
+	for _, artifact := range f.artifacts {
+		relPath, err := filepath.Rel(f.runDir, artifact.Path)
+		if err != nil {
+			return fmt.Errorf("fs store: relativize artifact path %s: %w", artifact.Name, err)
+		}
+		relPath = filepath.ToSlash(relPath)
+		doc.Artifacts = append(doc.Artifacts, ArtifactRecord{
+			Name:      artifact.Name,
+			RelPath:   relPath,
+			MediaType: artifact.MediaType,
+			Role:      artifact.Role,
+			SizeBytes: artifact.SizeBytes,
+			Checksum:  artifact.Checksum,
+			CreatedAt: artifact.CreatedAt,
+		})
+	}
+
+	payload, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return fmt.Errorf("fs store: marshal artifacts: %w", err)
+	}
+	payload = append(payload, '\n')
+
+	path := filepath.Join(f.runDir, ArtifactsFileName)
+	if err := os.WriteFile(path, payload, 0o644); err != nil {
+		return fmt.Errorf("fs store: write artifacts: %w", err)
+	}
+
+	return nil
+}

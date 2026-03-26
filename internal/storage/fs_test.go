@@ -114,6 +114,30 @@ func TestFSStorePersistsArtifacts(t *testing.T) {
 		t.Fatalf("manifest primary data mismatch: %s", manifestDoc.PrimaryData)
 	}
 
+	artifactsBytes, err := os.ReadFile(filepath.Join(tmp, run.ID, ArtifactsFileName))
+	if err != nil {
+		t.Fatalf("read artifacts sidecar: %v", err)
+	}
+
+	var artifactsDoc ArtifactsDocument
+	if err := json.Unmarshal(artifactsBytes, &artifactsDoc); err != nil {
+		t.Fatalf("unmarshal artifacts sidecar: %v", err)
+	}
+	if artifactsDoc.SchemaVersion != "1" {
+		t.Fatalf("artifacts schema version = %q, want 1", artifactsDoc.SchemaVersion)
+	}
+	if len(artifactsDoc.Artifacts) != len(artifacts) {
+		t.Fatalf("artifacts sidecar count = %d, want %d", len(artifactsDoc.Artifacts), len(artifacts))
+	}
+	for i, artifact := range artifactsDoc.Artifacts {
+		if strings.Contains(artifact.RelPath, "/") || strings.Contains(artifact.RelPath, "\\") {
+			t.Fatalf("artifact rel_path should stay within run dir, got %q", artifact.RelPath)
+		}
+		if artifact.Checksum.Value != artifacts[i].Checksum.Value {
+			t.Fatalf("artifact checksum mismatch for %s", artifact.Name)
+		}
+	}
+
 	// Ensure files live under run directory.
 	runDir := filepath.Join(tmp, run.ID)
 	for _, artifact := range artifacts {
@@ -125,4 +149,3 @@ func TestFSStorePersistsArtifacts(t *testing.T) {
 		}
 	}
 }
-
