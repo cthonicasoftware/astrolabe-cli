@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -161,15 +162,9 @@ func (c *Client) UploadRun(ctx context.Context, runID string) error {
 func (c *Client) loadRun(runID string) (*core.Run, error) {
 	runDir := filepath.Join(c.cacheRoot, runID)
 	manifestPath := filepath.Join(runDir, "manifest.json")
-
-	data, err := os.ReadFile(manifestPath)
+	doc, err := storage.LoadManifest(manifestPath)
 	if err != nil {
 		return nil, fmt.Errorf("read manifest: %w", err)
-	}
-
-	var doc storage.ManifestDocument
-	if err := json.Unmarshal(data, &doc); err != nil {
-		return nil, fmt.Errorf("parse manifest: %w", err)
 	}
 
 	// Load upload state if it exists
@@ -189,10 +184,56 @@ func (c *Client) loadRun(runID string) (*core.Run, error) {
 		return nil, fmt.Errorf("read upload state: %w", err)
 	}
 
-	// Reconstruct artifacts list
+	artifacts, err := c.loadArtifacts(runDir, doc.Started)
+	if err != nil {
+		return nil, err
+	}
+
+	run := &core.Run{
+		ID:             doc.RunID,
+		Source:         doc.Source,
+		Manifest:       doc.Manifest,
+		Capture:        doc.Capture,
+		Started:        doc.Started,
+		Completed:      doc.Completed,
+		RecordsCount:   doc.RecordsCount,
+		PrimaryDataURI: doc.PrimaryData,
+		Artifacts:      artifacts,
+		Upload:         uploadState,
+	}
+
+	return run, nil
+}
+
+func (c *Client) loadArtifacts(runDir string, started time.Time) ([]core.Artifact, error) {
+	artifactsPath := filepath.Join(runDir, storage.ArtifactsFileName)
+	doc, err := storage.LoadArtifacts(artifactsPath)
+	if err == nil {
+		artifacts := make([]core.Artifact, 0, len(doc.Artifacts))
+		for _, artifact := range doc.Artifacts {
+			artifacts = append(artifacts, core.Artifact{
+				Name:      artifact.Name,
+				Path:      filepath.Join(runDir, artifact.RelPath),
+				MediaType: artifact.MediaType,
+				Role:      artifact.Role,
+				SizeBytes: artifact.SizeBytes,
+				Checksum:  artifact.Checksum,
+				CreatedAt: artifact.CreatedAt,
+			})
+		}
+		return artifacts, nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("read artifacts: %w", err)
+	}
+
+	return loadArtifactsLegacy(runDir, started)
+}
+
+func loadArtifactsLegacy(runDir string, started time.Time) ([]core.Artifact, error) {
 	var artifacts []core.Artifact
 
-	// Manifest artifact
+	manifestPath := filepath.Join(runDir, "manifest.json")
 	manifestStat, err := os.Stat(manifestPath)
 	if err == nil {
 		checksum, err := computeFileSHA256(manifestPath)
@@ -209,11 +250,10 @@ func (c *Client) loadRun(runID string) (*core.Run, error) {
 				Algorithm: "sha256",
 				Value:     checksum,
 			},
-			CreatedAt: doc.Started,
+			CreatedAt: started,
 		})
 	}
 
-	// Data artifact
 	dataPath := filepath.Join(runDir, "data.jsonl")
 	dataStat, err := os.Stat(dataPath)
 	if err == nil {
@@ -231,24 +271,11 @@ func (c *Client) loadRun(runID string) (*core.Run, error) {
 				Algorithm: "sha256",
 				Value:     checksum,
 			},
-			CreatedAt: doc.Started,
+			CreatedAt: started,
 		})
 	}
 
-	run := &core.Run{
-		ID:             doc.RunID,
-		Source:         doc.Source,
-		Manifest:       doc.Manifest,
-		Capture:        doc.Capture,
-		Started:        doc.Started,
-		Completed:      doc.Completed,
-		RecordsCount:   doc.RecordsCount,
-		PrimaryDataURI: doc.PrimaryData,
-		Artifacts:      artifacts,
-		Upload:         uploadState,
-	}
-
-	return run, nil
+	return artifacts, nil
 }
 
 // saveRunState persists the upload state to disk so we can resume later.
