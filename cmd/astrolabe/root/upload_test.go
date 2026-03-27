@@ -2,8 +2,12 @@ package root
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
+	"github.com/spf13/cobra"
 )
 
 func TestUploadRunWithTimeout_AssignsFreshDeadlinePerRun(t *testing.T) {
@@ -32,5 +36,20 @@ func TestUploadRunWithTimeout_AssignsFreshDeadlinePerRun(t *testing.T) {
 	}
 	if !deadlines[1].After(deadlines[0]) {
 		t.Fatalf("expected second run deadline %v to be after first %v", deadlines[1], deadlines[0])
+	}
+}
+
+func TestUploadCmd_RejectsMissingAPIURLFromContextConfig(t *testing.T) {
+	cmd := &cobra.Command{}
+	cmd.Flags().Bool("json", false, "")
+	cmd.SetContext(withConfig(context.Background(), config.Config{
+		AuthToken:    "token",
+		ProjectID:    "project",
+		OfflineCache: t.TempDir(),
+	}))
+
+	err := uploadCmd.RunE(cmd, nil)
+	if err == nil || !strings.Contains(err.Error(), "API URL not configured") {
+		t.Fatalf("expected missing API URL error, got %v", err)
 	}
 }

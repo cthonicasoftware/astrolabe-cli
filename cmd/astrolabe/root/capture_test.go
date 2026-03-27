@@ -1,11 +1,15 @@
 package root
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
+	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
 
@@ -224,5 +228,51 @@ func TestRunCaptureFile_InvalidPath(t *testing.T) {
 	err := runCaptureFile(cmd, "/nonexistent/path/to/file.csv", fileFlags{}, meta)
 	if err == nil || !strings.Contains(err.Error(), "cannot access file") {
 		t.Errorf("expected 'cannot access file' error, got %v", err)
+	}
+}
+
+func TestConfigFromCmd_RequiresInjectedConfig(t *testing.T) {
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+
+	_, err := configFromCmd(cmd)
+	if err == nil || !strings.Contains(err.Error(), "config not found in context") {
+		t.Fatalf("expected missing config error, got %v", err)
+	}
+}
+
+func TestRunCaptureFile_UsesOfflineCacheFromContext(t *testing.T) {
+	meta := &captureMetadataFlags{}
+	cmd := newCaptureFileCmd(meta)
+
+	cacheDir := t.TempDir()
+	cmd.SetContext(withConfig(context.Background(), config.Config{
+		OfflineCache: cacheDir,
+	}))
+
+	inputPath := filepath.Join(t.TempDir(), "events.log")
+	if err := os.WriteFile(inputPath, []byte("first\nsecond\n"), 0o644); err != nil {
+		t.Fatalf("write input file: %v", err)
+	}
+
+	err := runCaptureFile(cmd, inputPath, fileFlags{format: "raw"}, meta)
+	if err != nil {
+		t.Fatalf("runCaptureFile: %v", err)
+	}
+
+	entries, err := os.ReadDir(cacheDir)
+	if err != nil {
+		t.Fatalf("read cache dir: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 captured run in cache, got %d", len(entries))
+	}
+
+	runDir := filepath.Join(cacheDir, entries[0].Name())
+	if _, err := os.Stat(filepath.Join(runDir, "manifest.json")); err != nil {
+		t.Fatalf("expected manifest in offline cache, stat manifest.json: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(runDir, "data.jsonl")); err != nil {
+		t.Fatalf("expected data output in offline cache, stat data.jsonl: %v", err)
 	}
 }

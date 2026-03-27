@@ -45,7 +45,7 @@ func runCaptureSerial(cmd *cobra.Command, flags serialFlags, meta *captureMetada
 	isInteractive := term.IsTerminal(int(os.Stdin.Fd())) && !portFlagSet
 
 	if isInteractive {
-		return runCaptureTUI(out)
+		return runCaptureTUI(cmd, out)
 	}
 
 	if flags.port == "" {
@@ -87,7 +87,7 @@ func runCaptureSerial(cmd *cobra.Command, flags serialFlags, meta *captureMetada
 		Attributes:      flagAttrs,
 	}, savedMetadata, cmd.Flags(), metaErr == nil)
 
-	appCfg, err := config.Load()
+	appCfg, err := configFromCmd(cmd)
 	if err != nil {
 		return err
 	}
