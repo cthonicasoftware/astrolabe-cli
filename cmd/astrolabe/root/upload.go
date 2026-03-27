@@ -2,16 +2,14 @@ package root
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
-	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/runs"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/tui"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/upload"
 	"github.com/spf13/cobra"
@@ -85,7 +83,7 @@ var uploadCmd = &cobra.Command{
 			}
 		} else {
 			// Upload all pending runs
-			runs, err := findPendingRuns(cfg.OfflineCache)
+			runs, err := runs.FindPending(cfg.OfflineCache)
 			if err != nil {
 				return fmt.Errorf("find pending runs: %w", err)
 			}
@@ -144,58 +142,4 @@ func uploadRunWithTimeout(parent context.Context, timeout time.Duration, runID s
 func init() {
 	uploadCmd.Flags().StringVar(&uploadRunID, "run-id", "", "specific run ID to upload (default: all pending)")
 	uploadCmd.Flags().BoolVar(&uploadForce, "force", false, "force upload even if offline flag set")
-}
-
-// findPendingRuns scans the cache directory for runs that haven't been uploaded yet.
-// Runs are considered pending if:
-// - No upload_state.json exists (never attempted)
-// - upload_state.json exists but status != "succeeded" (failed or incomplete)
-func findPendingRuns(cacheRoot string) ([]string, error) {
-	entries, err := os.ReadDir(cacheRoot)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	var pending []string
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-
-		runID := entry.Name()
-
-		// Check if manifest exists (validates it's a run directory)
-		manifestPath := filepath.Join(cacheRoot, runID, "manifest.json")
-		if _, err := os.Stat(manifestPath); err != nil {
-			continue
-		}
-
-		// Check upload state
-		statePath := filepath.Join(cacheRoot, runID, "upload_state.json")
-		stateData, err := os.ReadFile(statePath)
-		if err != nil {
-			// No state file means never uploaded
-			pending = append(pending, runID)
-			continue
-		}
-
-		// Parse upload state to check status
-		var state core.UploadState
-		if err := json.Unmarshal(stateData, &state); err != nil {
-			// If we can't parse the state, treat as pending
-			pending = append(pending, runID)
-			continue
-		}
-
-		// Only skip runs that have successfully uploaded
-		// Retry runs that failed, are in-flight, queued, or pending
-		if state.Status != core.UploadStatusSucceeded {
-			pending = append(pending, runID)
-		}
-	}
-
-	return pending, nil
 }

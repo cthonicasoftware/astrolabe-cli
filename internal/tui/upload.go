@@ -10,8 +10,6 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-
-	"github.com/cthonicasoftware/astrolabe-cli/internal/upload"
 )
 
 type uploadModel struct {
@@ -27,7 +25,7 @@ type uploadModel struct {
 	consecutiveFails    int
 	cancelled           bool
 	aborted             bool // Early termination due to repeated failures
-	client              upload.UploadClient
+	client              UploadPort
 	ctx                 context.Context
 	maxConsecutiveFails int // Stop after this many consecutive failures
 }
@@ -42,7 +40,7 @@ var (
 	uploadDoneStyle = lipgloss.NewStyle().Margin(1, 2)
 )
 
-func newUploadModel(client upload.UploadClient, runIDs []string) uploadModel {
+func newUploadModel(client UploadPort, runIDs []string) uploadModel {
 	return uploadModel{
 		runIDs:              runIDs,
 		spinner:             NewDefaultSpinner(),
@@ -54,7 +52,7 @@ func newUploadModel(client upload.UploadClient, runIDs []string) uploadModel {
 }
 
 // NewUploadModel constructs an upload screen model for use with the router.
-func NewUploadModel(client upload.UploadClient, runIDs []string) tea.Model {
+func NewUploadModel(client UploadPort, runIDs []string) tea.Model {
 	return newUploadModel(client, runIDs)
 }
 
@@ -203,7 +201,7 @@ func (m uploadModel) View() string {
 	return spin + info + gap + prog + runCount
 }
 
-func uploadRun(client upload.UploadClient, ctx context.Context, runID string) tea.Cmd {
+func uploadRun(client UploadPort, ctx context.Context, runID string) tea.Cmd {
 	return func() tea.Msg {
 		// Add a small delay to make the UI feel responsive
 		// Remove this in production if uploads are already slow
@@ -285,4 +283,3 @@ func navigateToWelcomeCmd(status *StatusMessage) tea.Cmd {
 		return NavigateMsg{To: ScreenWelcome, Status: status}
 	}
 }
-

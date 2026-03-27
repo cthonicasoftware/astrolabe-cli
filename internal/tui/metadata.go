@@ -8,8 +8,6 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-
-	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 )
 
@@ -32,7 +30,7 @@ const (
 type metadataModel struct {
 	inputs     []textinput.Model
 	attributes textarea.Model
-	repo       config.MetadataRepository
+	repo       MetadataPort
 	focusIndex int
 	width      int
 	height     int
@@ -62,11 +60,7 @@ var metadataFields = [totalMetadataInputs]metadataField{
 }
 
 // NewMetadataEditor constructs the metadata TUI model pre-populated with existing values.
-func NewMetadataEditor(repo config.MetadataRepository, meta config.Metadata, path string, loadErr error) tea.Model {
-	if repo == nil {
-		repo = config.NewFileMetadataRepository(nil)
-	}
-
+func NewMetadataEditor(repo MetadataPort, meta MetadataValues, path string, loadErr error) tea.Model {
 	model := &metadataModel{
 		inputs:     make([]textinput.Model, totalMetadataInputs),
 		attributes: textarea.New(),
@@ -101,7 +95,7 @@ func NewMetadataEditor(repo config.MetadataRepository, meta config.Metadata, pat
 	model.attributes.Prompt = ""
 	model.attributes.SetHeight(5)
 	model.attributes.SetWidth(40)
-	model.attributes.SetValue(config.FormatAttributeLines(meta.Attributes))
+	model.attributes.SetValue(formatAttributeLines(meta.Attributes))
 
 	model.setFocus(0)
 
@@ -285,7 +279,7 @@ func (m *metadataModel) save() error {
 		return fmt.Errorf("metadata repository not configured")
 	}
 
-	meta := config.Metadata{
+	meta := MetadataValues{
 		Operator: m.inputs[fieldOperator].Value(),
 		Location: m.inputs[fieldLocation].Value(),
 		Device: core.DeviceInfo{
@@ -306,13 +300,13 @@ func (m *metadataModel) save() error {
 		meta.Test.Plan = "unspecified"
 	}
 
-	tags, err := config.ParseTags(m.inputs[fieldTags].Value())
+	tags, err := parseTags(m.inputs[fieldTags].Value())
 	if err != nil {
 		return err
 	}
 	meta.Tags = tags
 
-	attrs, err := config.ParseAttributes(m.attributes.Value())
+	attrs, err := parseAttributes(m.attributes.Value())
 	if err != nil {
 		return err
 	}
@@ -325,5 +319,3 @@ func (m *metadataModel) save() error {
 	m.configPath = path
 	return nil
 }
-
-
