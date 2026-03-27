@@ -49,7 +49,7 @@ func runCaptureTCP(cmd *cobra.Command, flags tcpFlags, meta *captureMetadataFlag
 	isInteractive := term.IsTerminal(int(os.Stdin.Fd())) && !hostFlagSet
 
 	if isInteractive {
-		return runCaptureTUI(out)
+		return runCaptureTUI(cmd, out)
 	}
 
 	if flags.host == "" {
@@ -97,7 +97,7 @@ func runCaptureTCP(cmd *cobra.Command, flags tcpFlags, meta *captureMetadataFlag
 		Attributes:      flagAttrs,
 	}, savedMetadata, cmd.Flags(), metaErr == nil)
 
-	appCfg, err := config.Load()
+	appCfg, err := configFromCmd(cmd)
 	if err != nil {
 		return err
 	}

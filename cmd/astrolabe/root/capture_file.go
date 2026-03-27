@@ -147,7 +147,7 @@ func runCaptureFile(cmd *cobra.Command, filePath string, flags fileFlags, meta *
 		return fmt.Errorf("unsupported format: %s", format)
 	}
 
-	appCfg, err := config.Load()
+	appCfg, err := configFromCmd(cmd)
 	if err != nil {
 		return err
 	}

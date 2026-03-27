@@ -1,8 +1,6 @@
 package root
 
 import (
-	"fmt"
-
 	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/tui"
@@ -16,9 +14,9 @@ var tuiCmd = &cobra.Command{
 	Short: "Launch the interactive Text UI",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		appCfg, err := config.Load()
+		appCfg, err := configFromCmd(cmd)
 		if err != nil {
-			return fmt.Errorf("load config: %w", err)
+			return err
 		}
 		out := cliout.DefaultPrinter(viper.GetBool("json"))
 		return runTUI(out, appCfg, tui.ScreenWelcome)
@@ -30,10 +28,10 @@ func init() {
 }
 
 // runCaptureTUI launches the screen router starting at the capture configuration screen.
-func runCaptureTUI(out *cliout.Printer) error {
-	appCfg, err := config.Load()
+func runCaptureTUI(cmd *cobra.Command, out *cliout.Printer) error {
+	appCfg, err := configFromCmd(cmd)
 	if err != nil {
-		return fmt.Errorf("load config: %w", err)
+		return err
 	}
 	return runTUI(out, appCfg, tui.ScreenCaptureTabs)
 }

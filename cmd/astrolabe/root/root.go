@@ -4,6 +4,7 @@
 package root
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"sort"
@@ -29,6 +30,15 @@ var rootCmd = &cobra.Command{
 		if initConfigErr != nil {
 			return initConfigErr
 		}
+		cfg, err := config.Load()
+		if err != nil {
+			return err
+		}
+		ctx := cmd.Context()
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		cmd.SetContext(withConfig(ctx, cfg))
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {

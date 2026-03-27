@@ -8,7 +8,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
-	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/runs"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/tui"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/upload"
@@ -32,7 +31,7 @@ var uploadCmd = &cobra.Command{
 		jsonMode, _ := cmd.Flags().GetBool("json")
 		out := cliout.DefaultPrinter(jsonMode)
 
-		cfg, err := config.Load()
+		cfg, err := configFromCmd(cmd)
 		if err != nil {
 			return err
 		}
