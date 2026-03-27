@@ -1,7 +1,12 @@
 package tui
 
 import (
+	"context"
+	"fmt"
+
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/cthonicasoftware/astrolabe-cli/internal/runs"
 )
 
 // ScreenID identifies a routable screen.
@@ -36,33 +41,39 @@ type ScreenContext struct {
 // Return a non-nil error to navigate back to welcome with a StatusError.
 type ScreenFactory func(ctx ScreenContext) (tea.Model, func(), error)
 
-// RouterConfig holds all screen factories and external dependencies.
+// RouterConfig holds router dependencies.
 type RouterConfig struct {
 	InitialScreen ScreenID
 	InitialStatus *StatusMessage
-	Factories     map[ScreenID]ScreenFactory
-	CapturePort   CaptureSessionPort // may be nil until capture is wired
+	CapturePort   CaptureSessionPort
+	MetadataPort  MetadataPort
+	UploadPort    UploadPort
+	RunsCacheRoot string
 }
 
 type router struct {
-	cfg     RouterConfig
-	current tea.Model
-	cleanup func()
-	width   int
-	height  int
+	cfg       RouterConfig
+	factories map[ScreenID]ScreenFactory
+	current   tea.Model
+	cleanup   func()
+	width     int
+	height    int
 }
 
 func newRouter(cfg RouterConfig) *router {
 	status := cfg.InitialStatus
-	screen, cleanup, err := cfg.Factories[cfg.InitialScreen](ScreenContext{Status: status})
+	factories := buildFactories(cfg)
+	screen, cleanup, err := factories[cfg.InitialScreen](ScreenContext{Status: status})
 	if err != nil {
 		// Fall back to welcome on error
-		screen, cleanup, _ = cfg.Factories[ScreenWelcome](ScreenContext{})
+		screen, cleanup, _ = factories[ScreenWelcome](ScreenContext{})
 	}
+	cfg.InitialStatus = status
 	return &router{
-		cfg:     cfg,
-		current: screen,
-		cleanup: cleanup,
+		cfg:       cfg,
+		factories: factories,
+		current:   screen,
+		cleanup:   cleanup,
 	}
 }
 
@@ -108,7 +119,7 @@ func (r *router) navigate(msg NavigateMsg) tea.Cmd {
 		return tea.Quit
 	}
 
-	factory, ok := r.cfg.Factories[msg.To]
+	factory, ok := r.factories[msg.To]
 	if !ok {
 		// Unknown screen — go back to welcome with error
 		return r.navigate(NavigateMsg{
@@ -135,6 +146,70 @@ func (r *router) navigate(msg NavigateMsg) tea.Cmd {
 			return tea.WindowSizeMsg{Width: r.width, Height: r.height}
 		},
 	)
+}
+
+func buildFactories(cfg RouterConfig) map[ScreenID]ScreenFactory {
+	return map[ScreenID]ScreenFactory{
+		ScreenWelcome: func(ctx ScreenContext) (tea.Model, func(), error) {
+			return NewWelcome(ctx.Status), nil, nil
+		},
+		ScreenConfig: func(ctx ScreenContext) (tea.Model, func(), error) {
+			return NewConfigEditor(), nil, nil
+		},
+		ScreenCaptureTabs: func(ctx ScreenContext) (tea.Model, func(), error) {
+			return NewCaptureTabs(), nil, nil
+		},
+		ScreenCaptureLive: func(ctx ScreenContext) (tea.Model, func(), error) {
+			if cfg.CapturePort == nil {
+				return nil, nil, fmt.Errorf("capture not configured")
+			}
+			captureCfg, ok := ctx.Args.(CaptureConfig)
+			if !ok {
+				return nil, nil, fmt.Errorf("capture live: missing or invalid CaptureConfig in Args")
+			}
+			session, err := cfg.CapturePort.Start(context.Background(), captureCfg)
+			if err != nil {
+				return nil, nil, fmt.Errorf("start capture: %w", err)
+			}
+			appModel := NewApp("Live Capture", session.Feed())
+			cleanup := func() {
+				if appModel.SaveRequested() {
+					session.RequestSave()
+				}
+				_ = session.Stop()
+			}
+			return appModel, cleanup, nil
+		},
+		ScreenMetadata: func(ctx ScreenContext) (tea.Model, func(), error) {
+			if cfg.MetadataPort == nil {
+				return nil, nil, fmt.Errorf("metadata not configured")
+			}
+			meta, loadErr := cfg.MetadataPort.Load()
+			path, _ := cfg.MetadataPort.Path()
+			return NewMetadataEditor(cfg.MetadataPort, meta, path, loadErr), nil, nil
+		},
+		ScreenRuns: func(ctx ScreenContext) (tea.Model, func(), error) {
+			return NewRunsViewer(cfg.RunsCacheRoot), nil, nil
+		},
+		ScreenUpload: func(ctx ScreenContext) (tea.Model, func(), error) {
+			if cfg.UploadPort == nil {
+				return nil, nil, fmt.Errorf("upload not configured")
+			}
+			runIDs, err := runs.FindPending(cfg.RunsCacheRoot)
+			if err != nil {
+				return nil, nil, fmt.Errorf("find pending runs: %w", err)
+			}
+			if len(runIDs) == 0 {
+				return nil, nil, fmt.Errorf("no pending runs: all runs have been uploaded")
+			}
+			return NewUploadModel(cfg.UploadPort, runIDs), nil, nil
+		},
+	}
+}
+
+// NewRouterForTest exposes router construction for white-box tests.
+func NewRouterForTest(cfg RouterConfig) *router {
+	return newRouter(cfg)
 }
 
 func (r *router) runCleanup() {
