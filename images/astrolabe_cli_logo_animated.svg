@@ -1,0 +1,228 @@
+<svg width="100%" viewBox="0 0 680 270" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <filter id="glow-gold" x="-50%" y="-50%" width="200%" height="200%">
+    <feGaussianBlur stdDeviation="3" result="blur"/>
+    <feFlood flood-color="#D4A03C" flood-opacity="0.5"/>
+    <feComposite in2="blur" operator="in"/>
+    <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+</defs>
+<style>
+:root{--b:#7A5A12;--wm:#18140F}
+@media(prefers-color-scheme:dark){:root{--b:#D4A03C;--wm:#EDE8DE}}
+.r{fill:none;stroke:var(--b);stroke-width:1.5}
+.rt{fill:none;stroke:var(--b);stroke-width:0.85}
+.rd{fill:none;stroke:var(--b);stroke-width:0.65;stroke-dasharray:4 3}
+.tmaj{fill:none;stroke:var(--b);stroke-width:1.6}
+.tmed{fill:none;stroke:var(--b);stroke-width:1.05}
+.tmin{fill:none;stroke:var(--b);stroke-width:0.6}
+.arm{fill:none;stroke:var(--b);stroke-width:0.95}
+.dot{fill:var(--b)}
+.rul{stroke:var(--b)}
+</style>
+
+<!-- ═══════════════════════════════════════════════════════
+     ASTROLABE MARK  center (135,135)  r=112
+     ═══════════════════════════════════════════════════════ -->
+
+<!-- Phase 1 (0–1.5s): Outer ring draws in clockwise -->
+<circle cx="135" cy="135" r="112" class="r"
+        stroke-dasharray="703.72" stroke-dashoffset="703.72">
+  <animate attributeName="stroke-dashoffset" from="703.72" to="0"
+           dur="1.5s" begin="0s" fill="freeze"
+           calcMode="spline" keySplines="0.4 0 0.2 1" keyTimes="0;1"/>
+</circle>
+
+<!-- Major ticks (N/E/S/W) → fade in at 0.6s -->
+<g opacity="0">
+  <animate attributeName="opacity" from="0" to="1" begin="0.6s" dur="0.4s" fill="freeze"/>
+  <line x1="135" y1="23" x2="135" y2="36" class="tmaj"/>
+  <line x1="135" y1="23" x2="135" y2="36" class="tmaj" transform="rotate(90,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="36" class="tmaj" transform="rotate(180,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="36" class="tmaj" transform="rotate(270,135,135)"/>
+</g>
+
+<!-- Medium ticks (30° intervals) → fade in at 0.9s -->
+<g opacity="0">
+  <animate attributeName="opacity" from="0" to="1" begin="0.9s" dur="0.4s" fill="freeze"/>
+  <line x1="135" y1="23" x2="135" y2="32" class="tmed" transform="rotate(30,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="32" class="tmed" transform="rotate(60,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="32" class="tmed" transform="rotate(120,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="32" class="tmed" transform="rotate(150,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="32" class="tmed" transform="rotate(210,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="32" class="tmed" transform="rotate(240,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="32" class="tmed" transform="rotate(300,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="32" class="tmed" transform="rotate(330,135,135)"/>
+</g>
+
+<!-- Minor ticks (10° intervals) → fade in at 1.1s -->
+<g opacity="0">
+  <animate attributeName="opacity" from="0" to="1" begin="1.1s" dur="0.4s" fill="freeze"/>
+  <line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(10,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(20,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(40,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(50,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(70,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(80,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(100,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(110,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(130,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(140,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(160,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(170,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(190,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(200,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(220,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(230,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(250,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(260,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(280,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(290,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(310,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(320,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(340,135,135)"/>
+  <line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(350,135,135)"/>
+</g>
+
+<!-- Phase 2 (1.3–2.0s): Inner rings materialize -->
+
+<!-- Middle circle r=80 → draws in at 1.3s -->
+<circle cx="135" cy="135" r="80" class="rt"
+        stroke-dasharray="502.65" stroke-dashoffset="502.65">
+  <animate attributeName="stroke-dashoffset" from="502.65" to="0"
+           dur="1.0s" begin="1.3s" fill="freeze"
+           calcMode="spline" keySplines="0.4 0 0.2 1" keyTimes="0;1"/>
+</circle>
+
+<!-- Dashed circle r=52 → fade in at 1.6s -->
+<circle cx="135" cy="135" r="52" class="rd" opacity="0">
+  <animate attributeName="opacity" from="0" to="1" begin="1.6s" dur="0.5s" fill="freeze"/>
+</circle>
+
+<!-- Dashed circle r=28 → fade in at 1.9s -->
+<circle cx="135" cy="135" r="28" class="rd" stroke-width="0.5" stroke-dasharray="2 3" opacity="0">
+  <animate attributeName="opacity" from="0" to="1" begin="1.9s" dur="0.5s" fill="freeze"/>
+</circle>
+
+<!-- Equator line → fade in at 2.0s -->
+<line x1="55" y1="135" x2="215" y2="135" class="rd" stroke-width="0.55" opacity="0">
+  <animate attributeName="opacity" from="0" to="1" begin="2.0s" dur="0.4s" fill="freeze"/>
+</line>
+
+<!-- Phase 3a (2.2s): Alidade arm fades in; idle drift starts at 10s -->
+<!-- additive="sum" lets the idle rotation add on top of the base rotate(21) -->
+<g transform="rotate(21,135,135)" opacity="0">
+  <animate attributeName="opacity" from="0" to="1" begin="2.2s" dur="0.5s" fill="freeze"/>
+  <animateTransform attributeName="transform" type="rotate" additive="sum"
+    values="0,135,135; 5,135,135; -4,135,135; 2,135,135; 0,135,135"
+    keyTimes="0;0.25;0.55;0.8;1"
+    dur="14s" begin="10s" repeatCount="indefinite"
+    calcMode="spline"
+    keySplines="0.4 0 0.2 1;0.4 0 0.2 1;0.4 0 0.2 1;0.4 0 0.2 1"/>
+  <line x1="135" y1="14" x2="135" y2="256" class="arm"/>
+  <circle cx="135" cy="23" r="4.5" class="arm" stroke-width="0.9"/>
+  <circle cx="135" cy="23" r="1.5" class="dot"/>
+  <circle cx="135" cy="247" r="4.5" class="arm" stroke-width="0.9"/>
+  <circle cx="135" cy="247" r="1.5" class="dot"/>
+</g>
+
+<!-- Phase 3b (2.8–3.7s): Star markers pop in, then breathe -->
+
+<!-- Star at (135,55) — top -->
+<g opacity="0">
+  <animate attributeName="opacity" from="0" to="1" begin="2.8s" dur="0.35s" fill="freeze"/>
+  <g>
+    <animate attributeName="opacity" values="1;0.45;1" dur="4.2s" begin="10.0s"
+             repeatCount="indefinite" calcMode="spline"
+             keySplines="0.4 0 0.2 1;0.4 0 0.2 1" keyTimes="0;0.5;1"/>
+    <circle cx="135" cy="55" r="3.5" class="dot"/>
+    <line x1="135" y1="49" x2="135" y2="61" class="arm" stroke-width="0.5"/>
+    <line x1="129" y1="55" x2="141" y2="55" class="arm" stroke-width="0.5"/>
+  </g>
+</g>
+
+<!-- Star at (194,82) — right -->
+<g opacity="0">
+  <animate attributeName="opacity" from="0" to="1" begin="3.1s" dur="0.35s" fill="freeze"/>
+  <g>
+    <animate attributeName="opacity" values="1;0.45;1" dur="5.3s" begin="11.2s"
+             repeatCount="indefinite" calcMode="spline"
+             keySplines="0.4 0 0.2 1;0.4 0 0.2 1" keyTimes="0;0.5;1"/>
+    <circle cx="194" cy="82" r="3.5" class="dot"/>
+    <line x1="188" y1="82" x2="200" y2="82" class="arm" stroke-width="0.5"/>
+    <line x1="194" y1="76" x2="194" y2="88" class="arm" stroke-width="0.5"/>
+  </g>
+</g>
+
+<!-- Star at (84,74) — left -->
+<g opacity="0">
+  <animate attributeName="opacity" from="0" to="1" begin="3.4s" dur="0.35s" fill="freeze"/>
+  <g>
+    <animate attributeName="opacity" values="1;0.45;1" dur="3.7s" begin="12.0s"
+             repeatCount="indefinite" calcMode="spline"
+             keySplines="0.4 0 0.2 1;0.4 0 0.2 1" keyTimes="0;0.5;1"/>
+    <circle cx="84" cy="74" r="3.5" class="dot"/>
+    <line x1="78" y1="74" x2="90" y2="74" class="arm" stroke-width="0.5"/>
+    <line x1="84" y1="68" x2="84" y2="80" class="arm" stroke-width="0.5"/>
+  </g>
+</g>
+
+<!-- Center rings + dot → pop in at 3.7s; dot pulses from 10s -->
+<g opacity="0">
+  <animate attributeName="opacity" from="0" to="1" begin="3.7s" dur="0.4s" fill="freeze"/>
+  <circle cx="135" cy="135" r="9" class="rt" stroke-width="1.1"/>
+  <circle cx="135" cy="135" r="4" class="dot">
+    <animate attributeName="r" values="4;5.5;4" dur="3s" begin="10s" repeatCount="indefinite"
+             calcMode="spline" keySplines="0.4 0 0.2 1;0.4 0 0.2 1" keyTimes="0;0.5;1"/>
+  </circle>
+  <circle cx="135" cy="135" r="2" fill="none" stroke="var(--b)" stroke-width="0.5"/>
+</g>
+
+<!-- ═══════════════════════════════════════════════════════
+     WORDMARK  starts at x=265
+     ═══════════════════════════════════════════════════════ -->
+
+<!-- Top rule draws rightward at 4.2s -->
+<line x1="265" y1="135" x2="265" y2="135" stroke="var(--b)" stroke-width="0.4">
+  <animate attributeName="x2" from="265" to="660" begin="4.2s" dur="0.7s" fill="freeze"
+           calcMode="spline" keySplines="0.4 0 0.2 1" keyTimes="0;1"/>
+</line>
+
+<!-- "ASTROLABE CLI" slides up + fades in at 4.5s -->
+<g opacity="0">
+  <animate attributeName="opacity" from="0" to="1" begin="4.5s" dur="0.6s" fill="freeze"
+           calcMode="spline" keySplines="0 0 0.2 1" keyTimes="0;1"/>
+  <animateTransform attributeName="transform" type="translate"
+    from="0,14" to="0,0" begin="4.5s" dur="0.9s" fill="freeze"
+    calcMode="spline" keySplines="0.16 1 0.3 1" keyTimes="0;1"/>
+  <text x="265" y="113"
+    fill="var(--wm)"
+    font-family="'Palatino Linotype','Book Antiqua',Palatino,Georgia,serif"
+    font-size="36" font-weight="700" letter-spacing="3">ASTROLABE CLI</text>
+</g>
+
+<!-- Tagline fades in at 5.1s -->
+<g opacity="0">
+  <animate attributeName="opacity" from="0" to="1" begin="5.1s" dur="0.6s" fill="freeze"/>
+  <text x="265" y="151"
+    fill="var(--b)"
+    font-family="'Courier New',Courier,monospace"
+    font-size="10.5" letter-spacing="1.6">FIELD DATA CAPTURE  ·  TEST AUTOMATION</text>
+</g>
+
+<!-- Bottom rule draws rightward at 5.5s -->
+<line x1="265" y1="161" x2="265" y2="161" stroke="var(--b)" stroke-width="0.8">
+  <animate attributeName="x2" from="265" to="660" begin="5.5s" dur="0.6s" fill="freeze"
+           calcMode="spline" keySplines="0.4 0 0.2 1" keyTimes="0;1"/>
+</line>
+
+<!-- Attribution fades in at 6.0s -->
+<g opacity="0">
+  <animate attributeName="opacity" from="0" to="0.55" begin="6.0s" dur="0.5s" fill="freeze"/>
+  <text x="265" y="178"
+    fill="var(--b)"
+    font-family="'Courier New',Courier,monospace"
+    font-size="8" letter-spacing="1.8">CTHONICA SOFTWARE LLC</text>
+</g>
+
+</svg>

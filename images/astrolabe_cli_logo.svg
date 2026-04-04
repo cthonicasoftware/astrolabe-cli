@@ -1,0 +1,101 @@
+<svg width="100%" viewBox="0 0 680 270" xmlns="http://www.w3.org/2000/svg">
+<style>
+:root{--b:#7A5A12;--wm:#18140F}
+@media(prefers-color-scheme:dark){:root{--b:#D4A03C;--wm:#EDE8DE}}
+.r{fill:none;stroke:var(--b);stroke-width:1.5}
+.rt{fill:none;stroke:var(--b);stroke-width:0.85}
+.rd{fill:none;stroke:var(--b);stroke-width:0.65;stroke-dasharray:4 3}
+.tmaj{fill:none;stroke:var(--b);stroke-width:1.6}
+.tmed{fill:none;stroke:var(--b);stroke-width:1.05}
+.tmin{fill:none;stroke:var(--b);stroke-width:0.6}
+.arm{fill:none;stroke:var(--b);stroke-width:0.95}
+.dot{fill:var(--b)}
+.rul{stroke:var(--b)}
+</style>
+
+<!-- Astrolabe mark: center (135,135) r=112 -->
+<circle cx="135" cy="135" r="112" class="r"/>
+<line x1="135" y1="23" x2="135" y2="36" class="tmaj"/>
+<line x1="135" y1="23" x2="135" y2="36" class="tmaj" transform="rotate(90,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="36" class="tmaj" transform="rotate(180,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="36" class="tmaj" transform="rotate(270,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="32" class="tmed" transform="rotate(30,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="32" class="tmed" transform="rotate(60,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="32" class="tmed" transform="rotate(120,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="32" class="tmed" transform="rotate(150,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="32" class="tmed" transform="rotate(210,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="32" class="tmed" transform="rotate(240,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="32" class="tmed" transform="rotate(300,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="32" class="tmed" transform="rotate(330,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(10,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(20,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(40,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(50,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(70,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(80,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(100,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(110,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(130,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(140,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(160,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(170,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(190,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(200,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(220,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(230,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(250,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(260,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(280,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(290,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(310,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(320,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(340,135,135)"/>
+<line x1="135" y1="23" x2="135" y2="28" class="tmin" transform="rotate(350,135,135)"/>
+<circle cx="135" cy="135" r="80" class="rt"/>
+<circle cx="135" cy="135" r="52" class="rd"/>
+<circle cx="135" cy="135" r="28" class="rd" stroke-width="0.5" stroke-dasharray="2 3"/>
+<line x1="55" y1="135" x2="215" y2="135" class="rd" stroke-width="0.55"/>
+<g transform="rotate(21,135,135)">
+  <line x1="135" y1="14" x2="135" y2="256" class="arm"/>
+  <circle cx="135" cy="23" r="4.5" class="arm" stroke-width="0.9"/>
+  <circle cx="135" cy="23" r="1.5" class="dot"/>
+  <circle cx="135" cy="247" r="4.5" class="arm" stroke-width="0.9"/>
+  <circle cx="135" cy="247" r="1.5" class="dot"/>
+</g>
+<circle cx="135" cy="55" r="3.5" class="dot"/>
+<line x1="135" y1="49" x2="135" y2="61" class="arm" stroke-width="0.5"/>
+<line x1="129" y1="55" x2="141" y2="55" class="arm" stroke-width="0.5"/>
+<circle cx="194" cy="82" r="3.5" class="dot"/>
+<line x1="188" y1="82" x2="200" y2="82" class="arm" stroke-width="0.5"/>
+<line x1="194" y1="76" x2="194" y2="88" class="arm" stroke-width="0.5"/>
+<circle cx="84" cy="74" r="3.5" class="dot"/>
+<line x1="78" y1="74" x2="90" y2="74" class="arm" stroke-width="0.5"/>
+<line x1="84" y1="68" x2="84" y2="80" class="arm" stroke-width="0.5"/>
+<circle cx="135" cy="135" r="9" class="rt" stroke-width="1.1"/>
+<circle cx="135" cy="135" r="4" class="dot"/>
+<circle cx="135" cy="135" r="2" fill="none" stroke="var(--b)" stroke-width="0.5"/>
+
+<!-- Wordmark: starts at x=265, well clear of mark right edge (135+112=247) -->
+<line x1="265" y1="135" x2="660" y2="135" stroke="var(--b)" stroke-width="0.4"/>
+
+<!-- ASTROLABE CLI — font-size 36, letter-spacing 3 keeps it within 265-660 -->
+<text x="265" y="113"
+  fill="var(--wm)"
+  font-family="'Palatino Linotype','Book Antiqua',Palatino,Georgia,serif"
+  font-size="36" font-weight="700" letter-spacing="3">ASTROLABE CLI</text>
+
+<!-- Tagline -->
+<text x="265" y="151"
+  fill="var(--b)"
+  font-family="'Courier New',Courier,monospace"
+  font-size="10.5" letter-spacing="1.6">FIELD DATA CAPTURE  ·  TEST AUTOMATION</text>
+
+<!-- Rule -->
+<line x1="265" y1="161" x2="660" y2="161" stroke="var(--b)" stroke-width="0.8"/>
+
+<!-- Attribution -->
+<text x="265" y="178"
+  fill="var(--b)"
+  font-family="'Courier New',Courier,monospace"
+  font-size="8" letter-spacing="1.8" opacity="0.55">CTHONICA SOFTWARE LLC</text>
+</svg>

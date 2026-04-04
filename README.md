@@ -1,6 +1,6 @@
 # Astrolabe CLI
 
-![astrolabe_cli_logo](https://github.com/user-attachments/assets/038d6771-1dbc-4b1b-935d-b7d2e4d20093)
+![astrolabe_cli_logo](images/astrolabe_cli_logo_animated.svg)
 
 ---
 Astrolabe is a command-line tool for capturing QA run data from serial devices, TCP sources, and existing files, then validating and uploading those runs to your backend.
