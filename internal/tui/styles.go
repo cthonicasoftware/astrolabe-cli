@@ -11,14 +11,14 @@ const marginSize = 1
 
 // Color Palette - centralized color definitions
 var (
-	ColorPrimary   = lipgloss.Color("#00D9FF") // Cyan - main highlights, cursor
-	ColorSecondary = lipgloss.Color("#7D56F4") // Purple - headers
-	ColorSuccess   = lipgloss.Color("#04B575") // Green - selected items, success states
-	ColorWarning   = lipgloss.Color("#FFD700") // Yellow - warnings, active states
-	ColorError     = lipgloss.Color("#FF5F87") // Pink - errors, logo
-	ColorMuted     = lipgloss.Color("#626262") // Gray - unselected, help text
-	ColorText      = lipgloss.Color("#FFFFFF") // White - normal text
-	ColorHighlight = lipgloss.Color("#313244") // Slate highlight for selections
+	ColorPrimary   = lipgloss.Color("#c6a664") // Celestial Gold - main highlights, cursor
+	ColorSecondary = lipgloss.Color("#7fa4b5") // Starlight - headers, info
+	ColorSuccess   = lipgloss.Color("#5e8570") // Verdigris - selected items, success states
+	ColorWarning   = lipgloss.Color("#d4a843") // Bright gold - warnings, active states
+	ColorError     = lipgloss.Color("#c4523f") // Rust-red - errors
+	ColorMuted     = lipgloss.Color("#5a5040") // Warm gray - unselected, help text
+	ColorText      = lipgloss.Color("#f0e6d3") // Parchment - normal text
+	ColorHighlight = lipgloss.Color("#1f160a") // Obsidian-brown - highlight background
 )
 
 // Common Styles - reusable across all TUI components
@@ -164,8 +164,8 @@ const (
 // Progress bar configuration
 // Custom gradient that matches our color palette (cyan → purple)
 var (
-	ProgressGradientStart   = lipgloss.Color("#00D9FF") // Cyan
-	ProgressGradientEnd     = lipgloss.Color("#7D56F4") // Purple
+	ProgressGradientStart   = lipgloss.Color("#c6a664") // Celestial Gold
+	ProgressGradientEnd     = lipgloss.Color("#5e8570") // Verdigris
 	DefaultProgressGradient = progress.WithGradient(string(ProgressGradientStart), string(ProgressGradientEnd))
 )
 

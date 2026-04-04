@@ -2,14 +2,14 @@
 <defs>
   <filter id="glow-gold" x="-50%" y="-50%" width="200%" height="200%">
     <feGaussianBlur stdDeviation="3" result="blur"/>
-    <feFlood flood-color="#D4A03C" flood-opacity="0.5"/>
+    <feFlood flood-color="#c6a664" flood-opacity="0.5"/>
     <feComposite in2="blur" operator="in"/>
     <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
   </filter>
 </defs>
 <style>
-:root{--b:#7A5A12;--wm:#18140F}
-@media(prefers-color-scheme:dark){:root{--b:#D4A03C;--wm:#EDE8DE}}
+:root{--b:#8a6438;--wm:#0f0d0d}
+@media(prefers-color-scheme:dark){:root{--b:#c6a664;--wm:#f5e6d3}}
 .r{fill:none;stroke:var(--b);stroke-width:1.5}
 .rt{fill:none;stroke:var(--b);stroke-width:0.85}
 .rd{fill:none;stroke:var(--b);stroke-width:0.65;stroke-dasharray:4 3}
