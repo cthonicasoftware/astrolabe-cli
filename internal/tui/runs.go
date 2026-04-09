@@ -31,7 +31,27 @@ var (
 					Padding(1, 2)
 )
 
-const maxPayloadBytes int64 = 2 * 1024 * 1024
+const (
+	maxPayloadBytes        int64 = 2 * 1024 * 1024
+	runsTableColumnPadding       = 2
+)
+
+type runsTableColumnSpec struct {
+	title      string
+	minWidth   int
+	idealWidth int
+	grow       int
+	shrink     int
+}
+
+var runsTableColumnSpecs = []runsTableColumnSpec{
+	{title: "Run ID", minWidth: 12, idealWidth: 24, grow: 3, shrink: 4},
+	{title: "Started", minWidth: 19, idealWidth: 19, grow: 0, shrink: 0},
+	{title: "Duration", minWidth: 8, idealWidth: 10, grow: 0, shrink: 1},
+	{title: "Records", minWidth: 7, idealWidth: 8, grow: 0, shrink: 1},
+	{title: "Source", minWidth: 12, idealWidth: 18, grow: 2, shrink: 3},
+	{title: "Test Plan", minWidth: 10, idealWidth: 18, grow: 2, shrink: 3},
+}
 
 type runsViewMode int
 
@@ -332,8 +352,102 @@ func (m *runsViewModel) resizeTable() {
 		tableHeight = 6
 	}
 
+	m.table.SetColumns(buildRunsTableColumns(tableWidth))
 	m.table.SetWidth(tableWidth)
 	m.table.SetHeight(tableHeight)
+}
+
+func buildRunsTableColumns(tableWidth int) []table.Column {
+	columns := make([]table.Column, len(runsTableColumnSpecs))
+	widths := make([]int, len(runsTableColumnSpecs))
+	totalIdeal := 0
+	for i, spec := range runsTableColumnSpecs {
+		widths[i] = spec.idealWidth
+		totalIdeal += spec.idealWidth
+	}
+
+	contentWidth := tableWidth - len(runsTableColumnSpecs)*runsTableColumnPadding
+	if contentWidth > 0 {
+		switch {
+		case contentWidth > totalIdeal:
+			distributeRunsTableDelta(widths, contentWidth-totalIdeal, true)
+		case contentWidth < totalIdeal:
+			distributeRunsTableDelta(widths, totalIdeal-contentWidth, false)
+		}
+	}
+
+	for i, spec := range runsTableColumnSpecs {
+		if widths[i] < 1 {
+			widths[i] = 1
+		}
+		columns[i] = table.Column{Title: spec.title, Width: widths[i]}
+	}
+	return columns
+}
+
+func distributeRunsTableDelta(widths []int, delta int, grow bool) {
+	if delta <= 0 {
+		return
+	}
+
+	weights := make([]int, len(runsTableColumnSpecs))
+	totalWeight := 0
+	for i, spec := range runsTableColumnSpecs {
+		weight := spec.grow
+		if !grow {
+			weight = spec.shrink
+			if widths[i] <= spec.minWidth {
+				weight = 0
+			}
+		}
+		weights[i] = weight
+		totalWeight += weight
+	}
+
+	if totalWeight == 0 {
+		return
+	}
+
+	remainder := delta
+	for i, weight := range weights {
+		if weight == 0 {
+			continue
+		}
+		share := delta * weight / totalWeight
+		if !grow {
+			maxShrink := widths[i] - runsTableColumnSpecs[i].minWidth
+			if share > maxShrink {
+				share = maxShrink
+			}
+		}
+		widths[i] += signedRunsTableDelta(share, grow)
+		remainder -= share
+	}
+
+	for remainder > 0 {
+		updated := false
+		for i, weight := range weights {
+			if weight == 0 || remainder == 0 {
+				continue
+			}
+			if !grow && widths[i] <= runsTableColumnSpecs[i].minWidth {
+				continue
+			}
+			widths[i] += signedRunsTableDelta(1, grow)
+			remainder--
+			updated = true
+		}
+		if !updated {
+			break
+		}
+	}
+}
+
+func signedRunsTableDelta(value int, grow bool) int {
+	if grow {
+		return value
+	}
+	return -value
 }
 
 func (m *runsViewModel) openPayloadView() tea.Cmd {
@@ -675,14 +789,7 @@ func (m *runsViewModel) selectedRunID() string {
 }
 
 func newRunsTable(rows []table.Row) table.Model {
-	columns := []table.Column{
-		{Title: "Run ID", Width: 24},
-		{Title: "Started", Width: 19},
-		{Title: "Duration", Width: 10},
-		{Title: "Records", Width: 8},
-		{Title: "Source", Width: 18},
-		{Title: "Test Plan", Width: 18},
-	}
+	columns := buildRunsTableColumns(0)
 
 	// sensible row count
 	height := 10
@@ -712,7 +819,7 @@ func newRunsTable(rows []table.Row) table.Model {
 		Foreground(ColorText).
 		Background(ColorSecondary).
 		Bold(true)
-	styles.Cell = lipgloss.NewStyle().
+	styles.Cell = styles.Cell.
 		Foreground(ColorText)
 	tbl.SetStyles(styles)
 	tbl.Focus()
