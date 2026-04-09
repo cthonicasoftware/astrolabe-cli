@@ -413,4 +413,3 @@ func (v *Validator) checkPassed(name string) bool {
 	}
 	return false
 }
-

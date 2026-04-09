@@ -161,4 +161,3 @@ func (r *Raw) Close() error {
 	}
 	return nil
 }
-

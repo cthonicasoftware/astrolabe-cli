@@ -41,4 +41,3 @@ func TestFormatTestPlan(t *testing.T) {
 		t.Fatalf("unexpected variantless format: %q", got)
 	}
 }
-

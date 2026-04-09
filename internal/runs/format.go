@@ -55,4 +55,3 @@ func FormatTestPlan(test core.TestInfo) string {
 	}
 	return fmt.Sprintf("%s/%s", test.Plan, test.Variant)
 }
-

@@ -338,4 +338,3 @@ func TestMockSerial_DoubleCloseError(t *testing.T) {
 		t.Error("Expected error when closing already-closed mock serial")
 	}
 }
-

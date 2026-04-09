@@ -24,4 +24,3 @@ func InitFromConfig(cfg config.Config) {
 		Init(&NoopMetrics{})
 	}
 }
-

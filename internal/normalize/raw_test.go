@@ -261,4 +261,3 @@ func TestRaw_PartialLine(t *testing.T) {
 		t.Errorf("Expected content='partial line', got %v", records[0].Payload["content"])
 	}
 }
-

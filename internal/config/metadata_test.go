@@ -99,4 +99,3 @@ func TestMetadataFilePathUsesHome(t *testing.T) {
 		t.Fatalf("expected %s, got %s", want, path)
 	}
 }
-

@@ -16,10 +16,10 @@ type MockSerial struct {
 	Config sources.Config
 
 	// Test configuration
-	frames     [][]byte      // Pre-configured frames to emit
-	frameCursor int          // Current position in frames
-	frameDelay time.Duration // Delay between frames
-	readError  error         // Error to return after configured frames
+	frames      [][]byte      // Pre-configured frames to emit
+	frameCursor int           // Current position in frames
+	frameDelay  time.Duration // Delay between frames
+	readError   error         // Error to return after configured frames
 
 	// State
 	mu     sync.Mutex
@@ -200,4 +200,3 @@ func (m *MockSerial) FramesRemaining() int {
 	defer m.mu.Unlock()
 	return len(m.frames) - m.frameCursor
 }
-

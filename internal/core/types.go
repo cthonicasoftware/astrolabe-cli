@@ -83,16 +83,16 @@ const (
 // Artifact represents a single file associated with a run, including its
 // checksum, upload status, and optional remote reference.
 type Artifact struct {
-	Name            string       `json:"name"`
-	Path            string       `json:"path"`
-	MediaType       string       `json:"media_type"`
-	Role            ArtifactRole `json:"role"`
-	SizeBytes       int64        `json:"size_bytes,omitempty"`
-	Checksum        Checksum     `json:"checksum"`
-	CreatedAt       time.Time    `json:"created_at"`
-	UploadedAt      *time.Time   `json:"uploaded_at,omitempty"`
-	RemoteURL       string       `json:"remote_url,omitempty"`
-	RemoteArtifactID string      `json:"remote_artifact_id,omitempty"` // Backend-assigned ULID
+	Name             string       `json:"name"`
+	Path             string       `json:"path"`
+	MediaType        string       `json:"media_type"`
+	Role             ArtifactRole `json:"role"`
+	SizeBytes        int64        `json:"size_bytes,omitempty"`
+	Checksum         Checksum     `json:"checksum"`
+	CreatedAt        time.Time    `json:"created_at"`
+	UploadedAt       *time.Time   `json:"uploaded_at,omitempty"`
+	RemoteURL        string       `json:"remote_url,omitempty"`
+	RemoteArtifactID string       `json:"remote_artifact_id,omitempty"` // Backend-assigned ULID
 }
 
 // UploadStatus represents the lifecycle state of a run's upload to the backend.

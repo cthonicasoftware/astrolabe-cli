@@ -108,4 +108,3 @@ func List(root string) (Result, error) {
 
 	return result, nil
 }
-

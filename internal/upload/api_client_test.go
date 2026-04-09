@@ -320,4 +320,3 @@ func TestAPIClient_ContextCancellation(t *testing.T) {
 		t.Error("expected context cancellation error, got nil")
 	}
 }
-

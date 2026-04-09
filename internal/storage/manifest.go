@@ -40,4 +40,3 @@ func LoadManifest(path string) (ManifestDocument, error) {
 
 	return doc, nil
 }
-

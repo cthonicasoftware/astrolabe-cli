@@ -475,7 +475,7 @@ func startSequencedTCPServer(t *testing.T, msgSize int, msgCount int) (port int,
 // TestTCP_HighFrequency_NoDataLoss verifies that all bytes arrive intact when a server
 // blasts data with zero delay between writes (simulating a high-frequency test bench).
 func TestTCP_HighFrequency_NoDataLoss(t *testing.T) {
-	const msgSize = 128  // bytes per message
+	const msgSize = 128   // bytes per message
 	const msgCount = 5000 // total messages
 
 	port, expectedBytes, cleanup := startSequencedTCPServer(t, msgSize, msgCount)
@@ -734,7 +734,7 @@ func TestTCP_HighFrequency_ServerCloseMidStream(t *testing.T) {
 // separated by pauses, typical of real test-bench data acquisition.
 func TestTCP_HighFrequency_BurstPattern(t *testing.T) {
 	const msgSize = 128
-	const burstSize = 100  // messages per burst
+	const burstSize = 100 // messages per burst
 	const burstCount = 10
 	const burstPause = 50 * time.Millisecond
 

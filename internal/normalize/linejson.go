@@ -42,4 +42,3 @@ func (l *LineJSON) Ingest(b []byte) ([]core.Record, error) {
 
 // Close satisfies the Normalizer interface; LineJSON holds no resources.
 func (l *LineJSON) Close() error { return nil }
-

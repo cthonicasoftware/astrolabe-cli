@@ -78,4 +78,3 @@ func ExampleMockSerial_Meta() {
 	// Output:
 	// Kind: serial, Port: /dev/ttyUSB0, Baud: 115200
 }
-

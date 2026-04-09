@@ -305,4 +305,3 @@ func (m *configModel) save() error {
 
 	return nil
 }
-

@@ -200,4 +200,3 @@ func (p *Printer) printJSON(level, message string, data interface{}) {
 
 	_ = json.NewEncoder(p.writer).Encode(evt)
 }
-

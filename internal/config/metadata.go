@@ -233,4 +233,3 @@ func FormatAttributeLines(attrs map[string]string) string {
 	}
 	return strings.Join(lines, "\n")
 }
-

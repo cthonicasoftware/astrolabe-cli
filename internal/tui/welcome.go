@@ -174,4 +174,3 @@ func (m *welcomeModel) View() string {
 	content := s.String()
 	return lipgloss.PlaceVertical(m.height, lipgloss.Center, content)
 }
-

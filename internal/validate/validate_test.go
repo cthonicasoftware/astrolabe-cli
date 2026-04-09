@@ -460,4 +460,3 @@ func findCheck(checks []Check, name string) *Check {
 	}
 	return nil
 }
-

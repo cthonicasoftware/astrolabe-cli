@@ -133,7 +133,7 @@ func TestLineWrapper_WordBreaking(t *testing.T) {
 	})
 
 	t.Run("skips space at break point", func(t *testing.T) {
-		lw := NewLineWrapper(10) // Effective width: 9
+		lw := NewLineWrapper(10)         // Effective width: 9
 		input := []string{"hello world"} // 11 chars total, will wrap
 
 		result := lw.Wrap(input)

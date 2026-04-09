@@ -169,4 +169,3 @@ func (c *CSV) Close() error {
 	}
 	return nil
 }
-

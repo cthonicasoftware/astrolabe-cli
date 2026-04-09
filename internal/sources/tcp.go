@@ -197,4 +197,3 @@ func (t *TCP) Close() error {
 func (t *TCP) Address() string {
 	return fmt.Sprintf("%s:%d", t.Host, t.Port)
 }
-

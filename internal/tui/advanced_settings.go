@@ -346,4 +346,3 @@ func (m *advancedSettingsModel) WasApplied() bool {
 func (m *advancedSettingsModel) ShouldClose() bool {
 	return m.shouldClose
 }
-

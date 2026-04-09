@@ -126,4 +126,3 @@ func TestInitFromConfig_Integration(t *testing.T) {
 		t.Errorf("captures delta after init = %v, want 1", captures["total"].(int64)-beforeCaptures)
 	}
 }
-

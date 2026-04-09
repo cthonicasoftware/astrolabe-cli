@@ -176,4 +176,3 @@ func TestIntegration_ConfigurationVariations(t *testing.T) {
 		})
 	}
 }
-

@@ -99,8 +99,8 @@ func (c *APIClient) CreateRun(ctx context.Context, run *core.Run) (string, error
 
 // ArtifactPresignRequest represents a single artifact in the presign request.
 type ArtifactPresignRequest struct {
-	Filename       string `json:"filename"`        // Changed from file_name to match backend
-	Role           string `json:"role"`            // Required by backend (manifest, data, log, etc.)
+	Filename       string `json:"filename"` // Changed from file_name to match backend
+	Role           string `json:"role"`     // Required by backend (manifest, data, log, etc.)
 	ContentType    string `json:"content_type"`
 	SizeBytes      int64  `json:"size_bytes"`
 	ChecksumSHA256 string `json:"checksum_sha256"`
@@ -184,8 +184,8 @@ func (c *APIClient) GetPresignedURL(ctx context.Context, remoteRunID string, art
 
 // ArtifactConfirmRequest represents a single artifact in the confirm request.
 type ArtifactConfirmRequest struct {
-	ArtifactID     string    `json:"artifact_id"`      // Backend-assigned ULID (required!)
-	Filename       string    `json:"filename"`         // Changed from file_name to match backend
+	ArtifactID     string    `json:"artifact_id"` // Backend-assigned ULID (required!)
+	Filename       string    `json:"filename"`    // Changed from file_name to match backend
 	ChecksumSHA256 string    `json:"checksum_sha256"`
 	UploadedAt     time.Time `json:"uploaded_at"`
 }
@@ -242,4 +242,3 @@ func (c *APIClient) ConfirmUpload(ctx context.Context, remoteRunID string, artif
 
 	return nil
 }
-

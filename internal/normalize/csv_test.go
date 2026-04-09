@@ -259,4 +259,3 @@ func TestCSV_PartialLine(t *testing.T) {
 		}
 	}
 }
-

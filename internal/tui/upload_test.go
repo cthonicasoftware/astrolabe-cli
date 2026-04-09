@@ -531,4 +531,3 @@ func TestUploadModel_ConsecutiveFailsResetOnSuccess(t *testing.T) {
 		t.Errorf("expected failed=3, got %d", model.failed)
 	}
 }
-

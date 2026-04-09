@@ -973,4 +973,3 @@ type CaptureConfig struct {
 	TCPPort      string
 	SCPIAddress  string // For future SCPI/VISA implementation
 }
-
