@@ -59,6 +59,14 @@ Or set these via environment variables:
 astrolabe upload --run-id <run-id>
 ```
 
+### Force upload
+
+```bash
+astrolabe upload --force
+```
+
+The `--force` flag uploads even when the offline flag is set.
+
 ### Upload all pending runs
 
 ```bash
@@ -155,7 +163,7 @@ For the full backend contract, including headers, status codes, field notes, and
 ### 1. Create Run
 
 ```
-POST /api/v1/runs
+POST /api/v1/runs/
 Authorization: Bearer <token>
 Content-Type: application/json
 

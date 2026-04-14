@@ -221,10 +221,10 @@ astrolabe version
 
 # Check serial port access (if applicable)
 astrolabe tui
-# → Select "List Ports"
+# → Select "Capture" → Serial tab to see available ports
 
 # Check configuration
-astrolabe config get
+astrolabe config get api_url
 ```
 
 ---

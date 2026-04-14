@@ -275,4 +275,3 @@ A compatible backend should:
 ## Related Docs
 
 - `docs/UPLOAD_GUIDE.md` for operator-facing upload workflow
-- `docs/TESTING_ORRERY_INTEGRATION.md` for end-to-end integration testing
