@@ -14,8 +14,8 @@ Common task patterns for day-to-day Astrolabe operations.
 astrolabe tui
 ```
 
-1. Select **List Ports** to identify your device
-2. Select **Capture Serial**
+1. Select **Capture**
+2. Choose the **Serial** tab
 3. Choose port from list
 4. Set baud rate (common: 9600, 115200)
 5. Press Enter to start capture
@@ -26,11 +26,8 @@ astrolabe tui
 ### CLI Method
 
 ```bash
-# Identify available ports
-astrolabe ports list
-
 # Start capture
-astrolabe capture serial /dev/ttyUSB0 \
+astrolabe capture serial --port /dev/ttyUSB0 \
   --baud 115200 \
   --device-id "DUT-001" \
   --test-plan "functional-test"
@@ -120,7 +117,7 @@ astrolabe capture file data.csv --columns "time,voltage,current"
 astrolabe tui
 ```
 
-1. Select **Capture TCP**
+1. Select **Capture** and choose the **TCP** tab
 2. Enter host address (e.g., `192.168.1.100`)
 3. Select or enter port number
 4. Connection validates automatically
@@ -131,12 +128,12 @@ astrolabe tui
 
 ```bash
 # Capture from network instrument
-astrolabe capture tcp 192.168.1.100 5025 \
+astrolabe capture tcp --host 192.168.1.100 --port 5025 \
   --device-id "oscilloscope-01" \
   --test-plan "signal-measurement"
 
 # With timeouts for slow connections
-astrolabe capture tcp slow-device 9000 \
+astrolabe capture tcp --host slow-device --port 9000 \
   --connect-timeout 30s \
   --read-timeout 120s
 
@@ -204,7 +201,7 @@ for entry in "${DEVICES[@]}"; do
   echo "Capturing from $DEVICE_ID on $PORT..."
 
   # Run capture in background
-  astrolabe capture serial "$PORT" \
+  astrolabe capture serial --port "$PORT" \
     --baud 115200 \
     --device-id "$DEVICE_ID" \
     --test-plan "multi-device-test" \
@@ -272,7 +269,7 @@ astrolabe upload
 TIMESTAMP=$(date +%Y%m%d-%H%M)
 
 # Capture for 55 minutes (leave 5 min buffer)
-timeout 3300 astrolabe capture tcp sensor-gateway 9000 \
+timeout 3300 astrolabe capture tcp --host sensor-gateway --port 9000 \
   --test-plan "hourly-monitoring" \
   --attr "capture_time=$TIMESTAMP"
 
@@ -364,14 +361,12 @@ jobs:
 | Task | Command |
 |------|---------|
 | Launch TUI | `astrolabe tui` |
-| List serial ports | `astrolabe ports list` |
-| Capture serial | `astrolabe capture serial <port> --baud <rate>` |
-| Capture TCP | `astrolabe capture tcp <host> <port>` |
+| Capture serial | `astrolabe capture serial --port <port> --baud <rate>` |
+| Capture TCP | `astrolabe capture tcp --host <host> --port <port>` |
 | Import file | `astrolabe capture file <path>` |
-| List runs | `astrolabe runs list` |
 | Upload all | `astrolabe upload` |
 | Upload specific run | `astrolabe upload --run-id <id>` |
-| Check config | `astrolabe config get` |
+| Check config | `astrolabe config get api_url` |
 | Show version | `astrolabe version` |
 
 ---

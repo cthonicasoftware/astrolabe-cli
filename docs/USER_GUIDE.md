@@ -39,7 +39,7 @@ astrolabe.exe tui
 # macOS/Linux
 astrolabe tui
 ```
-**Expected result:** Welcome screen appears with menu options (🔌 Configure Connection, 📝 Configure Metadata, 🎯 Capture Serial, etc.)
+**Expected result:** Welcome screen appears with menu options: Capture, View Runs, Upload Data, Configure Metadata, Configure Connection.
 
 **Step 2: Configure Connection**
 - Select "Configure Connection" (🔌)
@@ -61,20 +61,18 @@ astrolabe tui
 
 ### Capturing Data
 
-**Step 4: List Available Ports (Serial Only)**
-- Select "List Ports" from welcome screen
-- Note the port name:
-  - **Windows**: `COM3`, `COM4`, etc.
-  - **macOS**: `/dev/cu.usbserial-*` or `/dev/tty.usbserial-*`
-  - **Linux**: `/dev/ttyUSB0`, `/dev/ttyACM0`, etc.
-
-**Expected result:** List of available serial ports displayed.
+**Step 4: Identify Your Port (Serial Only)**
+- Check your OS for available serial ports:
+  - **Windows**: Device Manager → Ports (COM & LPT) — note the COM number (e.g., `COM3`)
+  - **macOS**: `ls /dev/cu.*` in terminal
+  - **Linux**: `ls /dev/ttyUSB* /dev/ttyACM*` in terminal
 
 **Step 5: Start Capture**
-- Select "Capture Serial" (🎯) or "Capture TCP" (󰛶)
+- Select **Capture** from the welcome screen
+- Choose the **Serial** or **TCP** tab
 - Configure connection:
-  - **Serial**: Enter port and baud rate (e.g., `115200`)
-  - **TCP**: Enter host:port (`192.168.1.100:8080`)
+  - **Serial**: Choose your port and set baud rate (e.g., `115200`)
+  - **TCP**: Enter host address and port number separately
 - Press Enter to start
 
 **Expected result:** Live data streams in real-time on screen.
@@ -108,26 +106,23 @@ astrolabe tui
 # Windows: Capture from COM port
 # --device-id: Your equipment identifier
 # --baud: Communication speed (common: 9600, 115200)
-astrolabe.exe capture serial COM3 --device-id test-bench-01 --baud 115200
+astrolabe.exe capture serial --port COM3 --device-id test-bench-01 --baud 115200
 
 # macOS: Capture from USB serial
-./bin/astrolabe capture serial /dev/cu.usbserial-0001 --device-id test-bench-01 --baud 115200
+./bin/astrolabe capture serial --port /dev/cu.usbserial-0001 --device-id test-bench-01 --baud 115200
 
 # Linux: Capture from USB serial
-./bin/astrolabe capture serial /dev/ttyUSB0 --device-id test-bench-01 --baud 115200
+./bin/astrolabe capture serial --port /dev/ttyUSB0 --device-id test-bench-01 --baud 115200
 
 # Capture from file (batch import) - all platforms
 # Useful for importing historical CSV data
 astrolabe capture file data.csv --device-id archive-01
 
-# List all cached runs
-astrolabe runs list
-
 # Upload specific run by ID
 astrolabe upload --run-id <run-id>
 
-# Check configuration
-astrolabe config get
+# Check a configuration value
+astrolabe config get api_url
 ```
 
 ### Environment Variables (Alternative to TUI Config)
@@ -137,13 +132,11 @@ astrolabe config get
 $env:ASTROLABE_API_URL="https://qa.yourcompany.com"
 $env:ASTROLABE_PROJECT_ID="project-123"
 $env:ASTROLABE_AUTH_TOKEN="your-token"
-$env:ASTROLABE_LOG_LEVEL="debug"  # For troubleshooting
 
 # macOS/Linux (Bash/Zsh)
 export ASTROLABE_API_URL="https://qa.yourcompany.com"
 export ASTROLABE_PROJECT_ID="project-123"
 export ASTROLABE_AUTH_TOKEN="your-token"
-export ASTROLABE_LOG_LEVEL=debug  # For troubleshooting
 ```
 
 ### Batch File Processing
@@ -209,7 +202,7 @@ chmod 600 ~/.astrolabe/connection.yml
 **IF upload fails:**
 1. **Check configuration exists:**
    ```bash
-   astrolabe config get
+   astrolabe config get api_url
    ```
    - If empty → Run `astrolabe tui` and configure connection
 
@@ -225,11 +218,10 @@ chmod 600 ~/.astrolabe/connection.yml
 
 **IF serial port not found:**
 1. **List available ports:**
-   - In TUI: Select "List Ports"
-   - Verify your device is connected
-   - **Windows**: Check Device Manager for COM port number
+   - **Windows**: Check Device Manager → Ports (COM & LPT) for the COM number
    - **macOS**: Run `ls /dev/cu.*` in terminal
    - **Linux**: Run `ls /dev/ttyUSB* /dev/ttyACM*` in terminal
+   - Verify your device is connected
 
 2. **Check drivers/permissions:**
    - **Windows**: Install manufacturer's USB driver
@@ -256,7 +248,6 @@ chmod 600 ~/.astrolabe/connection.yml
 - **[TUI Workflow Guide](TUI_WORKFLOW.md)** - Detailed interactive interface documentation
 - **[Configuration Guide](CONFIG_TUI.md)** - Advanced configuration options
 - **[Upload Guide](UPLOAD_GUIDE.md)** - Backend integration and upload process details
-- **[Astrolabe Skill Reference](ASTROLABE_SKILL.md)** - Complete CLI command reference and architecture
 
 ---
 

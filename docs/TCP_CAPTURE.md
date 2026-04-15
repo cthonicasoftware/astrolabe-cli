@@ -9,20 +9,20 @@ TCP capture connects to a remote host:port and streams data until interrupted (C
 ## Basic Usage
 
 ```bash
-astrolabe capture tcp <host> <port>
+astrolabe capture tcp --host <host> --port <port>
 ```
 
 ### Examples
 
 ```bash
 # Capture from localhost:8080
-astrolabe capture tcp localhost 8080
+astrolabe capture tcp --host localhost --port 8080
 
 # Capture from remote server
-astrolabe capture tcp 192.168.1.100 9000
+astrolabe capture tcp --host 192.168.1.100 --port 9000
 
 # Capture with test plan metadata
-astrolabe capture tcp 10.0.0.50 5000 --test-plan "network-test"
+astrolabe capture tcp --host 10.0.0.50 --port 5000 --test-plan "network-test"
 ```
 
 ## Interactive TUI
@@ -35,7 +35,7 @@ astrolabe tui
 
 ### TUI Workflow
 
-1. **Select "Capture TCP"** from the welcome menu
+1. **Select "Capture"** from the welcome menu and choose the **TCP** tab
 2. **Enter host/IP address** (e.g., localhost, 192.168.1.100)
 3. **Select port** from common ports or enter custom port
 4. **Connection test** - automatically validates connection before proceeding
@@ -68,13 +68,15 @@ The TUI provides quick selection for common TCP ports:
 ### Syntax
 
 ```bash
-astrolabe capture tcp <host> <port> [flags]
+astrolabe capture tcp [flags]
 ```
 
-### Arguments
+### Connection Flags
 
-- `host` - Hostname or IP address of the TCP server
-- `port` - TCP port number (1-65535)
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--host` | `-H` | Hostname or IP address of the TCP server | `localhost` |
+| `--port` | `-p` | TCP port number (1-65535) | `9000` |
 
 ### TCP-Specific Flags
 
@@ -106,7 +108,7 @@ Many test instruments expose TCP interfaces for streaming measurement data:
 
 ```bash
 # Connect to oscilloscope
-astrolabe capture tcp 192.168.1.10 5025 \
+astrolabe capture tcp --host 192.168.1.10 --port 5025 \
   --test-plan "signal-analysis" \
   --device-id "scope-001" \
   --operator "alice"
@@ -118,7 +120,7 @@ Capture data from network services for analysis:
 
 ```bash
 # Capture from custom test server
-astrolabe capture tcp test-server.local 8888 \
+astrolabe capture tcp --host test-server.local --port 8888 \
   --test-plan "protocol-validation" \
   --tag "network" \
   --tag "automated"
@@ -130,7 +132,7 @@ Connect to remote data loggers:
 
 ```bash
 # Capture environmental sensor data
-astrolabe capture tcp sensor-gateway 9000 \
+astrolabe capture tcp --host sensor-gateway --port 9000 \
   --test-plan "environmental-monitoring" \
   --location "lab-3" \
   --read-timeout 60s
@@ -142,7 +144,7 @@ Capture test output from CI runners:
 
 ```bash
 # Capture test results streaming from CI agent
-astrolabe capture tcp ci-agent 7000 \
+astrolabe capture tcp --host ci-agent --port 7000 \
   --test-plan "ci-integration-test" \
   --operator "jenkins" \
   --tag "ci" \
@@ -156,7 +158,7 @@ astrolabe capture tcp ci-agent 7000 \
 Controls how long to wait for initial connection:
 
 ```bash
-astrolabe capture tcp slow-server 9000 --connect-timeout 30s
+astrolabe capture tcp --host slow-server --port 9000 --connect-timeout 30s
 ```
 
 Good for:
@@ -169,7 +171,7 @@ Good for:
 Controls how long to wait between reads (0 = infinite):
 
 ```bash
-astrolabe capture tcp sporadic-server 9000 --read-timeout 120s
+astrolabe capture tcp --host sporadic-server --port 9000 --read-timeout 120s
 ```
 
 Good for:
@@ -185,10 +187,10 @@ Controls how much data to read at once:
 
 ```bash
 # Larger buffer for high-throughput streams
-astrolabe capture tcp fast-server 9000 --buffer-size 65536
+astrolabe capture tcp --host fast-server --port 9000 --buffer-size 65536
 
 # Smaller buffer for line-oriented protocols
-astrolabe capture tcp line-server 9000 --buffer-size 1024
+astrolabe capture tcp --host line-server --port 9000 --buffer-size 1024
 ```
 
 Good for:
@@ -311,19 +313,19 @@ Capture completes normally when connection closes.
 
 ```bash
 # For slow/unreliable networks
-astrolabe capture tcp remote-server 9000 \
+astrolabe capture tcp --host remote-server --port 9000 \
   --connect-timeout 30s \
   --read-timeout 120s
 
 # For fast local connections
-astrolabe capture tcp localhost 8080 \
+astrolabe capture tcp --host localhost --port 8080 \
   --connect-timeout 2s
 ```
 
 ### 2. Add Descriptive Metadata
 
 ```bash
-astrolabe capture tcp instrument 5025 \
+astrolabe capture tcp --host instrument --port 5025 \
   --test-plan "frequency-sweep" \
   --device-id "sig-gen-001" \
   --operator "bob" \
@@ -389,13 +391,13 @@ Run multiple captures in parallel (different terminals):
 
 ```bash
 # Terminal 1
-astrolabe capture tcp instrument-1 9000 --test-plan "multi-source-test"
+astrolabe capture tcp --host instrument-1 --port 9000 --test-plan "multi-source-test"
 
 # Terminal 2
-astrolabe capture tcp instrument-2 9001 --test-plan "multi-source-test"
+astrolabe capture tcp --host instrument-2 --port 9001 --test-plan "multi-source-test"
 
 # Terminal 3
-astrolabe capture tcp instrument-3 9002 --test-plan "multi-source-test"
+astrolabe capture tcp --host instrument-3 --port 9002 --test-plan "multi-source-test"
 ```
 
 Then upload all at once:
@@ -409,7 +411,7 @@ astrolabe upload
 #!/bin/bash
 
 # Start capture in background
-astrolabe capture tcp data-source 9000 \
+astrolabe capture tcp --host data-source --port 9000 \
   --test-plan "automated-capture" \
   &
 
@@ -437,7 +439,7 @@ Capture from containerized services:
 docker run -d -p 9000:9000 my-test-service
 
 # Capture data
-astrolabe capture tcp localhost 9000 --test-plan "container-test"
+astrolabe capture tcp --host localhost --port 9000 --test-plan "container-test"
 
 # Stop container
 docker stop $(docker ps -q --filter ancestor=my-test-service)
@@ -488,7 +490,7 @@ docker stop $(docker ps -q --filter ancestor=my-test-service)
 ssh -L 9000:instrument-server:9000 user@gateway
 
 # Capture through tunnel
-astrolabe capture tcp localhost 9000 --test-plan "secure-capture"
+astrolabe capture tcp --host localhost --port 9000 --test-plan "secure-capture"
 ```
 
 ### Firewall Configuration

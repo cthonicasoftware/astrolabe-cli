@@ -28,14 +28,11 @@ astrolabe tui
 You'll see the welcome menu:
 
 ```
-  Capture Serial
-  Capture TCP
-  List Ports
+  Capture
   View Runs
   Upload Data
   Configure Metadata
   Configure Connection
-  New File
 ```
 
 ### Step 2: Configure Backend Connection (First Time Only)
@@ -50,18 +47,20 @@ You'll see the welcome menu:
 ### Step 3: Capture Data
 
 **For Serial Port:**
-1. Select **Capture Serial**
-2. Choose your port from the list
-3. Set baud rate (default: 115200)
-4. Press Enter - live data streams on screen
-5. Press `s` to save when done
+1. Select **Capture**
+2. Choose the **Serial** tab
+3. Choose your port from the list
+4. Set baud rate (default: 115200)
+5. Press Enter — live data streams on screen
+6. Press `s` to save when done
 
 **For TCP:**
-1. Select **Capture TCP**
-2. Enter host address (e.g., `192.168.1.100`)
-3. Enter port (e.g., `8080`)
-4. Press Enter - live data streams on screen
-5. Press `s` to save when done
+1. Select **Capture**
+2. Choose the **TCP** tab
+3. Enter host address (e.g., `192.168.1.100`)
+4. Enter port (e.g., `8080`)
+5. Press Enter — live data streams on screen
+6. Press `s` to save when done
 
 **For File Import:**
 ```bash
@@ -94,12 +93,11 @@ Check upload status:
 | Task | Command |
 |------|---------|
 | Launch TUI | `astrolabe tui` |
-| Capture from serial | `astrolabe capture serial /dev/ttyUSB0 --baud 115200` |
-| Capture from TCP | `astrolabe capture tcp 192.168.1.100:8080` |
+| Capture from serial | `astrolabe capture serial --port /dev/ttyUSB0 --baud 115200` |
+| Capture from TCP | `astrolabe capture tcp --host 192.168.1.100 --port 8080` |
 | Import file | `astrolabe capture file data.csv` |
-| List runs | `astrolabe runs list` |
 | Upload all | `astrolabe upload` |
-| Check config | `astrolabe config get` |
+| Check config | `astrolabe config get api_url` |
 | Show version | `astrolabe version` |
 
 ---

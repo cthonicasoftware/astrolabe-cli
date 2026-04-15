@@ -1,5 +1,7 @@
 # Test Utilities
 
+> **Note:** This package is for internal use only and is not part of the public API. It is intended for use within Astrolabe's own test suite and may change without notice.
+
 This package provides mock implementations and test helpers for the Astrolabe CLI/TUI project.
 
 ## MockSerial

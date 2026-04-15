@@ -14,14 +14,11 @@ The welcome screen presents these options:
 
 ```
 ┌─────────────────────────────────────┐
-│  🎯 Capture Serial                  │
-│  󰛶  Capture TCP                     │
-│  📡 List Ports                      │
+│  🎯 Capture                         │
 │  📊 View Runs                       │
 │  ⬆️  Upload Data                    │
 │  📝 Configure Metadata              │
 │  🔌 Configure Connection            │
-│  📄 New File                        │
 └─────────────────────────────────────┘
 ```
 
@@ -45,7 +42,8 @@ Use `↑` / `↓` or `j` / `k` to navigate, `Enter` to select.
 
 ### Capture and Upload Workflow
 
-1. **Select "Capture Serial"** (🎯) or **"Capture TCP"** (󰛶)
+1. **Select "Capture"** (🎯)
+   - Choose the **Serial** or **TCP** tab
    - For serial: Choose port from list, configure baud rate
    - For TCP: Enter host/IP and port
    - Watch live data stream
@@ -66,23 +64,12 @@ Use `↑` / `↓` or `j` / `k` to navigate, `Enter` to select.
 
 ## Menu Item Details
 
-### 🎯 Capture Serial
-- Interactive serial port selection
-- Live data streaming TUI
+### 🎯 Capture
+- Opens a tabbed capture screen with **Serial**, **TCP**, and **SCPI/VISA** tabs
+- **Serial tab**: Interactive port selection, baud rate configuration, live streaming
+- **TCP tab**: Enter host/IP and port, connection validation, live streaming
 - Press `s` to save, `q` to quit without saving
 - Returns to welcome screen when done
-
-### 󰛶 Capture TCP
-- Enter TCP host/IP address
-- Select from common ports or enter custom port
-- Live data streaming TUI
-- Press `s` to save, `q` to quit without saving
-- Returns to welcome screen when done
-
-### 📡 List Ports
-- Shows all available serial ports
-- Displays port paths and descriptions
-- Press `q` to return
 
 ### 📝 Configure Metadata
 - Set operator, location, device info, test details
@@ -111,9 +98,6 @@ Use `↑` / `↓` or `j` / `k` to navigate, `Enter` to select.
 - Set max retry attempts
 - Press `Ctrl+T` to toggle token visibility
 - `Ctrl+S` to save
-
-### 📄 New File
-- (Future feature)
 
 ## Status Messages
 
@@ -173,7 +157,7 @@ Connection refused: check your API URL and network
 → Select "Configure Connection" and set your backend server URL
 
 ### Can't find serial port
-→ Select "List Ports" to see available ports
+→ Check your OS for available ports (Windows: Device Manager, macOS: `ls /dev/cu.*`, Linux: `ls /dev/ttyUSB*`)
 
 ### Lost metadata between captures
 → Use "Configure Metadata" to set defaults that persist

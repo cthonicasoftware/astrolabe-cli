@@ -8,7 +8,7 @@ Effective metadata makes your QA data searchable, traceable, and valuable. This 
 
 Good metadata enables:
 - **Traceability**: Link test results to specific devices, firmware, and test plans
-- **Searchability**: Find specific runs in the Orrery backend
+- **Searchability**: Find specific runs in the backend
 - **Analysis**: Compare results across firmware versions, test stations, or time periods
 - **Compliance**: Maintain audit trails for quality standards
 
@@ -21,39 +21,29 @@ Poor metadata leads to:
 
 ## Core Metadata Fields
 
-### Operator Information
+### Operator
 
 **Purpose:** Track who performed the capture for accountability and follow-up.
 
 ```json
-"operator": {
-  "name": "Jane Smith",
-  "email": "jane.smith@company.com",
-  "id": "jsmith"
-}
+"operator": "jane.smith"
 ```
 
 **Best Practices:**
-- Use consistent IDs across your organization
-- For automated captures, use system/service identifiers (e.g., `ci-runner-01`)
-- Email enables notification workflows
+- Use consistent identifiers across your organization (username, email, or display name)
+- For automated captures, use system/service identifiers (e.g., `ci-runner-01`, `jenkins`)
 
-### Location Information
+### Location
 
 **Purpose:** Identify where the test was performed for troubleshooting and equipment tracking.
 
 ```json
-"location": {
-  "site": "HQ",
-  "building": "Building A",
-  "room": "Lab 101",
-  "bench_id": "BENCH-A3"
-}
+"location": "HQ / Lab 101 / Bench A3"
 ```
 
 **Best Practices:**
-- Use consistent naming conventions across sites
-- `bench_id` should uniquely identify the test station
+- Use a consistent format across your organization
+- Include enough specificity to uniquely identify the test station
 - Useful for correlating environmental factors with test results
 
 ### Device Information
@@ -63,20 +53,23 @@ Poor metadata leads to:
 ```json
 "device": {
   "id": "DUT-2024-001",
-  "serial_number": "SN12345678",
-  "model": "Widget Pro",
+  "serial": "SN12345678",
   "hardware_version": "v2.1",
-  "firmware_version": "1.4.2",
+  "firmware": "1.4.2",
   "firmware_hash": "abc123def456"
 }
 ```
 
-**Best Practices:**
+**Fields:**
 - **`id`**: Use a consistent identifier format (e.g., `DUT-YYYY-NNN`)
-- **`serial_number`**: Physical label from the device
-- **`firmware_version`**: Use semantic versioning (e.g., `1.4.2`)
+- **`serial`**: Physical serial number from the device label
+- **`hardware_version`**: PCB or hardware revision
+- **`firmware`**: Use semantic versioning (e.g., `1.4.2`)
 - **`firmware_hash`**: Short git hash or build hash for exact traceability
+
+**Best Practices:**
 - Keep hardware and firmware versions separate for independent tracking
+- Always include `firmware_hash` for builds — version strings alone aren't unique enough
 
 ### Test Information
 
@@ -85,27 +78,22 @@ Poor metadata leads to:
 ```json
 "test": {
   "plan": "functional-validation",
-  "plan_version": "2.0",
   "variant": "extended",
-  "run_number": "42",
-  "environment": "production"
+  "run": "42"
 }
 ```
 
-**Best Practices:**
+**Fields:**
 - **`plan`**: Use kebab-case names (e.g., `power-cycle-stress`, `calibration-full`)
-- **`plan_version`**: Version your test plans to track methodology changes
 - **`variant`**: Distinguish test configurations (e.g., `quick`, `standard`, `extended`)
-- **`environment`**: Indicate test stage (`development`, `staging`, `production`)
+- **`run`**: Sequential run number or identifier within a plan
 
 ### Tags
 
 **Purpose:** Flexible categorization for filtering and grouping.
 
 ```json
-"tags": {
-  "tags": ["calibration", "production-line", "batch-2024-Q1"]
-}
+"tags": ["calibration", "production-line", "batch-2024-Q1"]
 ```
 
 **Best Practices:**
@@ -145,29 +133,17 @@ Poor metadata leads to:
 
 ```json
 {
-  "operator": {
-    "name": "Line Operator",
-    "id": "station-3-auto"
-  },
-  "location": {
-    "site": "Factory-SZ",
-    "building": "Production",
-    "room": "Line 3",
-    "bench_id": "STATION-3"
-  },
+  "operator": "station-3-auto",
+  "location": "Factory-SZ / Production / Line 3 / Station 3",
   "device": {
-    "model": "Widget Pro",
     "hardware_version": "v2.1",
-    "firmware_version": "1.4.2-release"
+    "firmware": "1.4.2-release"
   },
   "test": {
     "plan": "production-functional",
-    "plan_version": "3.0",
-    "environment": "production"
+    "variant": "standard"
   },
-  "tags": {
-    "tags": ["production", "functional", "automated"]
-  },
+  "tags": ["production", "functional", "automated"],
   "attributes": {
     "line_number": "3",
     "shift": "day",
@@ -180,32 +156,19 @@ Poor metadata leads to:
 
 ```json
 {
-  "operator": {
-    "name": "Alex Chen",
-    "email": "alex.chen@company.com",
-    "id": "achen"
-  },
-  "location": {
-    "site": "HQ",
-    "building": "R&D",
-    "room": "Lab 201",
-    "bench_id": "PROTO-BENCH-1"
-  },
+  "operator": "alex.chen",
+  "location": "HQ / R&D / Lab 201 / Proto Bench 1",
   "device": {
     "id": "PROTO-007",
-    "model": "Widget Pro",
     "hardware_version": "v3.0-proto",
-    "firmware_version": "2.0.0-dev.45",
+    "firmware": "2.0.0-dev.45",
     "firmware_hash": "abc123d"
   },
   "test": {
     "plan": "power-consumption",
-    "variant": "sleep-modes",
-    "environment": "development"
+    "variant": "sleep-modes"
   },
-  "tags": {
-    "tags": ["prototype", "power", "investigation"]
-  },
+  "tags": ["prototype", "power", "investigation"],
   "attributes": {
     "experiment_id": "PWR-2024-015",
     "supply_voltage": "3.3",
@@ -219,29 +182,18 @@ Poor metadata leads to:
 
 ```json
 {
-  "operator": {
-    "name": "CI Pipeline",
-    "id": "jenkins-main"
-  },
-  "location": {
-    "site": "Cloud",
-    "bench_id": "ci-runner-pool"
-  },
+  "operator": "jenkins-main",
+  "location": "cloud / ci-runner-pool",
   "device": {
     "id": "HIL-SIM-01",
-    "model": "Widget Pro Simulator",
-    "firmware_version": "${GIT_TAG}",
+    "firmware": "${GIT_TAG}",
     "firmware_hash": "${GIT_COMMIT}"
   },
   "test": {
     "plan": "regression-suite",
-    "plan_version": "1.0",
-    "run_number": "${BUILD_NUMBER}",
-    "environment": "ci"
+    "run": "${BUILD_NUMBER}"
   },
-  "tags": {
-    "tags": ["regression", "automated", "ci"]
-  },
+  "tags": ["regression", "automated", "ci"],
   "attributes": {
     "build_url": "${BUILD_URL}",
     "branch": "${GIT_BRANCH}",
@@ -258,31 +210,28 @@ Poor metadata leads to:
 
 **Bad:**
 ```
-firmware_version: "1.4.2"
-firmware_version: "v1.4.2"
-firmware_version: "Version 1.4.2"
+firmware: "1.4.2"
+firmware: "v1.4.2"
+firmware: "Version 1.4.2"
 ```
 
 **Good:** Pick one format and use it everywhere:
 ```
-firmware_version: "1.4.2"
+firmware: "1.4.2"
 ```
 
 ### 2. Missing Device Identity
 
 **Bad:** No way to trace back to physical device
 ```json
-"device": {
-  "model": "Widget"
-}
+"device": {}
 ```
 
 **Good:** Include unique identifiers
 ```json
 "device": {
   "id": "DUT-2024-042",
-  "serial_number": "SN12345678",
-  "model": "Widget Pro"
+  "serial": "SN12345678"
 }
 ```
 
@@ -315,7 +264,6 @@ firmware_version: "1.4.2"
 ```json
 "test": {
   "plan": "thermal-stress-cycle",
-  "plan_version": "2.1",
   "variant": "extended"
 }
 ```
@@ -325,14 +273,14 @@ firmware_version: "1.4.2"
 **Bad:** Cannot distinguish between builds
 ```json
 "device": {
-  "firmware_version": "latest"
+  "firmware": "latest"
 }
 ```
 
 **Good:** Include exact version and hash
 ```json
 "device": {
-  "firmware_version": "1.4.2",
+  "firmware": "1.4.2",
   "firmware_hash": "abc123d"
 }
 ```
@@ -346,25 +294,12 @@ Configure defaults in the TUI to avoid repetitive entry:
 1. Launch: `astrolabe tui`
 2. Select **Configure Metadata**
 3. Set common values that rarely change:
-   - Operator name/ID
-   - Location (site, building, room, bench)
-   - Device model and hardware version
+   - Operator identifier
+   - Location
+   - Device hardware version
 4. Press `Ctrl+S` to save
 
-Override per-capture via CLI flags or TUI prompts when values differ.
-
----
-
-## Integration with Orrery Backend
-
-Metadata flows to Orrery where it enables:
-
-- **Filtering**: Find all runs for a specific device or firmware version
-- **Grouping**: Aggregate results by test plan or location
-- **Trending**: Track metrics over time by firmware version
-- **Alerts**: Trigger notifications based on metadata conditions
-
-Ensure your metadata schema aligns with your Orrery dashboards and queries.
+Override per-capture via CLI flags when values differ.
 
 ---
 

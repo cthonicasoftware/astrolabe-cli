@@ -72,8 +72,7 @@ Before diving into specific issues, verify these basics:
 ### Port Not Detected
 
 **Symptoms:**
-- Empty list when selecting "List Ports"
-- Port not shown in capture menu
+- Port not shown in the Capture → Serial tab
 
 **Solutions:**
 
@@ -458,10 +457,11 @@ Before diving into specific issues, verify these basics:
 - `~/.astrolabe/connection.yml`
 - `~/.astrolabe/metadata.json`
 
-**Enable Debug Logging:**
+**Inspect Run Data Directly:**
 ```bash
-export ASTROLABE_LOG_LEVEL=debug
-astrolabe tui
+# View run manifest and captured data
+ls ~/.astrolabe/runs/
+cat ~/.astrolabe/runs/<run-id>/manifest.json
 ```
 
 ---
