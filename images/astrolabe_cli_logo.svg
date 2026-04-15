@@ -88,7 +88,7 @@
 <text x="265" y="151"
   fill="var(--b)"
   font-family="'Courier New',Courier,monospace"
-  font-size="10.5" letter-spacing="1.6">FIELD DATA CAPTURE  ·  TEST AUTOMATION</text>
+  font-size="10.5" letter-spacing="1.6">CAPTURE  ·  VALIDATE  ·  UPLOAD</text>
 
 <!-- Rule -->
 <line x1="265" y1="161" x2="660" y2="161" stroke="var(--b)" stroke-width="0.8"/>

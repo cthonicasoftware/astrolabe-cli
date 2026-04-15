@@ -207,7 +207,7 @@
   <text x="265" y="151"
     fill="var(--b)"
     font-family="'Courier New',Courier,monospace"
-    font-size="10.5" letter-spacing="1.6">FIELD DATA CAPTURE  ·  TEST AUTOMATION</text>
+    font-size="10.5" letter-spacing="1.6">CAPTURE  ·  VALIDATE  ·  UPLOAD</text>
 </g>
 
 <!-- Bottom rule draws rightward at 5.5s -->
