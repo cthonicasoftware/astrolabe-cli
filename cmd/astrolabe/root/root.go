@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"strings"
 
@@ -53,7 +54,8 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.astrolabe/connection.yml)")
 	rootCmd.PersistentFlags().Bool("json", false, "emit machine-readable JSON output")
 	if err := viper.BindPFlag("json", rootCmd.PersistentFlags().Lookup("json")); err != nil {
-		panic(fmt.Sprintf("bind json flag: %v", err))
+		fmt.Fprintf(os.Stderr, "astrolabe: bind json flag: %v\n", err)
+		os.Exit(1)
 	}
 
 	// attach subcommands

@@ -63,7 +63,10 @@ func ReadInConfig(explicitPath string) error {
 // Load returns the active configuration from Viper.
 // Missing values fall back to sensible defaults (e.g. ~/.astrolabe/runs for OfflineCache).
 func Load() (Config, error) {
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return Config{}, fmt.Errorf("resolve home directory: %w", err)
+	}
 	return Config{
 		APIURL:       viper.GetString("api_url"),
 		ProjectID:    viper.GetString("project_id"),

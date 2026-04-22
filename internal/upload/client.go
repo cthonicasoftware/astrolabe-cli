@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -81,7 +82,9 @@ func (c *Client) UploadRun(ctx context.Context, runID string) error {
 			now := time.Now()
 			run.Upload.LastAttempt = &now
 			run.Upload.Attempts++
-			_ = c.saveRunState(run)
+			if saveErr := c.saveRunState(run); saveErr != nil {
+				log.Printf("saveRunState after create-run failure: %v", saveErr)
+			}
 			return fmt.Errorf("create run on server: %w", err)
 		}
 
@@ -105,7 +108,9 @@ func (c *Client) UploadRun(ctx context.Context, runID string) error {
 			now := time.Now()
 			run.Upload.LastAttempt = &now
 			run.Upload.Attempts++
-			_ = c.saveRunState(run)
+			if saveErr := c.saveRunState(run); saveErr != nil {
+				log.Printf("saveRunState after presigned-url failure: %v", saveErr)
+			}
 			return fmt.Errorf("get presigned url for %s: %w", artifact.Name, err)
 		}
 
@@ -126,7 +131,9 @@ func (c *Client) UploadRun(ctx context.Context, runID string) error {
 				now := time.Now()
 				run.Upload.LastAttempt = &now
 				run.Upload.Attempts += result.Attempts
-				_ = c.saveRunState(run)
+				if saveErr := c.saveRunState(run); saveErr != nil {
+					log.Printf("saveRunState after artifact-upload failure: %v", saveErr)
+				}
 				return fmt.Errorf("upload artifact %s: %w", artifact.Name, err)
 			}
 
@@ -141,7 +148,9 @@ func (c *Client) UploadRun(ctx context.Context, runID string) error {
 			now := time.Now()
 			run.Upload.LastAttempt = &now
 			run.Upload.Attempts++
-			_ = c.saveRunState(run)
+			if saveErr := c.saveRunState(run); saveErr != nil {
+				log.Printf("saveRunState after confirm-upload failure: %v", saveErr)
+			}
 			return fmt.Errorf("confirm upload for %s: %w", artifact.Name, err)
 		}
 	}
