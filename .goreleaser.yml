@@ -57,7 +57,7 @@ sboms:
 binary_signs:
   - id: binaries
     cmd: cosign
-    signature: "{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}{{ .Ext }}.sigstore.json"
+    signature: "{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}.sigstore.json"
     args:
       - sign-blob
       - "--bundle=${signature}"
