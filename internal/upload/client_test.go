@@ -268,6 +268,71 @@ func TestUploadRun_Integration(t *testing.T) {
 	}
 }
 
+func TestUploadRun_PersistsRemoteStateToArtifactsSidecar(t *testing.T) {
+	tmpDir := t.TempDir()
+	runID := "test-run-sidecar"
+	runDir := writeTestRun(t, tmpDir, runID)
+
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/runs/":
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(CreateRunResponse{RunID: "remote-run-sidecar"})
+		case "/api/v1/runs/remote-run-sidecar/artifacts/presign":
+			var req PresignedURLRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Fatalf("decode presign request: %v", err)
+			}
+			var artifacts []ArtifactPresignResponse
+			for _, art := range req.Artifacts {
+				artifacts = append(artifacts, ArtifactPresignResponse{
+					ArtifactID: "remote-" + art.Filename,
+					URL:        server.URL + "/upload",
+					Method:     http.MethodPut,
+				})
+			}
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(PresignedURLResponse{Artifacts: artifacts})
+		case "/upload":
+			w.WriteHeader(http.StatusOK)
+		case "/api/v1/runs/remote-run-sidecar/artifacts/confirm":
+			w.WriteHeader(http.StatusOK)
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(Config{
+		APIURL:     server.URL,
+		AuthToken:  "test-token",
+		ProjectID:  "test-project",
+		CacheRoot:  tmpDir,
+		MaxRetries: 1,
+	})
+
+	if err := client.UploadRun(context.Background(), runID); err != nil {
+		t.Fatalf("upload run: %v", err)
+	}
+
+	doc, err := storage.LoadArtifacts(filepath.Join(runDir, storage.ArtifactsFileName))
+	if err != nil {
+		t.Fatalf("load artifacts sidecar: %v", err)
+	}
+	if len(doc.Artifacts) == 0 {
+		t.Fatal("expected artifacts in sidecar")
+	}
+	for _, art := range doc.Artifacts {
+		if art.RemoteArtifactID != "remote-"+art.Name {
+			t.Errorf("%s: remote_artifact_id = %q, want %q", art.Name, art.RemoteArtifactID, "remote-"+art.Name)
+		}
+		if art.UploadedAt == nil || art.UploadedAt.IsZero() {
+			t.Errorf("%s: uploaded_at not persisted", art.Name)
+		}
+	}
+}
+
 func TestUploadRun_ReusesExistingRemoteRunID(t *testing.T) {
 	tmpDir := t.TempDir()
 	runID := "test-run-resume"
