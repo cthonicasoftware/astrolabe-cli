@@ -153,6 +153,13 @@ func (c *Client) UploadRun(ctx context.Context, runID string) error {
 			}
 			return fmt.Errorf("confirm upload for %s: %w", artifact.Name, err)
 		}
+
+		// Persist the artifact's remote state (ID + upload timestamp) to
+		// artifacts.json so the sidecar reflects remote state after each
+		// artifact completes, surviving a crash mid-run.
+		if err := c.saveArtifactsState(run); err != nil {
+			return fmt.Errorf("save artifacts state for %s: %w", artifact.Name, err)
+		}
 	}
 
 	// Mark upload as succeeded
@@ -221,13 +228,15 @@ func (c *Client) loadArtifacts(runDir string, started time.Time) ([]core.Artifac
 		artifacts := make([]core.Artifact, 0, len(doc.Artifacts))
 		for _, artifact := range doc.Artifacts {
 			artifacts = append(artifacts, core.Artifact{
-				Name:      artifact.Name,
-				Path:      filepath.Join(runDir, filepath.FromSlash(artifact.RelPath)),
-				MediaType: artifact.MediaType,
-				Role:      artifact.Role,
-				SizeBytes: artifact.SizeBytes,
-				Checksum:  artifact.Checksum,
-				CreatedAt: artifact.CreatedAt,
+				Name:             artifact.Name,
+				Path:             filepath.Join(runDir, filepath.FromSlash(artifact.RelPath)),
+				MediaType:        artifact.MediaType,
+				Role:             artifact.Role,
+				SizeBytes:        artifact.SizeBytes,
+				Checksum:         artifact.Checksum,
+				CreatedAt:        artifact.CreatedAt,
+				UploadedAt:       artifact.UploadedAt,
+				RemoteArtifactID: artifact.RemoteArtifactID,
 			})
 		}
 		return artifacts, nil
@@ -299,6 +308,23 @@ func (c *Client) saveRunState(run *core.Run) error {
 
 	if err := os.WriteFile(statePath, data, 0o644); err != nil {
 		return fmt.Errorf("write upload state: %w", err)
+	}
+
+	return nil
+}
+
+// saveArtifactsState writes the run's artifacts (including remote IDs and
+// upload timestamps) back to artifacts.json.
+func (c *Client) saveArtifactsState(run *core.Run) error {
+	runDir := filepath.Join(c.cacheRoot, run.ID)
+	doc, err := storage.NewArtifactsDocument(runDir, run.Artifacts)
+	if err != nil {
+		return fmt.Errorf("build artifacts doc: %w", err)
+	}
+
+	artifactsPath := filepath.Join(runDir, storage.ArtifactsFileName)
+	if err := storage.SaveArtifacts(artifactsPath, doc); err != nil {
+		return fmt.Errorf("save artifacts: %w", err)
 	}
 
 	return nil
