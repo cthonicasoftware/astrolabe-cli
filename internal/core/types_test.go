@@ -101,6 +101,36 @@ func TestRunJSONRoundTrip(t *testing.T) {
 	}
 }
 
+func TestManifestAlwaysEmitsRequiredDeviceFirmware(t *testing.T) {
+	// The Orrery backend requires device.id, device.firmware and test.plan to be
+	// PRESENT in the ingest manifest (see Orrery API_CONTRACT.md / runs/serializers.py).
+	// A blank firmware must still be emitted as "firmware": "" rather than dropped,
+	// otherwise ingest fails with 400 "Missing required manifest fields: device.firmware".
+	m := Manifest{
+		SchemaVersion: "v1",
+		Device:        DeviceInfo{ID: "dev-1"}, // Firmware intentionally left empty
+		Test:          TestInfo{Plan: "smoke"},
+	}
+
+	payload, err := json.Marshal(m)
+	if err != nil {
+		t.Fatalf("marshal manifest: %v", err)
+	}
+
+	var decoded map[string]any
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatalf("unmarshal manifest: %v", err)
+	}
+
+	device, ok := decoded["device"].(map[string]any)
+	if !ok {
+		t.Fatalf("device object missing from manifest JSON: %s", payload)
+	}
+	if _, present := device["firmware"]; !present {
+		t.Fatalf("device.firmware must always be present (Orrery requires it); got: %s", payload)
+	}
+}
+
 func TestRecordJSONRoundTrip(t *testing.T) {
 	ts := time.Date(2024, time.November, 2, 9, 15, 0, 0, time.UTC)
 	record := Record{
