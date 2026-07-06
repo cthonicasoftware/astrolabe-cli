@@ -17,7 +17,7 @@ type SourceMeta struct {
 type DeviceInfo struct {
 	ID              string `json:"id"`
 	Serial          string `json:"serial,omitempty"`
-	Firmware        string `json:"firmware,omitempty"`
+	Firmware        string `json:"firmware"` // required by the Orrery ingest contract; always emit (even when empty)
 	FirmwareHash    string `json:"firmware_hash,omitempty"`
 	HardwareVersion string `json:"hardware_version,omitempty"`
 }
