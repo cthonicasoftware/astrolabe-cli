@@ -6,8 +6,43 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/tui"
 )
+
+// TestSavedMetadataOptions_AppliesSavedTestPlan guards issue #92: TUI captures
+// must pick up the operator's saved metadata instead of always reporting
+// "unspecified".
+func TestSavedMetadataOptions_AppliesSavedTestPlan(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	if _, err := config.SaveMetadata(config.Metadata{
+		Operator: "alice",
+		Test:     core.TestInfo{Plan: "smoke-test", Variant: "nightly"},
+	}); err != nil {
+		t.Fatalf("SaveMetadata: %v", err)
+	}
+
+	opts := savedMetadataOptions(nil)
+
+	if opts.Test.Plan != "smoke-test" {
+		t.Errorf("Test.Plan = %q, want %q", opts.Test.Plan, "smoke-test")
+	}
+	if opts.Test.Variant != "nightly" {
+		t.Errorf("Test.Variant = %q, want %q", opts.Test.Variant, "nightly")
+	}
+	if opts.Operator != "alice" {
+		t.Errorf("Operator = %q, want %q", opts.Operator, "alice")
+	}
+
+	manifest := buildCaptureManifest(opts, nil)
+	if manifest.Test.Plan != "smoke-test" {
+		t.Errorf("manifest Test.Plan = %q, want %q", manifest.Test.Plan, "smoke-test")
+	}
+}
 
 func TestCaptureSessionStop_SavesArtifacts(t *testing.T) {
 	cacheRoot := t.TempDir()

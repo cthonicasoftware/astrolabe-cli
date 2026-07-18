@@ -10,6 +10,7 @@ import (
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/capture"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/normalize"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
@@ -95,6 +96,12 @@ func (a *captureAdapter) Start(ctx context.Context, cfg tui.CaptureConfig) (tui.
 		_ = os.RemoveAll(tempRoot)
 		return nil, err
 	}
+
+	// Load the operator's saved metadata so TUI-captured runs carry the same
+	// operator/device/test context the CLI capture paths apply. Without this the
+	// manifest is built from zero values and every run reports "unspecified".
+	req.Meta = savedMetadataOptions(a.out)
+
 	components, err := a.svc.BuildComponents(req)
 	if err != nil {
 		_ = os.RemoveAll(tempRoot)
@@ -182,6 +189,17 @@ func (a *captureAdapter) Start(ctx context.Context, cfg tui.CaptureConfig) (tui.
 	}()
 
 	return sess, nil
+}
+
+// savedMetadataOptions loads the operator's persisted metadata and turns it into
+// manifest options for a TUI capture. Load failures degrade to empty options
+// (yielding an "unspecified" manifest) rather than aborting the capture.
+func savedMetadataOptions(out *cliout.Printer) core.ManifestOptions {
+	savedMetadata, err := config.LoadMetadata()
+	if err != nil && out != nil {
+		out.Warning(fmt.Sprintf("Failed to load saved metadata: %v", err))
+	}
+	return buildManifestOptions(captureMetadataInput{}, savedMetadata, nil, err == nil)
 }
 
 func captureRequestFromConfig(cfg tui.CaptureConfig) (CaptureRequest, error) {
