@@ -2,7 +2,9 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -28,6 +30,55 @@ func TestUploadModel_Init(t *testing.T) {
 	}
 	if len(model.runIDs) != 3 {
 		t.Errorf("expected 3 runIDs, got %d", len(model.runIDs))
+	}
+}
+
+// TestUploadModel_StandaloneExits guards the freeze bug: when uploadModel runs
+// as the root program (astrolabe upload, no router), ctrl+c and the NavigateMsg
+// it emits on completion must both quit, or the summary screen is unexitable.
+func TestUploadModel_StandaloneExits(t *testing.T) {
+	mock := upload.NewMockUploadClient()
+	model := newUploadModel(mock, []string{"run-1"})
+
+	isQuit := func(cmd tea.Cmd) bool {
+		if cmd == nil {
+			return false
+		}
+		_, ok := cmd().(tea.QuitMsg)
+		return ok
+	}
+
+	// ctrl+c must quit immediately.
+	_, cmd := model.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if !isQuit(cmd) {
+		t.Error("ctrl+c did not return tea.Quit")
+	}
+
+	// A NavigateMsg (the completion signal, unhandled standalone) must quit.
+	_, cmd = model.Update(NavigateMsg{To: ScreenWelcome})
+	if !isQuit(cmd) {
+		t.Error("NavigateMsg did not return tea.Quit when standalone")
+	}
+}
+
+// TestUploadModel_SurfacesRealError guards against the misleading
+// "check your connection" message: a server-side failure must show the actual
+// error in the summary, not a connectivity guess.
+func TestUploadModel_SurfacesRealError(t *testing.T) {
+	const realErr = "confirm upload for data.jsonl: status=422 body=artifact_not_uploaded"
+	mock := upload.NewMockUploadClient()
+	mock.SetError("run-1", realErr)
+
+	model := newUploadModel(mock, []string{"run-1"})
+	updated, _ := model.Update(uploadedRunMsg{runID: "run-1", err: errors.New(realErr)})
+	model = updated.(uploadModel)
+
+	status := model.buildStatus()
+	if !strings.Contains(status.Body, realErr) {
+		t.Errorf("summary omits real error.\nbody:\n%s", status.Body)
+	}
+	if strings.Contains(status.Body, "connection") {
+		t.Errorf("summary still shows misleading connection text.\nbody:\n%s", status.Body)
 	}
 }
 

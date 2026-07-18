@@ -125,7 +125,18 @@ func (u *Uploader) uploadOnce(ctx context.Context, artifact core.Artifact, presi
 		method = http.MethodPut
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, presignedURL.URL, file)
+	// For an empty artifact, hand net/http an explicit no-body reader. If we
+	// pass a non-nil *os.File with ContentLength 0, net/http cannot tell "empty"
+	// from "unknown length" and falls back to chunked transfer encoding with no
+	// Content-Length header. Presigned object-storage PUTs (S3/MinIO) reject
+	// chunked bodies, so the object never lands and confirmation later fails
+	// with "artifact_not_uploaded".
+	var body io.Reader = file
+	if stat.Size() == 0 {
+		body = http.NoBody
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, presignedURL.URL, body)
 	if err != nil {
 		return fmt.Errorf("create upload request: %w", err)
 	}

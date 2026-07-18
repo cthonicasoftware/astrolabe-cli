@@ -23,6 +23,7 @@ type uploadModel struct {
 	succeeded           int
 	failed              int
 	consecutiveFails    int
+	lastError           string // Most recent upload failure, surfaced in the summary
 	cancelled           bool
 	aborted             bool // Early termination due to repeated failures
 	client              UploadPort
@@ -71,11 +72,25 @@ func (m uploadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
+		case "ctrl+c":
+			// Force-quit. When this model runs standalone (astrolabe upload)
+			// it is the root program, so nothing else handles ctrl+c; without
+			// this the summary screen is unexitable in raw mode, where the OS
+			// delivers ^C as a key event rather than SIGINT.
+			return m, tea.Quit
 		case "esc", "q":
 			m.cancelled = true
 			m.done = true
 			return m, navigateToWelcomeCmd(m.buildStatus())
 		}
+
+	case NavigateMsg:
+		// Only reached when running standalone: the router consumes NavigateMsg
+		// itself before delegating to child screens, so this case never fires
+		// under the router. Standalone has no router to navigate to, so treat a
+		// navigate request as a request to quit the one-shot program. Without
+		// this the model emits a NavigateMsg nobody handles and the app hangs.
+		return m, tea.Quit
 
 	case uploadedRunMsg:
 		runID := m.runIDs[m.index]
@@ -84,6 +99,7 @@ func (m uploadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.failed++
 			m.consecutiveFails++
+			m.lastError = msg.err.Error()
 		} else {
 			m.succeeded++
 			m.consecutiveFails = 0 // Reset on success
@@ -158,7 +174,7 @@ func (m uploadModel) View() string {
 			}
 			statusLine += "."
 			lines = append(lines, statusLine)
-			lines = append(lines, "Check your connection settings and try again.")
+			lines = append(lines, m.failureHint())
 		} else if m.cancelled {
 			lines = append(lines, "Upload cancelled.")
 
@@ -215,6 +231,17 @@ func uploadRun(client UploadPort, ctx context.Context, runID string) tea.Cmd {
 	}
 }
 
+// failureHint returns a human-facing explanation for failed uploads. It prefers
+// the actual error reported by the upload client over a generic connection
+// guess, which is misleading for server-side rejections (e.g. an HTTP 422
+// "artifact_not_uploaded") that have nothing to do with connectivity.
+func (m uploadModel) failureHint() string {
+	if e := strings.TrimSpace(m.lastError); e != "" {
+		return "Last error: " + e
+	}
+	return "Check your connection settings and try again."
+}
+
 // buildStatus generates a StatusMessage reflecting the final upload state.
 func (m uploadModel) buildStatus() *StatusMessage {
 	totalRuns := len(m.runIDs)
@@ -232,7 +259,7 @@ func (m uploadModel) buildStatus() *StatusMessage {
 		} else {
 			lines = append(lines, fmt.Sprintf("%d failed, %d not attempted.", failed, remaining))
 		}
-		lines = append(lines, "Check your connection settings.")
+		lines = append(lines, m.failureHint())
 		return NewStatusMessage(StatusError, "Upload Stopped", strings.Join(lines, "\n"))
 	}
 
@@ -266,13 +293,13 @@ func (m uploadModel) buildStatus() *StatusMessage {
 	} else if succeeded == 0 {
 		lines := []string{
 			fmt.Sprintf("All %d uploads failed.", totalRuns),
-			"Check your connection settings and try again.",
+			m.failureHint(),
 		}
 		return NewStatusMessage(StatusError, "Upload Failed", strings.Join(lines, "\n"))
 	}
 	lines := []string{
 		fmt.Sprintf("%d succeeded, %d failed.", succeeded, failed),
-		"Check your connection for failed runs.",
+		m.failureHint(),
 	}
 	return NewStatusMessage(StatusWarning, "Upload Partially Complete", strings.Join(lines, "\n"))
 }
