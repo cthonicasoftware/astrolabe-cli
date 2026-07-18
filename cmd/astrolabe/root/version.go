@@ -11,11 +11,12 @@ import (
 
 // Version information - set via ldflags at build time
 // Example: go build -ldflags "-X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.Version=1.0.0"
+// TODO: verify version schema matches most recent git tag.
 var (
 	Version   = "dev"
 	Commit    = "unknown"
 	BuildDate = "unknown"
-	Schema    = "1.0.0"
+	Schema    = "0.1.3"
 )
 
 type versionInfo struct {

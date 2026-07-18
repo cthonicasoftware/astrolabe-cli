@@ -18,8 +18,15 @@
 # Shell scripts must be LF or they break on Linux.
 *.sh text eol=lf
 
+# Git hooks are shell scripts (no extension); force LF or they break.
+.githooks/** text eol=lf
+
 # PowerShell scripts: CRLF for native Windows tooling.
 *.ps1 text eol=crlf
+
+# Windows batch scripts: CRLF or they can misbehave under cmd.exe.
+*.bat text eol=crlf
+*.cmd text eol=crlf
 
 # Treat as binary (no EOL conversion, no diff).
 *.png binary

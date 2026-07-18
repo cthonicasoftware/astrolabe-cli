@@ -1,0 +1,61 @@
+#!/bin/sh
+#
+# pre-push: verify that any version tag being pushed (vX.Y.Z) matches the
+# Schema value declared in cmd/astrolabe/root/version.go at the tagged commit.
+#
+# Git has no hook for `git tag`, so the check runs at push time. Only tag refs
+# of the form refs/tags/vX.Y.Z are inspected; branches, other tags, and tag
+# deletions are ignored. A mismatch blocks the push with a fix hint.
+#
+# Enable with:  git config core.hooksPath .githooks
+
+set -u
+
+VERSION_FILE="cmd/astrolabe/root/version.go"
+zero="0000000000000000000000000000000000000000"
+status=0
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+	# Only care about version tags.
+	case "$local_ref" in
+		refs/tags/v[0-9]*) : ;;
+		*) continue ;;
+	esac
+
+	# Skip tag deletions (local sha is all zeros).
+	[ "$local_sha" = "$zero" ] && continue
+
+	tag="${local_ref#refs/tags/}"
+	tag_version="${tag#v}"
+
+	# Peel annotated/lightweight tag to its commit, then read the file as it
+	# exists in that commit — this validates what is actually being tagged.
+	commit="$(git rev-parse --quiet --verify "${local_sha}^{commit}")" || {
+		echo "pre-push: $tag does not point at a commit; skipping version check" >&2
+		continue
+	}
+
+	file_content="$(git show "${commit}:${VERSION_FILE}" 2>/dev/null)" || {
+		echo "pre-push: cannot read ${VERSION_FILE} at ${tag}; refusing push" >&2
+		status=1
+		continue
+	}
+
+	schema="$(printf '%s\n' "$file_content" \
+		| sed -n 's/[[:space:]]*Schema[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' \
+		| head -1)"
+
+	if [ -z "$schema" ]; then
+		echo "pre-push: could not find Schema in ${VERSION_FILE} at ${tag}; refusing push" >&2
+		status=1
+		continue
+	fi
+
+	if [ "$schema" != "$tag_version" ]; then
+		echo "pre-push: version tag ${tag} does not match Schema \"${schema}\" in ${VERSION_FILE}." >&2
+		echo "         set Schema = \"${tag_version}\" (and re-tag), or tag v${schema} instead." >&2
+		status=1
+	fi
+done
+
+exit $status
