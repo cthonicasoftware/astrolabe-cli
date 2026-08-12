@@ -161,3 +161,7 @@ func (r *Raw) Close() error {
 	}
 	return nil
 }
+
+// Format implements the optional format describer consulted by the capture
+// service to record the record format in run manifests.
+func (r *Raw) Format() string { return "raw" }

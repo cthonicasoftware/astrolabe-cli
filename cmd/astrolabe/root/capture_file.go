@@ -10,7 +10,6 @@ import (
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
-	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/normalize"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
 	"github.com/spf13/cobra"
@@ -120,11 +119,6 @@ func runCaptureFile(cmd *cobra.Command, filePath string, flags fileFlags, meta *
 		Follow:    false,
 	}
 
-	fileSource, err := sources.NewFileWithConfig(fileCfg)
-	if err != nil {
-		return fmt.Errorf("failed to create file source: %w", err)
-	}
-
 	var normalizer normalize.Normalizer
 	switch format {
 	case "csv":
@@ -170,14 +164,17 @@ func runCaptureFile(cmd *cobra.Command, filePath string, flags fileFlags, meta *
 		Attributes:      flagAttrs,
 	}, savedMetadata, cmd.Flags(), true)
 
-	manifest := buildFileManifest(absPath, format, metaOpts)
-	captureSettings := buildFileCaptureSettings(absPath, format)
-
 	out.Step("Processing file...")
-	run, interrupted, err := runHeadlessCapture(out, fileSource, normalizer, appCfg.OfflineCache, manifest, captureSettings)
+	svc := newCaptureService(out, appCfg.OfflineCache)
+	result, err := svc.Run(cmd.Context(), CaptureRequest{
+		Source:     fileCfg,
+		Normalizer: normalizer,
+		Meta:       metaOpts,
+	})
 	if err != nil {
 		return err
 	}
+	run, interrupted := result.Run, result.Interrupted
 
 	out.Blank()
 	if interrupted {
@@ -192,23 +189,6 @@ func runCaptureFile(cmd *cobra.Command, filePath string, flags fileFlags, meta *
 	out.Muted("Run 'astrolabe upload' to upload to server.")
 
 	return nil
-}
-
-func buildFileManifest(filePath, format string, opts core.ManifestOptions) core.Manifest {
-	attrs := map[string]string{
-		"source_kind":   "file",
-		"source_file":   filepath.Base(filePath),
-		"source_format": format,
-		"source_path":   filePath,
-	}
-
-	return buildCaptureManifest(opts, attrs)
-}
-
-func buildFileCaptureSettings(filePath, format string) core.CaptureSettings {
-	return core.CaptureSettings{
-		Notes: fmt.Sprintf("File ingestion: %s (format: %s)", filepath.Base(filePath), format),
-	}
 }
 
 func detectFormat(filePath string) string {
