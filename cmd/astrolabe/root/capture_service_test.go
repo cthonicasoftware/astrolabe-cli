@@ -1,6 +1,7 @@
 package root
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -17,8 +18,8 @@ func TestCaptureServiceBuildComponentsSerial(t *testing.T) {
 	}
 
 	components, err := svc.BuildComponents(CaptureRequest{
-		SerialConfig: serialCfg,
-		RunLabel:     "bench-run",
+		Source:   *serialCfg,
+		RunLabel: "bench-run",
 		Meta: core.ManifestOptions{
 			Operator:   "qa-operator",
 			Attributes: map[string]string{"rack": "r2"},
@@ -59,7 +60,7 @@ func TestCaptureServiceBuildComponentsTCP(t *testing.T) {
 	}
 
 	components, err := svc.BuildComponents(CaptureRequest{
-		TCPConfig: tcpCfg,
+		Source: *tcpCfg,
 	})
 	if err != nil {
 		t.Fatalf("BuildComponents() error = %v", err)
@@ -93,12 +94,16 @@ func TestCaptureServiceBuildComponentsRejectsInvalidRequests(t *testing.T) {
 		t.Fatal("BuildComponents() error = nil, want error for missing source")
 	}
 
+	// A source whose config cannot produce a usable source must surface the
+	// failure, tagged with the source kind.
 	_, err = svc.BuildComponents(CaptureRequest{
-		SerialConfig: &sources.Config{Port: "COM1", Baud: 115200},
-		TCPConfig:    &sources.TCPConfig{Host: "localhost", Port: 9000},
+		Source: sources.TCPConfig{Host: "", Port: 9000},
 	})
 	if err == nil {
-		t.Fatal("BuildComponents() error = nil, want error for multiple sources")
+		t.Fatal("BuildComponents() error = nil, want error for invalid TCP config")
+	}
+	if !strings.Contains(err.Error(), "tcp") {
+		t.Errorf("BuildComponents() error = %q, want it to name the source kind", err)
 	}
 }
 
@@ -111,7 +116,11 @@ func TestCaptureRequestFromConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("captureRequestFromConfig() error = %v", err)
 	}
-	if req.TCPConfig == nil || req.TCPConfig.Port != 1234 {
-		t.Fatalf("tcp request = %+v, want port 1234", req.TCPConfig)
+	tcpCfg, ok := req.Source.(sources.TCPConfig)
+	if !ok {
+		t.Fatalf("req.Source = %T, want sources.TCPConfig", req.Source)
+	}
+	if tcpCfg.Port != 1234 {
+		t.Fatalf("tcp request = %+v, want port 1234", tcpCfg)
 	}
 }
