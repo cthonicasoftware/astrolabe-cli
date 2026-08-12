@@ -262,3 +262,26 @@ func (f *File) Close() error {
 	}
 	return nil
 }
+
+// Kind implements Spec; file ingestion runs record source kind "file".
+func (c FileConfig) Kind() string { return "file" }
+
+// NewSource implements Spec, constructing and validating the file source.
+func (c FileConfig) NewSource() (ManagedSource, error) { return NewFileWithConfig(c) }
+
+// ManifestAttrs implements Spec, describing the ingested file. The record
+// format is contributed by the normalizer, not the source.
+func (c FileConfig) ManifestAttrs() map[string]string {
+	return map[string]string{
+		"source_kind": "file",
+		"source_file": filepath.Base(c.Path),
+		"source_path": c.Path,
+	}
+}
+
+// CaptureSettings implements Spec.
+func (c FileConfig) CaptureSettings() core.CaptureSettings {
+	return core.CaptureSettings{
+		Notes: fmt.Sprintf("File ingestion: %s", filepath.Base(c.Path)),
+	}
+}
