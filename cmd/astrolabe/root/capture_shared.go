@@ -2,18 +2,11 @@ package root
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/capture"
-	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
-	"github.com/cthonicasoftware/astrolabe-cli/internal/normalize"
-	"github.com/cthonicasoftware/astrolabe-cli/internal/storage"
 	"github.com/spf13/pflag"
 )
 
@@ -64,51 +57,6 @@ func buildManifestOptions(in captureMetadataInput, savedMetadata config.Metadata
 		applyMetadataDefaults(&opts, savedMetadata, flags)
 	}
 	return opts
-}
-
-func runHeadlessCapture(
-	out *cliout.Printer,
-	source captureManagedSource,
-	normalizer normalize.Normalizer,
-	storeRoot string,
-	manifest core.Manifest,
-	captureSettings core.CaptureSettings,
-) (*core.Run, bool, error) {
-	store := storage.NewFS(storeRoot)
-	opts := capture.Options{
-		Source:     source,
-		Normalizer: normalizer,
-		Store:      store,
-		Manifest:   manifest,
-		Capture:    captureSettings,
-	}
-
-	pipeline, err := capture.NewPipeline(opts)
-	if err != nil {
-		return nil, false, fmt.Errorf("build pipeline: %w", err)
-	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	if err := source.Open(ctx); err != nil {
-		return nil, false, fmt.Errorf("open source: %w", err)
-	}
-	defer func() {
-		if err := source.Close(); err != nil {
-			out.Warning(fmt.Sprintf("Failed to close source: %v", err))
-		}
-	}()
-
-	run, runErr := pipeline.Run(ctx)
-	if runErr != nil && !errors.Is(runErr, context.Canceled) {
-		return nil, false, fmt.Errorf("capture pipeline: %w", runErr)
-	}
-	if run == nil {
-		return nil, false, fmt.Errorf("capture pipeline: run not returned")
-	}
-
-	return run, runErr != nil, nil
 }
 
 func buildCaptureManifest(opts core.ManifestOptions, attrs map[string]string) core.Manifest {

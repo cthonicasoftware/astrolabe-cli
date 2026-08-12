@@ -209,7 +209,7 @@ func captureRequestFromConfig(cfg tui.CaptureConfig) (CaptureRequest, error) {
 			return CaptureRequest{}, fmt.Errorf("serial config missing")
 		}
 		return CaptureRequest{
-			SerialConfig: cfg.SerialConfig,
+			Source: *cfg.SerialConfig,
 		}, nil
 
 	case tui.SourceTypeTCP:
@@ -217,12 +217,11 @@ func captureRequestFromConfig(cfg tui.CaptureConfig) (CaptureRequest, error) {
 		if err != nil {
 			return CaptureRequest{}, fmt.Errorf("invalid TCP port %q: %w", cfg.TCPPort, err)
 		}
-		tcpCfg := &sources.TCPConfig{
-			Host: cfg.TCPHost,
-			Port: portNum,
-		}
 		return CaptureRequest{
-			TCPConfig: tcpCfg,
+			Source: sources.TCPConfig{
+				Host: cfg.TCPHost,
+				Port: portNum,
+			},
 		}, nil
 
 	default:

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 
@@ -196,4 +197,30 @@ func (t *TCP) Close() error {
 // Address returns the full TCP address (host:port).
 func (t *TCP) Address() string {
 	return fmt.Sprintf("%s:%d", t.Host, t.Port)
+}
+
+// Kind implements Spec; TCP runs record source kind "tcp".
+func (c TCPConfig) Kind() string { return "tcp" }
+
+// NewSource implements Spec, constructing and validating the TCP source.
+func (c TCPConfig) NewSource() (ManagedSource, error) { return NewTCPWithConfig(c) }
+
+// ManifestAttrs implements Spec, describing the TCP endpoint and read tuning.
+func (c TCPConfig) ManifestAttrs() map[string]string {
+	return map[string]string{
+		"source_kind":     "tcp",
+		"host":            c.Host,
+		"port":            strconv.Itoa(c.Port),
+		"connect_timeout": c.ConnectTimeout.String(),
+		"read_timeout":    c.ReadTimeout.String(),
+		"buffer_size":     strconv.Itoa(c.BufferSize),
+	}
+}
+
+// CaptureSettings implements Spec.
+func (c TCPConfig) CaptureSettings() core.CaptureSettings {
+	return core.CaptureSettings{
+		Channels: []string{"tcp"},
+		Notes:    fmt.Sprintf("tcp capture from %s:%d", c.Host, c.Port),
+	}
 }

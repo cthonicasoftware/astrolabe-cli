@@ -42,3 +42,7 @@ func (l *LineJSON) Ingest(b []byte) ([]core.Record, error) {
 
 // Close satisfies the Normalizer interface; LineJSON holds no resources.
 func (l *LineJSON) Close() error { return nil }
+
+// Format implements the optional format describer consulted by the capture
+// service to record the record format in run manifests.
+func (l *LineJSON) Format() string { return "jsonl" }

@@ -96,9 +96,9 @@ func runCaptureSerial(cmd *cobra.Command, flags serialFlags, meta *captureMetada
 	out.Info("Capturing... (press Ctrl+C to stop)")
 	out.Blank()
 	result, err := svc.Run(cmd.Context(), CaptureRequest{
-		SerialConfig: serialCfg,
-		RunLabel:     flags.name,
-		Meta:         metaOpts,
+		Source:   *serialCfg,
+		RunLabel: flags.name,
+		Meta:     metaOpts,
 	})
 	if err != nil {
 		return err

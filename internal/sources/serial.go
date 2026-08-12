@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
 	"sync"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
@@ -256,3 +257,27 @@ func (s *Serial) Close() error {
 }
 
 //TODO: Create goroutine to refresh available port list on a timer or via os event
+
+// Kind implements Spec; serial runs record source kind "serial".
+func (c Config) Kind() string { return "serial" }
+
+// NewSource implements Spec, constructing the serial source. Serial
+// configuration is normalized rather than rejected, so this never errors.
+func (c Config) NewSource() (ManagedSource, error) { return NewSerialWithConfig(c), nil }
+
+// ManifestAttrs implements Spec, describing the serial port and line rate.
+func (c Config) ManifestAttrs() map[string]string {
+	return map[string]string{
+		"source_kind": "serial",
+		"port":        c.Port,
+		"baud":        strconv.Itoa(c.Baud),
+	}
+}
+
+// CaptureSettings implements Spec.
+func (c Config) CaptureSettings() core.CaptureSettings {
+	return core.CaptureSettings{
+		Channels: []string{"serial"},
+		Notes:    fmt.Sprintf("serial capture from %s @ %d baud", c.Port, c.Baud),
+	}
+}

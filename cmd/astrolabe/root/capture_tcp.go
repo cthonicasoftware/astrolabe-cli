@@ -106,9 +106,9 @@ func runCaptureTCP(cmd *cobra.Command, flags tcpFlags, meta *captureMetadataFlag
 	out.Info("Capturing... (press Ctrl+C to stop)")
 	out.Blank()
 	result, err := svc.Run(cmd.Context(), CaptureRequest{
-		TCPConfig: &tcpCfg,
-		RunLabel:  flags.name,
-		Meta:      metaOpts,
+		Source:   tcpCfg,
+		RunLabel: flags.name,
+		Meta:     metaOpts,
 	})
 	if err != nil {
 		return err

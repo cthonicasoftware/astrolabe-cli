@@ -169,3 +169,7 @@ func (c *CSV) Close() error {
 	}
 	return nil
 }
+
+// Format implements the optional format describer consulted by the capture
+// service to record the record format in run manifests.
+func (c *CSV) Format() string { return "csv" }

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/capture"
@@ -18,14 +17,18 @@ import (
 )
 
 type CaptureRequest struct {
-	SerialConfig *sources.Config
-	TCPConfig    *sources.TCPConfig
-	RunLabel     string
-	Meta         core.ManifestOptions
+	// Source is the configured capture source. Exactly one source per request
+	// is guaranteed by the type: a Spec value cannot describe two sources.
+	Source sources.Spec
+	// Normalizer converts source frames into records. Nil selects LineJSON.
+	Normalizer normalize.Normalizer
+	RunLabel   string
+	Meta       core.ManifestOptions
 }
 
 type CaptureComponents struct {
 	Source          captureManagedSource
+	Normalizer      normalize.Normalizer
 	Manifest        core.Manifest
 	CaptureSettings core.CaptureSettings
 }
@@ -61,7 +64,7 @@ func (s *captureService) Run(ctx context.Context, req CaptureRequest) (CaptureRe
 	store := storage.NewFS(s.storeRoot)
 	pipeline, err := capture.NewPipeline(capture.Options{
 		Source:     components.Source,
-		Normalizer: normalize.NewLineJSON(),
+		Normalizer: components.Normalizer,
 		Store:      store,
 		Manifest:   components.Manifest,
 		Capture:    components.CaptureSettings,
@@ -97,71 +100,37 @@ func (s *captureService) Run(ctx context.Context, req CaptureRequest) (CaptureRe
 }
 
 func (s *captureService) BuildComponents(req CaptureRequest) (CaptureComponents, error) {
-	switch {
-	case req.SerialConfig != nil && req.TCPConfig != nil:
-		return CaptureComponents{}, fmt.Errorf("capture request must specify exactly one source")
-	case req.SerialConfig == nil && req.TCPConfig == nil:
-		return CaptureComponents{}, fmt.Errorf("capture request must specify a source")
-	case req.SerialConfig != nil:
-		cfg := *req.SerialConfig
-		return CaptureComponents{
-			Source:          sources.NewSerialWithConfig(cfg),
-			Manifest:        s.buildSerialManifest(cfg, req.RunLabel, req.Meta),
-			CaptureSettings: s.buildSerialCaptureSettings(cfg),
-		}, nil
-	case req.TCPConfig != nil:
-		cfg := *req.TCPConfig
-		source, err := sources.NewTCPWithConfig(cfg)
-		if err != nil {
-			return CaptureComponents{}, fmt.Errorf("create TCP source: %w", err)
-		}
-		return CaptureComponents{
-			Source:          source,
-			Manifest:        s.buildTCPManifest(cfg, req.RunLabel, req.Meta),
-			CaptureSettings: s.buildTCPCaptureSettings(cfg),
-		}, nil
-	default:
-		return CaptureComponents{}, fmt.Errorf("unsupported capture request")
+	if req.Source == nil {
+		return CaptureComponents{}, errors.New("capture request must specify a source")
 	}
-}
 
-func (s *captureService) buildSerialManifest(cfg sources.Config, name string, opts core.ManifestOptions) core.Manifest {
-	attrs := map[string]string{
-		"source_kind": "serial",
-		"port":        cfg.Port,
-		"baud":        strconv.Itoa(cfg.Baud),
+	source, err := req.Source.NewSource()
+	if err != nil {
+		return CaptureComponents{}, fmt.Errorf("create %s source: %w", req.Source.Kind(), err)
 	}
-	if name != "" {
-		attrs["run_label"] = name
-	}
-	return buildCaptureManifest(opts, attrs)
-}
 
-func (s *captureService) buildSerialCaptureSettings(cfg sources.Config) core.CaptureSettings {
-	return core.CaptureSettings{
-		Channels: []string{"serial"},
-		Notes:    fmt.Sprintf("serial capture from %s @ %d baud", cfg.Port, cfg.Baud),
+	normalizer := req.Normalizer
+	if normalizer == nil {
+		normalizer = normalize.NewLineJSON()
 	}
-}
 
-func (s *captureService) buildTCPManifest(cfg sources.TCPConfig, name string, opts core.ManifestOptions) core.Manifest {
-	attrs := map[string]string{
-		"source_kind":     "tcp",
-		"host":            cfg.Host,
-		"port":            strconv.Itoa(cfg.Port),
-		"connect_timeout": cfg.ConnectTimeout.String(),
-		"read_timeout":    cfg.ReadTimeout.String(),
-		"buffer_size":     strconv.Itoa(cfg.BufferSize),
+	attrs := req.Source.ManifestAttrs()
+	if attrs == nil {
+		attrs = make(map[string]string)
 	}
-	if name != "" {
-		attrs["run_label"] = name
+	if req.RunLabel != "" {
+		attrs["run_label"] = req.RunLabel
 	}
-	return buildCaptureManifest(opts, attrs)
-}
+	// Record format is a property of the normalizer, not the transport, so any
+	// source paired with a format-aware normalizer gets the attribute.
+	if describer, ok := normalizer.(interface{ Format() string }); ok {
+		attrs["source_format"] = describer.Format()
+	}
 
-func (s *captureService) buildTCPCaptureSettings(cfg sources.TCPConfig) core.CaptureSettings {
-	return core.CaptureSettings{
-		Channels: []string{"tcp"},
-		Notes:    fmt.Sprintf("tcp capture from %s:%d", cfg.Host, cfg.Port),
-	}
+	return CaptureComponents{
+		Source:          source,
+		Normalizer:      normalizer,
+		Manifest:        buildCaptureManifest(req.Meta, attrs),
+		CaptureSettings: req.Source.CaptureSettings(),
+	}, nil
 }
