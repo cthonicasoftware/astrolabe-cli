@@ -3,7 +3,6 @@
 package normalize
 
 import (
-	"strings"
 	"time"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
@@ -30,12 +29,11 @@ func (l *LineJSON) Init(*core.Run) error { return nil }
 
 // Ingest wraps the raw bytes in a single Record with a "line" payload field.
 func (l *LineJSON) Ingest(b []byte) ([]core.Record, error) {
-	s := strings.TrimSpace(string(b))
 	rec := core.Record{
 		TS:      time.Now().UTC(),
 		Seq:     0,
 		Type:    "sample",
-		Payload: map[string]any{"line": s},
+		Payload: map[string]any{"line": string(b)},
 	}
 	return []core.Record{rec}, nil
 }
