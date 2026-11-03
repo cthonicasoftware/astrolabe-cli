@@ -16,6 +16,7 @@ import (
 type Summary struct {
 	ID              string               `json:"run_id"`
 	RunDir          string               `json:"run_dir"`
+	ClientVersion   string               `json:"client_version"`
 	Started         time.Time            `json:"started"`
 	Completed       *time.Time           `json:"completed,omitempty"`
 	DurationSeconds float64              `json:"duration_seconds"`
