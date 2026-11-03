@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/version"
 )
 
 // APIClient handles communication with the QA backend server.
@@ -42,6 +43,8 @@ type CreateRunRequest struct {
 	StartedAt    time.Time            `json:"started_at"`
 	Completed    *time.Time           `json:"completed_at,omitempty"`
 	RecordsCount uint64               `json:"records_count"`
+	// ClientVersion is the Astrolabe CLI SemVer that created the run.
+	ClientVersion string `json:"client_version"`
 }
 
 // CreateRunResponse contains the server-assigned run ID.
@@ -59,6 +62,8 @@ func (c *APIClient) CreateRun(ctx context.Context, run *core.Run) (string, error
 		StartedAt:    run.Started,
 		Completed:    run.Completed,
 		RecordsCount: run.RecordsCount,
+
+		ClientVersion: version.Version,
 	}
 
 	body, err := json.Marshal(req)
