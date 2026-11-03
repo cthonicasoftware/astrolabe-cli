@@ -62,6 +62,20 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Verify binary version matches tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          want="${TAG#v}"
+          bin=$(ls dist/astrolabe_darwin_arm64*/astrolabe | head -n1)
+          # Binary reports the version it was stamped with; fail on drift.
+          got=$("$bin" version --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])')
+          if [ "$got" != "$want" ]; then
+            echo "::error::binary version '$got' does not match tag '$want'"
+            exit 1
+          fi
+          echo "Binary version $got matches tag $TAG"
+
       - name: Attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:

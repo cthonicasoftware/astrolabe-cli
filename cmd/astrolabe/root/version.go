@@ -5,37 +5,26 @@ import (
 	"fmt"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/version"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
-// Version information - set via ldflags at build time
-// Example: go build -ldflags "-X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.Version=1.0.0"
-// TODO: verify version schema matches most recent git tag.
-var (
-	Version   = "dev"
-	Commit    = "unknown"
-	BuildDate = "unknown"
-	Schema    = "0.1.3"
-)
-
 type versionInfo struct {
-	Agent     string `json:"agent"`
-	Schema    string `json:"schema"`
+	Version   string `json:"version"`
 	Commit    string `json:"commit,omitempty"`
 	BuildDate string `json:"build_date,omitempty"`
 }
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
-	Short: "Report agent and schema versions",
+	Short: "Report the CLI version",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		info := versionInfo{
-			Agent:     Version,
-			Schema:    Schema,
-			Commit:    Commit,
-			BuildDate: BuildDate,
+			Version:   version.Version,
+			Commit:    version.Commit,
+			BuildDate: version.BuildDate,
 		}
 
 		if viper.GetBool("json") {
@@ -49,8 +38,7 @@ var versionCmd = &cobra.Command{
 		out := cliout.DefaultPrinter(jsonMode)
 
 		out.Header("Astrolabe CLI")
-		out.KeyValue("Version", info.Agent)
-		out.KeyValue("Schema", info.Schema)
+		out.KeyValue("Version", info.Version)
 		if info.Commit != "unknown" {
 			out.KeyValue("Commit", info.Commit)
 		}
@@ -58,7 +46,8 @@ var versionCmd = &cobra.Command{
 			out.KeyValue("Built", info.BuildDate)
 		}
 		out.Blank()
-		out.Muted("Data acquisition agent for test benches and QA systems")
+		// TODO: should really come up with a better tagline
+		out.Muted("Data acquisition instrument")
 
 		return nil
 	},

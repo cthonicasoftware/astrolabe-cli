@@ -9,7 +9,34 @@ import (
 	"time"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/version"
 )
+
+// TestCreateRunRequest_ClientVersionWire pins the JSON key and value that
+// orrery receives for the CLI version.
+func TestCreateRunRequest_ClientVersionWire(t *testing.T) {
+	orig := version.Version
+	version.Version = "1.2.3"
+	t.Cleanup(func() { version.Version = orig })
+
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode: %v", err)
+		}
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(CreateRunResponse{RunID: "r1"})
+	}))
+	defer srv.Close()
+
+	c := NewAPIClient(srv.URL, "tok", "proj")
+	if _, err := c.CreateRun(context.Background(), &core.Run{}); err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+	if got := body["client_version"]; got != "1.2.3" {
+		t.Fatalf("client_version = %v, want 1.2.3", got)
+	}
+}
 
 func TestAPIClient_CreateRun(t *testing.T) {
 	tests := []struct {

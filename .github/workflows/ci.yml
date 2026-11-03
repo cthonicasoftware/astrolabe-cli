@@ -90,6 +90,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -98,12 +100,13 @@ jobs:
           cache: true
 
       - name: Build binary
+        shell: bash
         env:
           CGO_ENABLED: ${{ matrix.cgo_enabled }}
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          go build -ldflags "-s -w" -o astrolabe-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.extension }} ./cmd/astrolabe
+          go build -ldflags "$(bash scripts/ldflags.sh)" -o astrolabe-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.extension }} ./cmd/astrolabe
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7

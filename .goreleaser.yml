@@ -32,7 +32,11 @@ builds:
         env:
           - CGO_ENABLED=1
     ldflags:
-      - -s -w -X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.Version={{ .Tag }} -X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.Commit={{ .ShortCommit }} -X github.com/cthonicasoftware/astrolabe-cli/cmd/astrolabe/root.BuildDate={{ .Date }}
+      - >-
+        -s -w
+        -X github.com/cthonicasoftware/astrolabe-cli/internal/version.Version={{ .Version }}
+        -X github.com/cthonicasoftware/astrolabe-cli/internal/version.Commit={{ .ShortCommit }}
+        -X github.com/cthonicasoftware/astrolabe-cli/internal/version.BuildDate={{ .Date }}
 
 archives:
   - id: astrolabe

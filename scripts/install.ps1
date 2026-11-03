@@ -31,7 +31,6 @@
     Preview installation steps
 
 .NOTES
-    Version: 0.1.0
     Requires: PowerShell 5.1 or later
 #>
 
@@ -45,7 +44,7 @@ param(
 
 # Configuration
 $Script:BinaryName = "astrolabe.exe"
-$Script:Version = "0.1.0"
+$Script:InstalledVersion = "unknown"  # read from the installed binary, not hardcoded
 $Script:ConfigDir = Join-Path $env:USERPROFILE ".astrolabe"
 $Script:UserInstallDir = Join-Path $env:LOCALAPPDATA "Programs\Astrolabe"
 $Script:SystemInstallDir = Join-Path ${env:ProgramFiles} "Astrolabe"
@@ -378,6 +377,12 @@ function Test-Installation {
         # Test execution
         $output = & $binaryPath version 2>&1
         if ($LASTEXITCODE -eq 0) {
+            try {
+                $Script:InstalledVersion = (& $binaryPath version --json | ConvertFrom-Json).version
+            } catch {
+                $Script:InstalledVersion = "unknown"
+            }
+            if (-not $Script:InstalledVersion) { $Script:InstalledVersion = "unknown" }
             Write-ColorOutput "Installation validated successfully" -Level Success
         } else {
             Write-ColorOutput "Binary exists but execution failed" -Level Error
@@ -394,7 +399,7 @@ function Test-Installation {
 function Show-Summary {
     Write-ColorOutput "Installation Complete!" -Level Header
 
-    Write-Host "[+] Astrolabe v$Version installed to: " -ForegroundColor Green -NoNewline
+    Write-Host "[+] Astrolabe $Script:InstalledVersion installed to: " -ForegroundColor Green -NoNewline
     Write-Host $InstallDir -ForegroundColor Cyan
 
     Write-Host "[+] Configuration directory: " -ForegroundColor Green -NoNewline
@@ -437,7 +442,7 @@ function Main {
     $Script:InstallDir = if ($SystemWide) { $SystemInstallDir } else { $UserInstallDir }
 
     # Show header
-    Write-ColorOutput "Astrolabe Installer v$Version" -Level Header
+    Write-ColorOutput "Astrolabe Installer" -Level Header
 
     if ($DryRun) {
         Write-ColorOutput "DRY RUN MODE - No changes will be made" -Level Warning
