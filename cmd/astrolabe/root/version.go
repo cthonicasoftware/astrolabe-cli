@@ -46,7 +46,8 @@ var versionCmd = &cobra.Command{
 			out.KeyValue("Built", info.BuildDate)
 		}
 		out.Blank()
-		out.Muted("Data acquisition agent for test benches and QA systems")
+		// TODO: should really come up with a better tagline
+		out.Muted("Data acquisition instrument")
 
 		return nil
 	},
