@@ -35,7 +35,6 @@
     Preview what would be removed
 
 .NOTES
-    Version: 0.1.0
     Requires: PowerShell 5.1 or later
 #>
 
