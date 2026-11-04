@@ -151,10 +151,9 @@ func (a *App) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 // handleTick handles periodic tick events
 func (a *App) handleTick(msg tickMsg) (tea.Model, tea.Cmd) {
 	a.lastTick = time.Time(msg)
-
-	if !a.paused {
-		return a, tea.Batch(a.tickCmd(), a.pullLine())
-	}
+	// Don't pull from the feed here: exactly one pullLine must be in flight at
+	// a time (started in Init, re-armed by handleLineData). Extra concurrent
+	// readers race on the channel and deliver chunks out of order.
 	return a, a.tickCmd()
 }
 
@@ -221,9 +220,7 @@ func (a *App) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // togglePause toggles the pause state
 func (a *App) togglePause() (tea.Model, tea.Cmd) {
 	a.paused = !a.paused
-	if !a.paused {
-		return a, a.pullLine()
-	}
+	// handleLineData keeps pulling while paused, so resuming needs no new reader.
 	return a, nil
 }
 
