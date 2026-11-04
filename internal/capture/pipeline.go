@@ -97,6 +97,28 @@ func (p *Pipeline) Run(ctx context.Context) (*core.Run, error) {
 		cancelErr error
 	)
 
+	writeRecords := func(records []core.Record) error {
+		if len(records) == 0 {
+			return nil
+		}
+		for i := range records {
+			if records[i].Seq == 0 {
+				seq++
+				records[i].Seq = seq
+			} else if records[i].Seq > seq {
+				seq = records[i].Seq
+			}
+			if records[i].TS.IsZero() {
+				records[i].TS = time.Now().UTC()
+			}
+		}
+		if err := p.opts.Store.Write(records); err != nil {
+			return fmt.Errorf("store write: %w", err)
+		}
+		run.RecordsCount += uint64(len(records))
+		return nil
+	}
+
 loop:
 	for {
 		select {
@@ -115,27 +137,17 @@ loop:
 			if err != nil {
 				return nil, fmt.Errorf("normalize frame: %w", err)
 			}
-			if len(records) == 0 {
-				continue
+			if err := writeRecords(records); err != nil {
+				return nil, err
 			}
+		}
+	}
 
-			for i := range records {
-				if records[i].Seq == 0 {
-					seq++
-					records[i].Seq = seq
-				} else if records[i].Seq > seq {
-					seq = records[i].Seq
-				}
-				if records[i].TS.IsZero() {
-					records[i].TS = time.Now().UTC()
-				}
-			}
-
-			if err := p.opts.Store.Write(records); err != nil {
-				return nil, fmt.Errorf("store write: %w", err)
-			}
-
-			run.RecordsCount += uint64(len(records))
+	// Emit any partial data the normalizer is still holding (e.g. a final
+	// line with no trailing newline).
+	if f, ok := p.opts.Normalizer.(normalize.Flusher); ok {
+		if err := writeRecords(f.Flush()); err != nil {
+			return nil, err
 		}
 	}
 
