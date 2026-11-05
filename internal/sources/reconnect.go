@@ -17,6 +17,10 @@ var ErrLinkDown = errors.New("link down: reconnecting")
 // errReconnectingClosed is returned by Open after Close.
 var errReconnectingClosed = errors.New("reconnecting source is closed")
 
+// errReconnectingOpen is returned by an Open while another Open is running
+// or has succeeded.
+var errReconnectingOpen = errors.New("reconnecting source already open")
+
 const (
 	defaultReconnectInitial = 250 * time.Millisecond
 	defaultReconnectMax     = 5 * time.Second
@@ -55,6 +59,7 @@ type Reconnecting struct {
 	meta    core.SourceMeta
 	ctx     context.Context
 	cancel  context.CancelFunc
+	opening bool // an Open is running or has succeeded
 	started bool // the forwarding goroutine owns (and will close) out
 	closed  bool
 }
@@ -90,13 +95,21 @@ func (r *Reconnecting) Open(ctx context.Context) error {
 		r.mu.Unlock()
 		return errReconnectingClosed
 	}
+	if r.opening {
+		r.mu.Unlock()
+		return errReconnectingOpen
+	}
+	r.opening = true
 	r.ctx, r.cancel = context.WithCancel(ctx)
 	runCtx := r.ctx
 	r.mu.Unlock()
 
 	src, err := r.openNext(runCtx)
 	if err != nil {
+		r.mu.Lock()
 		r.cancel()
+		r.opening = false // a failed Open may be tried again
+		r.mu.Unlock()
 		return err
 	}
 

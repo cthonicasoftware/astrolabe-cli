@@ -167,6 +167,9 @@ func TestReconnecting_ReopensAndOrdersEvents(t *testing.T) {
 	}
 	out := r.TimedFrames()
 
+	// "b" is waiting before second is even opened: the wrapper must still
+	// emit Up before forwarding it.
+	second.frames <- []byte("b")
 	first.frames <- []byte("a")
 	expectData(t, recv(t, out), "a")
 	first.drop()
@@ -181,7 +184,6 @@ func TestReconnecting_ReopensAndOrdersEvents(t *testing.T) {
 	if up.Gap <= 0 {
 		t.Errorf("Up.Gap = %v, want > 0", up.Gap)
 	}
-	second.frames <- []byte("b")
 	expectData(t, recv(t, out), "b")
 
 	if first.closeCount() == 0 {
@@ -353,18 +355,29 @@ func TestReconnecting_TimeoutEndsRun(t *testing.T) {
 
 func TestReconnecting_RepeatedDropsResetAttempts(t *testing.T) {
 	a, b, c := newFakeSource(), newFakeSource(), newFakeSource()
-	spec := &fakeSpec{kind: "serial", steps: []fakeStep{{src: a}, {src: b}, {src: c}}}
+	// The first outage fails twice before recovering; the second recovers
+	// on its first try, so its count only reads 1 if attempts reset.
+	spec := &fakeSpec{kind: "serial", steps: []fakeStep{
+		{src: a},
+		{err: errors.New("gone")},
+		{err: errors.New("gone")},
+		{src: b},
+		{src: c},
+	}}
 	r := NewReconnecting(spec, fastPolicy(), true)
 	if err := r.Open(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	defer r.Close()
 	out := r.TimedFrames()
-	for _, src := range []*fakeSource{a, b} {
-		src.drop()
+	for i, tc := range []struct {
+		src  *fakeSource
+		want int
+	}{{a, 3}, {b, 1}} {
+		tc.src.drop()
 		expectLink(t, recv(t, out), core.LinkDown)
-		if up := expectLink(t, recv(t, out), core.LinkUp); up.Attempts != 1 {
-			t.Errorf("Up.Attempts = %d, want 1", up.Attempts)
+		if up := expectLink(t, recv(t, out), core.LinkUp); up.Attempts != tc.want {
+			t.Errorf("outage %d: Up.Attempts = %d, want %d", i+1, up.Attempts, tc.want)
 		}
 	}
 	c.frames <- []byte("c")
@@ -443,6 +456,26 @@ func TestReconnecting_OnEventCalled(t *testing.T) {
 	if len(events) != 2 || events[0] != core.LinkDown || events[1] != core.LinkUp {
 		t.Errorf("OnEvent got %v, want [down up]", events)
 	}
+}
+
+func TestReconnecting_SecondOpenErrors(t *testing.T) {
+	first, extra := newFakeSource(), newFakeSource()
+	spec := &fakeSpec{kind: "serial", steps: []fakeStep{{src: first}, {src: extra}}}
+	r := NewReconnecting(spec, fastPolicy(), true)
+	if err := r.Open(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Open(context.Background()); err == nil {
+		t.Fatal("second Open succeeded, want error")
+	}
+	if n := spec.callCount(); n != 1 {
+		t.Errorf("NewSource called %d times, want 1", n)
+	}
+	out := r.TimedFrames()
+	first.frames <- []byte("a")
+	expectData(t, recv(t, out), "a")
+	_ = r.Close()
+	expectClosed(t, out, 200*time.Millisecond) // a double close would panic
 }
 
 func TestReconnecting_FramesIsNil(t *testing.T) {
