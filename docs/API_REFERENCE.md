@@ -101,6 +101,7 @@ Accepted success status codes:
 - `manifest`, `source`, and `capture` are forwarded from the local run metadata without reshaping.
 - For serial and TCP runs, `manifest.attributes.tx_records` holds the number of lines the operator sent during capture, as a string. `records_count` includes those sent records.
 - `data.jsonl` records from serial and TCP runs carry `envelope.direction` (`"rx"` or `"tx"`); sent lines use `type: "tx"`. The backend stores `data.jsonl` as an opaque artifact.
+- When a serial or TCP connection drops and is re-established during capture, `data.jsonl` gets a `link_down` record (`payload.error`) and later a `link_up` record (`payload.attempts`, `payload.gap_ms`, and `payload.port` if the serial port name changed). Neither carries `envelope.direction`. A partial line cut off by a drop is recorded with `envelope.truncated: true`. `manifest.attributes.reconnects` holds the number of successful reconnects, as a string. The backend still treats `data.jsonl` as opaque.
 - The CLI uses the local run ID as the idempotency key so retried create requests can be safely deduplicated by the backend.
 
 ## Endpoint: Request Artifact Upload URL

@@ -26,6 +26,17 @@ const (
 
 	// AttrTXRecords is the manifest attribute counting sent records.
 	AttrTXRecords = "tx_records"
+
+	// RecordTypeLinkDown and RecordTypeLinkUp mark the source connection
+	// dropping and coming back. They carry no envelope.direction.
+	RecordTypeLinkDown = "link_down"
+	RecordTypeLinkUp   = "link_up"
+
+	// AttrReconnects is the manifest attribute counting successful reconnects.
+	AttrReconnects = "reconnects"
+
+	// EnvelopeTruncated marks a record flushed early because the link dropped.
+	EnvelopeTruncated = "truncated"
 )
 
 // withDirection returns env with envelope.direction set, without mutating a
@@ -44,11 +55,8 @@ type Source interface {
 	Meta() core.SourceMeta
 }
 
-// Frame is a chunk of source bytes with the time it arrived.
-type Frame struct {
-	Data []byte
-	At   time.Time
-}
+// Frame is a chunk of source bytes, or a link event, with its arrival time.
+type Frame = core.Frame
 
 // TimedSource is an optional interface for sources that stamp frames as they
 // arrive. The pipeline reads TimedFrames instead of Frames when available, so
@@ -80,6 +88,10 @@ type Options struct {
 	// records are then tagged envelope.direction="rx", sent ones "tx", and the
 	// manifest gets a tx_records attribute.
 	Bidirectional bool
+
+	// Reconnecting marks the source as one that reconnects after a drop. The
+	// manifest then always gets a reconnects attribute, even "0".
+	Reconnecting bool
 }
 
 // Validate ensures the options contain the minimum required pieces to execute a capture.
@@ -145,6 +157,7 @@ func (p *Pipeline) Run(ctx context.Context) (*core.Run, error) {
 	var (
 		seq       uint64
 		txCount   uint64
+		reconns   uint64
 		framesCh  <-chan []byte
 		timedCh   <-chan Frame
 		txCh      = p.opts.TX
@@ -204,6 +217,49 @@ func (p *Pipeline) Run(ctx context.Context) (*core.Run, error) {
 		return nil
 	}
 
+	handleLink := func(frame Frame) error {
+		ev := frame.Link
+		switch ev.State {
+		case core.LinkDown:
+			if f, ok := p.opts.Normalizer.(normalize.Flusher); ok {
+				flushed := f.Flush()
+				for i := range flushed {
+					env := make(map[string]any, len(flushed[i].Envelope)+1)
+					for k, v := range flushed[i].Envelope {
+						env[k] = v
+					}
+					env[EnvelopeTruncated] = true
+					flushed[i].Envelope = env
+				}
+				if err := writeRX(flushed); err != nil {
+					return err
+				}
+			}
+			return writeRecords([]core.Record{{
+				TS:      frame.At,
+				Type:    RecordTypeLinkDown,
+				Payload: map[string]any{"error": ev.Err},
+			}})
+		case core.LinkUp:
+			payload := map[string]any{
+				"attempts": ev.Attempts,
+				"gap_ms":   ev.Gap.Milliseconds(),
+			}
+			if ev.Port != "" {
+				payload["port"] = ev.Port
+			}
+			if err := writeRecords([]core.Record{{
+				TS:      frame.At,
+				Type:    RecordTypeLinkUp,
+				Payload: payload,
+			}}); err != nil {
+				return err
+			}
+			reconns++
+		}
+		return nil
+	}
+
 	ingestRX := func(data []byte, at time.Time) error {
 		if len(data) == 0 {
 			return nil
@@ -259,6 +315,12 @@ loop:
 			if !ok {
 				break loop
 			}
+			if frame.Link != nil {
+				if err := handleLink(frame); err != nil {
+					return nil, err
+				}
+				continue
+			}
 			if err := ingestRX(frame.Data, frame.At); err != nil {
 				return nil, err
 			}
@@ -277,13 +339,18 @@ loop:
 		}
 	}
 
-	if p.opts.Bidirectional {
+	if p.opts.Bidirectional || p.opts.Reconnecting {
 		// Copy so the caller's Options.Manifest map is never mutated.
-		attrs := make(map[string]string, len(run.Manifest.Attributes)+1)
+		attrs := make(map[string]string, len(run.Manifest.Attributes)+2)
 		for k, v := range run.Manifest.Attributes {
 			attrs[k] = v
 		}
-		attrs[AttrTXRecords] = strconv.FormatUint(txCount, 10)
+		if p.opts.Bidirectional {
+			attrs[AttrTXRecords] = strconv.FormatUint(txCount, 10)
+		}
+		if p.opts.Reconnecting {
+			attrs[AttrReconnects] = strconv.FormatUint(reconns, 10)
+		}
 		run.Manifest.Attributes = attrs
 	}
 
