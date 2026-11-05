@@ -321,7 +321,7 @@ func (a *App) handleKeyPress(msg tea.KeyPressMsg) (Screen, tea.Cmd) {
 		return a.toggleTimestamps()
 	case key.Matches(msg, keys.Reconnect) && a.setReconnect != nil:
 		return a.toggleReconnect()
-	case key.Matches(msg, keys.Input) && a.canSend():
+	case key.Matches(msg, keys.Input) && a.send != nil && !a.disconnected:
 		a.inputMode = true
 		return a, a.input.Focus()
 	case key.Matches(msg, keys.Ending) && a.send != nil:
@@ -672,13 +672,15 @@ func (a *App) renderInput() string {
 	switch {
 	case a.disconnected:
 		line = StyleMuted.Render("Device disconnected. ctrl+w saves the run.")
-	case a.reconnecting:
-		line = StyleWarning.Render(reconnectHint)
 	case a.inputMode:
 		line = a.input.View()
-		if a.sending {
+		if a.reconnecting {
+			line += " " + StyleWarning.Render(reconnectHint)
+		} else if a.sending {
 			line += " " + StyleMuted.Render("sending…")
 		}
+	case a.reconnecting:
+		line = StyleWarning.Render(reconnectHint)
 	default:
 		line = StyleMuted.Render("press i to type to the device")
 	}

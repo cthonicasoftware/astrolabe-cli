@@ -28,10 +28,8 @@ func (a *App) applyLink(ev core.LinkEvent) tea.Cmd {
 	switch ev.State {
 	case core.LinkDown:
 		a.reconnecting = true
-		// Leave the field but keep its text, so the operator can send it
-		// once the link is back.
-		a.inputMode = false
-		a.input.Blur()
+		// Stay in input mode if the operator is typing, so their keys
+		// stay text and the draft survives. submit() blocks the send.
 		return nil
 	case core.LinkUp:
 		a.reconnecting = false

@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 )
 
@@ -33,8 +35,8 @@ func TestApp_LinkDownShowsReconnectingAndBlocksSend(t *testing.T) {
 	if app.canSend() {
 		t.Error("canSend() = true while reconnecting")
 	}
-	if app.inputMode {
-		t.Error("input mode kept while link is down")
+	if !app.inputMode {
+		t.Error("input mode dropped while link is down; typing should continue")
 	}
 	if app.input.Value() != "AT+R" {
 		t.Errorf("draft = %q, want it kept", app.input.Value())
@@ -45,9 +47,68 @@ func TestApp_LinkDownShowsReconnectingAndBlocksSend(t *testing.T) {
 	if in := app.renderInput(); !strings.Contains(in, "Reconnecting…") {
 		t.Errorf("input line = %q, want Reconnecting…", in)
 	}
-	app.Update(keyRunes("i"))
+}
+
+func TestApp_ReconnectingNotTypingMayEnterInputButNotSend(t *testing.T) {
+	app, sent, _ := newSendApp(t, nil)
+	app.Update(linkChunk(core.LinkEvent{State: core.LinkDown, Err: "EOF"}))
 	if app.inputMode {
-		t.Error("i entered input mode while reconnecting")
+		t.Fatal("link down entered input mode on its own")
+	}
+	app.Update(keyRunes("i"))
+	if !app.inputMode {
+		t.Fatal("i did not enter input mode while reconnecting")
+	}
+	typeText(app, "hi")
+	_, cmd := app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	run(app, cmd)
+	if len(*sent) != 0 || app.input.Value() != "hi" {
+		t.Errorf("sent=%v draft=%q, want nothing sent and draft kept", *sent, app.input.Value())
+	}
+}
+
+func TestApp_ReconnectingKeepsTypingKeysAsText(t *testing.T) {
+	app, sent, saved := newSendApp(t, nil)
+	app.EnableReconnect(func(bool) {})
+	app.Update(keyRunes("i"))
+	app.Update(linkChunk(core.LinkEvent{State: core.LinkDown, Err: "EOF"}))
+	before := app.prefs.Reconnect
+
+	_, c1 := app.Update(keyRunes("q"))
+	_, c2 := app.Update(keyRunes("r"))
+	for _, c := range []tea.Cmd{c1, c2} {
+		if c == nil {
+			continue
+		}
+		if _, ok := c().(NavigateMsg); ok {
+			t.Fatal("typing q/r while reconnecting navigated away")
+		}
+	}
+	if app.input.Value() != "qr" {
+		t.Errorf("draft = %q, want qr", app.input.Value())
+	}
+	if app.prefs.Reconnect != before || len(*saved) != 0 {
+		t.Errorf("prefs changed: reconnect %v->%v, saves=%d", before, app.prefs.Reconnect, len(*saved))
+	}
+
+	_, cmd := app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	run(app, cmd)
+	if len(*sent) != 0 || app.input.Value() != "qr" {
+		t.Errorf("sent=%v draft=%q, want nothing sent and draft kept", *sent, app.input.Value())
+	}
+	in := app.renderInput()
+	if !strings.Contains(in, "Reconnecting…") || !strings.Contains(in, "qr") {
+		t.Errorf("input row = %q, want draft and Reconnecting… hint", in)
+	}
+}
+
+func TestApp_FeedClosedLeavesInputMode(t *testing.T) {
+	app, _, _ := newSendApp(t, nil)
+	app.Update(keyRunes("i"))
+	app.Update(linkChunk(core.LinkEvent{State: core.LinkDown}))
+	app.handleFeedClosed()
+	if app.inputMode || app.reconnecting || !app.disconnected {
+		t.Errorf("inputMode=%v reconnecting=%v disconnected=%v", app.inputMode, app.reconnecting, app.disconnected)
 	}
 }
 
