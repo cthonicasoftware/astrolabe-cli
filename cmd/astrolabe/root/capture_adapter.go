@@ -53,6 +53,8 @@ type captureSession struct {
 
 	// writer is nil when the source cannot accept input.
 	writer io.Writer
+	// reconnect is nil when the source is not wrapped for reconnecting.
+	reconnect *sources.Reconnecting
 	// tx carries sent lines to the pipeline. It is never closed, so a Send
 	// racing Stop cannot panic; the pipeline stops reading it on cancel.
 	tx chan core.Record
@@ -61,6 +63,13 @@ type captureSession struct {
 func (s *captureSession) Feed() <-chan tui.FeedChunk { return s.feed }
 func (s *captureSession) RequestSave()               { s.saveRequested = true }
 func (s *captureSession) CanSend() bool              { return s.writer != nil }
+
+// SetReconnect turns reconnecting on or off; a no-op for unwrapped sources.
+func (s *captureSession) SetReconnect(on bool) {
+	if s.reconnect != nil {
+		s.reconnect.SetEnabled(on)
+	}
+}
 
 // Send writes line plus le to the device, then records it in the run. Only
 // bytes that reached the device are recorded. The returned time is the
@@ -150,11 +159,18 @@ func (a *captureAdapter) Start(ctx context.Context, cfg tui.CaptureConfig) (tui.
 	// operator/device/test context the CLI capture paths apply. Without this the
 	// manifest is built from zero values and every run reports "unspecified".
 	req.Meta = savedMetadataOptions(a.out)
+	// Serial and TCP sources are always wrapped; cfg.Reconnect only sets
+	// the initial toggle, so the operator can flip it mid-capture.
+	req.Reconnect = &sources.ReconnectPolicy{}
 
 	components, err := a.svc.BuildComponents(req)
 	if err != nil {
 		_ = os.RemoveAll(tempRoot)
 		return nil, err
+	}
+	reconnecting, wrapped := components.Source.(*sources.Reconnecting)
+	if wrapped {
+		reconnecting.SetEnabled(cfg.Reconnect) // before Open: a drop can come at once
 	}
 
 	sessionCtx, cancel := context.WithCancel(ctx)
@@ -181,6 +197,7 @@ func (a *captureAdapter) Start(ctx context.Context, cfg tui.CaptureConfig) (tui.
 		Capture:       components.CaptureSettings,
 		TX:            txCh,
 		Bidirectional: writer != nil,
+		Reconnecting:  wrapped,
 	}
 
 	pipeline, err := capture.NewPipeline(pipelineOpts)
@@ -199,6 +216,7 @@ func (a *captureAdapter) Start(ctx context.Context, cfg tui.CaptureConfig) (tui.
 		tempRoot:  tempRoot,
 		cacheRoot: a.cacheRoot,
 		writer:    writer,
+		reconnect: reconnecting, // nil when not wrapped
 		tx:        txCh,
 	}
 	var closeOnce sync.Once
@@ -209,25 +227,25 @@ func (a *captureAdapter) Start(ctx context.Context, cfg tui.CaptureConfig) (tui.
 		})
 	}
 
-	// Fan-out goroutine: stamp each source frame with its arrival time once,
-	// then forward it to both the TUI feed and the pipeline, so the live view
-	// and data.jsonl show the same time.
+	// Fan-out goroutine: forward each timed frame to both the TUI feed and
+	// the pipeline, so the live view and data.jsonl show the same time. Link
+	// events go to both too: the feed shows them, the pipeline records them.
+	frames := timedFrames(sessionCtx, components.Source)
 	go func() {
 		defer close(feedCh)
 		defer close(pipelineFramesCh)
 		defer sess.closeSource()
-		for frame := range components.Source.Frames() {
-			if len(frame) == 0 {
+		for frame := range frames {
+			if frame.Link == nil && len(frame.Data) == 0 {
 				continue
 			}
-			at := time.Now().UTC()
 			select {
-			case feedCh <- tui.FeedChunk{Data: string(frame), At: at}:
+			case feedCh <- tui.FeedChunk{Data: string(frame.Data), At: frame.At, Link: frame.Link}:
 			case <-sessionCtx.Done():
 				return
 			}
 			select {
-			case pipelineFramesCh <- capture.Frame{Data: frame, At: at}:
+			case pipelineFramesCh <- frame:
 			case <-sessionCtx.Done():
 				return
 			}
@@ -250,6 +268,27 @@ func (a *captureAdapter) Start(ctx context.Context, cfg tui.CaptureConfig) (tui.
 	}()
 
 	return sess, nil
+}
+
+// timedFrames returns src's timed frames. A source that does not stamp its
+// own frames (one not wrapped for reconnecting) is stamped here, once, on
+// arrival. The returned channel closes when src's frames end.
+func timedFrames(ctx context.Context, src captureManagedSource) <-chan capture.Frame {
+	if ts, ok := src.(capture.TimedSource); ok {
+		return ts.TimedFrames()
+	}
+	out := make(chan capture.Frame)
+	go func() {
+		defer close(out)
+		for b := range src.Frames() {
+			select {
+			case out <- capture.Frame{Data: b, At: time.Now().UTC()}:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return out
 }
 
 // savedMetadataOptions loads the operator's persisted metadata and turns it into

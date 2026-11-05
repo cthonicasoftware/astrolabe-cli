@@ -207,15 +207,20 @@ func buildFactories(cfg RouterConfig) map[ScreenID]ScreenFactory {
 			if !ok {
 				return nil, nil, fmt.Errorf("capture live: missing or invalid CaptureConfig in Args")
 			}
+			// Prefs load first: the source starts with the remembered
+			// reconnect setting.
+			prefs, savePrefs := loadLiveViewPrefs(cfg.LiveViewPrefsPort)
+			captureCfg.Reconnect = prefs.Reconnect
 			session, err := cfg.CapturePort.Start(context.Background(), captureCfg)
 			if err != nil {
 				return nil, nil, fmt.Errorf("start capture: %w", err)
 			}
 			appModel := NewApp("Live Capture", session.Feed())
-			appModel.SetPrefs(loadLiveViewPrefs(cfg.LiveViewPrefsPort))
+			appModel.SetPrefs(prefs, savePrefs)
 			if session.CanSend() {
 				appModel.EnableSend(session.Send)
 			}
+			appModel.EnableReconnect(session.SetReconnect)
 			cleanup := func() {
 				if appModel.SaveRequested() {
 					session.RequestSave()

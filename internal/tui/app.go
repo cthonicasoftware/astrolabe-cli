@@ -34,35 +34,37 @@ const (
 // keymap defines the key bindings for the live view. Scroll and History
 // only document keys the viewport and input field handle themselves.
 type keymap struct {
-	Quit    key.Binding
-	Save    key.Binding
-	Scroll  key.Binding
-	History key.Binding
-	Pause   key.Binding
-	Clear   key.Binding
-	Spot    key.Binding
-	Time    key.Binding
-	Input   key.Binding
-	Ending  key.Binding
-	Echo    key.Binding
-	Send    key.Binding
-	Leave   key.Binding
+	Quit      key.Binding
+	Save      key.Binding
+	Scroll    key.Binding
+	History   key.Binding
+	Pause     key.Binding
+	Clear     key.Binding
+	Spot      key.Binding
+	Time      key.Binding
+	Reconnect key.Binding
+	Input     key.Binding
+	Ending    key.Binding
+	Echo      key.Binding
+	Send      key.Binding
+	Leave     key.Binding
 }
 
 var keys = keymap{
-	Quit:    key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "discard run and return")),
-	Save:    key.NewBinding(key.WithKeys("ctrl+w"), key.WithHelp("ctrl+w", "stop & save run")),
-	Scroll:  key.NewBinding(key.WithKeys("up", "down", "pgup", "pgdown"), key.WithHelp("↑/↓ pgup/pgdn", "scroll")),
-	History: key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑/↓", "recall earlier lines")),
-	Pause:   key.NewBinding(key.WithKeys("space"), key.WithHelp("space", "pause/resume capture")),
-	Clear:   key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "clear buffer")),
-	Spot:    key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "toggle spotlight")),
-	Time:    key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "toggle timestamps")),
-	Input:   key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "type to device")),
-	Ending:  key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "cycle line ending")),
-	Echo:    key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "toggle echo")),
-	Send:    key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "send line")),
-	Leave:   key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "stop typing")),
+	Quit:      key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "discard run and return")),
+	Save:      key.NewBinding(key.WithKeys("ctrl+w"), key.WithHelp("ctrl+w", "stop & save run")),
+	Scroll:    key.NewBinding(key.WithKeys("up", "down", "pgup", "pgdown"), key.WithHelp("↑/↓ pgup/pgdn", "scroll")),
+	History:   key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑/↓", "recall earlier lines")),
+	Pause:     key.NewBinding(key.WithKeys("space"), key.WithHelp("space", "pause/resume capture")),
+	Clear:     key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "clear buffer")),
+	Spot:      key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "toggle spotlight")),
+	Time:      key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "toggle timestamps")),
+	Reconnect: key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "toggle reconnect")),
+	Input:     key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "type to device")),
+	Ending:    key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "cycle line ending")),
+	Echo:      key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "toggle echo")),
+	Send:      key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "send line")),
+	Leave:     key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "stop typing")),
 }
 
 // SendFunc writes a line plus line ending to the device and returns the time
@@ -99,6 +101,13 @@ type App struct {
 	draft        string // text typed before browsing history
 	disconnected bool
 	sendErr      string
+
+	// Reconnect state. setReconnect is nil when the source cannot reconnect.
+	setReconnect     func(bool)
+	reconnecting     bool
+	reconnectAttempt int
+	reconnectedUntil time.Time
+	now              func() time.Time
 }
 
 // NewApp creates a new App instance
@@ -135,6 +144,7 @@ func NewApp(title string, feed <-chan FeedChunk) *App {
 		spotlight:        NewSpotlightEffect(),
 		prefs:            DefaultLiveViewPrefs(),
 		input:            input,
+		now:              time.Now,
 	}
 }
 
@@ -150,7 +160,7 @@ func (a *App) EnableSend(send SendFunc) {
 	a.send = send
 }
 
-func (a *App) canSend() bool { return a.send != nil && !a.disconnected }
+func (a *App) canSend() bool { return a.send != nil && !a.disconnected && !a.reconnecting }
 
 // Message types
 type tickMsg time.Time
@@ -195,6 +205,8 @@ func (a *App) update(msg tea.Msg) (Screen, tea.Cmd) {
 		return a.handleFeedClosed()
 	case sendResultMsg:
 		return a.handleSendResult(m)
+	case reconnectedExpiredMsg:
+		return a, nil // re-render drops RECONNECTED
 	case prefsSaveErrMsg:
 		a.sendErr = "could not save settings: " + m.err.Error()
 		return a, nil
@@ -249,6 +261,12 @@ func (a *App) handleTick(msg tickMsg) (Screen, tea.Cmd) {
 
 // handleLineData handles incoming line data
 func (a *App) handleLineData(msg lineMsg) (Screen, tea.Cmd) {
+	// Link state changes at once, even while paused; only its marker line
+	// waits with the data.
+	var linkCmd tea.Cmd
+	if msg.Link != nil {
+		linkCmd = a.applyLink(*msg.Link)
+	}
 	// Always drain the channel to prevent blocking the pipeline. While paused,
 	// hold chunks so resuming shows them instead of silently dropping data.
 	if a.paused {
@@ -258,12 +276,13 @@ func (a *App) handleLineData(msg lineMsg) (Screen, tea.Cmd) {
 	}
 
 	// Always pull the next line, even when paused, to prevent blocking
-	return a, a.pullLine()
+	return a, tea.Batch(a.pullLine(), linkCmd)
 }
 
 // handleFeedClosed marks the device as gone. The run can still be saved.
 func (a *App) handleFeedClosed() (Screen, tea.Cmd) {
 	a.disconnected = true
+	a.reconnecting = false
 	a.inputMode = false
 	a.input.Blur()
 	return a, nil
@@ -274,6 +293,10 @@ func (a *App) handleFeedClosed() (Screen, tea.Cmd) {
 func (a *App) appendData(chunks ...FeedChunk) {
 	wasAtBottom := a.vp.AtBottom()
 	for _, c := range chunks {
+		if c.Link != nil {
+			a.lineBuffer.AddMarker(linkMarker(*c.Link, c.At), c.At)
+			continue
+		}
 		a.lineBuffer.AddData(c.Data, c.At)
 	}
 	a.updateViewportContent()
@@ -297,6 +320,8 @@ func (a *App) handleKeyPress(msg tea.KeyPressMsg) (Screen, tea.Cmd) {
 		return a.toggleSpotlight()
 	case key.Matches(msg, keys.Time):
 		return a.toggleTimestamps()
+	case key.Matches(msg, keys.Reconnect) && a.setReconnect != nil:
+		return a.toggleReconnect()
 	case key.Matches(msg, keys.Input) && a.canSend():
 		a.inputMode = true
 		return a, a.input.Focus()
@@ -488,9 +513,14 @@ func (a *App) updateViewportContent() {
 		rows := strings.Split(wrapper.Wrap([]string{line}), "\n")
 		// Measure before styling: widths of styled text include ANSI codes.
 		firstWidth := lipgloss.Width(rows[0])
-		if a.lineBuffer.IsEcho(i) {
+		switch {
+		case a.lineBuffer.IsEcho(i):
 			for j := range rows {
 				rows[j] = echoStyle.Render(rows[j])
+			}
+		case a.lineBuffer.IsMarker(i):
+			for j := range rows {
+				rows[j] = StyleMuted.Render(rows[j])
 			}
 		}
 		if a.prefs.Timestamps {
@@ -592,6 +622,10 @@ func (a *App) renderStatus() string {
 	switch {
 	case a.disconnected:
 		statusText = StyleError.Render(" DISCONNECTED") + " • " + statusText
+	case a.reconnecting:
+		statusText = StyleWarning.Render("\uf021 RECONNECTING") + " • " + statusText
+	case a.showReconnected():
+		statusText = StyleSuccess.Render("\uf0c1 RECONNECTED") + " • " + statusText
 	case a.paused:
 		statusText = StyleWarning.Render(" PAUSED") + " • " + statusText
 	default:
@@ -614,6 +648,14 @@ func (a *App) renderStatus() string {
 		statusText += " • " + StyleMuted.Render("Timestamps off")
 	}
 
+	if a.setReconnect != nil {
+		if a.prefs.Reconnect {
+			statusText += " • " + StyleMuted.Render("Reconnect on")
+		} else {
+			statusText += " • " + StyleMuted.Render("Reconnect off")
+		}
+	}
+
 	if a.send != nil {
 		echo := "echo off"
 		if a.prefs.Echo {
@@ -631,6 +673,8 @@ func (a *App) renderInput() string {
 	switch {
 	case a.disconnected:
 		line = StyleMuted.Render("Device disconnected. ctrl+w saves the run.")
+	case a.reconnecting:
+		line = StyleWarning.Render(a.reconnectHint())
 	case a.inputMode:
 		line = a.input.View()
 		if a.sending {
@@ -706,9 +750,14 @@ func (a *App) HelpSections() []HelpSection {
 			Keys:  []KeyHelp{{"pgup/pgdn", "scroll"}},
 		}}
 	}
+	live := []key.Binding{keys.Save, keys.Quit, keys.Pause, keys.Time}
+	if a.setReconnect != nil {
+		live = append(live, keys.Reconnect)
+	}
+	live = append(live, keys.Spot, keys.Clear, keys.Scroll)
 	sections := []HelpSection{{
 		Title: "Live capture",
-		Keys:  keyHelpFrom(keys.Save, keys.Quit, keys.Pause, keys.Time, keys.Spot, keys.Clear, keys.Scroll),
+		Keys:  keyHelpFrom(live...),
 	}}
 	if a.send != nil {
 		sections = append(sections, HelpSection{

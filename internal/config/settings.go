@@ -22,6 +22,9 @@ type LiveViewPrefs struct {
 	LineEnding string `json:"line_ending"`
 	Echo       bool   `json:"echo"`
 	Timestamps bool   `json:"timestamps"`
+	// Reconnect is whether the live view reconnects after the link drops.
+	// nil (missing from older files) means on.
+	Reconnect *bool `json:"reconnect,omitempty"`
 }
 
 // DefaultSettings returns LF line endings, echo on and timestamps off.
