@@ -17,25 +17,88 @@ type Normalizer interface {
 	Close() error
 }
 
-// LineJSON is a normalizer that wraps each raw line in a minimal JSON record
-// with a "line" payload field. It is the default normalizer for interactive captures.
-type LineJSON struct{}
+// Flusher is an optional interface for normalizers that buffer partial input.
+// The pipeline calls Flush once after the last frame so trailing data that never
+// saw a line terminator is still recorded.
+type Flusher interface {
+	Flush() []core.Record
+}
+
+// maxLineLen caps the buffered partial line. A stream with no terminator
+// (binary data, wrong baud rate) is force-emitted in chunks of this size
+// instead of growing without bound.
+const maxLineLen = 64 * 1024
+
+// LineJSON is a normalizer that wraps each line in a minimal JSON record with a
+// "line" payload field. It is the default normalizer for interactive captures.
+//
+// Sources such as serial and TCP deliver arbitrary read chunks, not lines, so
+// LineJSON buffers input and emits one record per terminated line. LF, CRLF
+// and a lone CR all terminate a line and are stripped from the stored line.
+// Lines longer than maxLineLen are split.
+type LineJSON struct {
+	buf    []byte
+	skipLF bool // previous byte was CR; swallow an immediately following LF
+}
 
 // NewLineJSON returns a new LineJSON normalizer.
 func NewLineJSON() *LineJSON { return &LineJSON{} }
 
-// Init satisfies the Normalizer interface; LineJSON requires no initialization.
-func (l *LineJSON) Init(*core.Run) error { return nil }
+// Init resets any buffered partial line.
+func (l *LineJSON) Init(*core.Run) error {
+	l.buf = l.buf[:0]
+	l.skipLF = false
+	return nil
+}
 
-// Ingest wraps the raw bytes in a single Record with a "line" payload field.
+// Ingest scans b and returns a record for each complete line.
 func (l *LineJSON) Ingest(b []byte) ([]core.Record, error) {
-	rec := core.Record{
+	var records []core.Record
+	emit := func() {
+		records = append(records, lineRecord(l.buf))
+		l.buf = l.buf[:0] // reuse backing array; lineRecord copies into a string
+	}
+	for _, c := range b {
+		if l.skipLF {
+			l.skipLF = false
+			if c == '\n' {
+				continue
+			}
+		}
+		switch c {
+		case '\n':
+			emit()
+		case '\r':
+			emit()
+			l.skipLF = true
+		default:
+			l.buf = append(l.buf, c)
+			if len(l.buf) >= maxLineLen {
+				emit()
+			}
+		}
+	}
+	return records, nil
+}
+
+// Flush returns a record for any buffered partial line and clears the buffer.
+func (l *LineJSON) Flush() []core.Record {
+	l.skipLF = false
+	if len(l.buf) == 0 {
+		return nil
+	}
+	rec := lineRecord(l.buf)
+	l.buf = l.buf[:0]
+	return []core.Record{rec}
+}
+
+func lineRecord(line []byte) core.Record {
+	return core.Record{
 		TS:      time.Now().UTC(),
 		Seq:     0,
 		Type:    "sample",
-		Payload: map[string]any{"line": string(b)},
+		Payload: map[string]any{"line": string(line)},
 	}
-	return []core.Record{rec}, nil
 }
 
 // Close satisfies the Normalizer interface; LineJSON holds no resources.

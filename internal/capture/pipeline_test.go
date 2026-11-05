@@ -142,6 +142,39 @@ func TestPipelineRun(t *testing.T) {
 	}
 }
 
+func TestPipelineRunReassemblesChunkedLines(t *testing.T) {
+	src := &sliceSource{
+		meta: core.SourceMeta{Kind: "serial"},
+		frames: [][]byte{
+			[]byte("h"),
+			[]byte("ello\r\nwor"),
+			[]byte("ld\r\ntail"), // "tail" has no newline; must be flushed
+		},
+	}
+	store := &spyStore{}
+
+	pipeline, err := NewPipeline(Options{
+		Source:     src,
+		Normalizer: normalize.NewLineJSON(),
+		Store:      store,
+		Manifest:   core.Manifest{SchemaVersion: "v1alpha1"},
+	})
+	if err != nil {
+		t.Fatalf("build pipeline: %v", err)
+	}
+
+	run, err := pipeline.Run(context.Background())
+	if err != nil {
+		t.Fatalf("run pipeline: %v", err)
+	}
+	if run.RecordsCount != 3 {
+		t.Fatalf("expected 3 records (hello, world, tail), got %d", run.RecordsCount)
+	}
+	if store.writeCalls != 3 {
+		t.Fatalf("expected 3 records written, got %d", store.writeCalls)
+	}
+}
+
 func TestPipelineFinalizeOnContextCancel(t *testing.T) {
 	frames := make(chan []byte)
 	done := make(chan struct{})
