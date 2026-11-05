@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"io"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 )
@@ -14,6 +15,20 @@ type ManagedSource interface {
 	Meta() core.SourceMeta
 	Open(context.Context) error
 	Close() error
+}
+
+// WritableSource is a ManagedSource that can also send bytes to the device
+// it reads from (serial ports, TCP sockets). Sources that only read, such as
+// files, do not implement it.
+type WritableSource interface {
+	ManagedSource
+	io.Writer
+}
+
+// IsWritable reports whether src can send data back to its device.
+func IsWritable(src any) bool {
+	_, ok := src.(io.Writer)
+	return ok
 }
 
 // Spec describes a configured capture source completely enough for the capture
@@ -43,4 +58,7 @@ var (
 	_ Spec = Config{}
 	_ Spec = TCPConfig{}
 	_ Spec = FileConfig{}
+
+	_ WritableSource = (*Serial)(nil)
+	_ WritableSource = (*TCP)(nil)
 )

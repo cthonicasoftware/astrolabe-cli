@@ -102,6 +102,21 @@ Newline-delimited JSON records captured from the source:
 {"ts":"2024-01-15T10:00:01Z","seq":2,"type":"measurement","payload":{"voltage":3.2}}
 ```
 
+Serial and TCP runs can carry data in both directions. Every record from these
+sources has `envelope.direction`: `"rx"` for data received from the device and
+`"tx"` for lines the operator sent from the live capture view. Sent lines use
+`type: "tx"` so consumers that filter on `type: "sample"` see only device
+output. `seq` orders sent and received records on one timeline.
+
+```jsonl
+{"ts":"2024-01-15T10:00:00Z","seq":1,"type":"tx","payload":{"line":"AT+RST","line_ending":"CRLF"},"envelope":{"direction":"tx"}}
+{"ts":"2024-01-15T10:00:00Z","seq":2,"type":"sample","payload":{"line":"OK"},"envelope":{"direction":"rx"}}
+```
+
+`line_ending` is one of `LF`, `CRLF`, `CR`, or `None`. The manifest of these
+runs includes a `tx_records` attribute with the number of sent records
+(`"0"` for capture-only runs). File imports carry no `envelope.direction`.
+
 ### upload_state.json
 
 Upload tracking information:

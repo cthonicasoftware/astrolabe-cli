@@ -48,6 +48,7 @@ type RouterConfig struct {
 	CapturePort   CaptureSessionPort
 	MetadataPort  MetadataPort
 	UploadPort    UploadPort
+	SendPrefsPort SendPrefsPort // optional; nil uses defaults and does not persist
 	RunsCacheRoot string
 }
 
@@ -172,6 +173,10 @@ func buildFactories(cfg RouterConfig) map[ScreenID]ScreenFactory {
 				return nil, nil, fmt.Errorf("start capture: %w", err)
 			}
 			appModel := NewApp("Live Capture", session.Feed())
+			if session.CanSend() {
+				prefs, savePrefs := loadSendPrefs(cfg.SendPrefsPort)
+				appModel.EnableSend(session.Send, prefs, savePrefs)
+			}
 			cleanup := func() {
 				if appModel.SaveRequested() {
 					session.RequestSave()
@@ -208,6 +213,19 @@ func buildFactories(cfg RouterConfig) map[ScreenID]ScreenFactory {
 }
 
 // NewRouterForTest exposes router construction for white-box tests.
+// loadSendPrefs reads remembered send settings. Load errors fall back to
+// defaults; a capture should never fail because a prefs file is bad.
+func loadSendPrefs(port SendPrefsPort) (SendPrefs, func(SendPrefs) error) {
+	if port == nil {
+		return DefaultSendPrefs(), nil
+	}
+	prefs, err := port.Load()
+	if err != nil {
+		prefs = DefaultSendPrefs()
+	}
+	return prefs, port.Save
+}
+
 func NewRouterForTest(cfg RouterConfig) *router {
 	return newRouter(cfg)
 }

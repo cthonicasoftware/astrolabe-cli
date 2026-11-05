@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/capture"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
@@ -37,6 +39,7 @@ func newCaptureAdapter(out *cliout.Printer, cacheRoot string) *captureAdapter {
 // captureSession implements tui.CaptureSession.
 type captureSession struct {
 	feed          chan string
+	ctx           context.Context
 	cancel        context.CancelFunc
 	done          chan tui.CaptureSessionResult
 	tempRoot      string
@@ -44,14 +47,58 @@ type captureSession struct {
 	saveRequested bool
 	stopOnce      sync.Once
 	result        tui.CaptureSessionResult
+
+	// closeSource closes the source exactly once.
+	closeSource func()
+
+	// writer is nil when the source cannot accept input.
+	writer io.Writer
+	// tx carries sent lines to the pipeline. It is never closed, so a Send
+	// racing Stop cannot panic; the pipeline stops reading it on cancel.
+	tx chan core.Record
 }
 
 func (s *captureSession) Feed() <-chan string { return s.feed }
 func (s *captureSession) RequestSave()        { s.saveRequested = true }
+func (s *captureSession) CanSend() bool       { return s.writer != nil }
+
+// Send writes line plus le to the device, then records it in the run. Only
+// bytes that reached the device are recorded.
+func (s *captureSession) Send(line string, le sources.LineEnding) error {
+	if s.writer == nil {
+		return errors.New("this source does not accept input")
+	}
+	payload := append([]byte(line), le.Bytes()...)
+	if len(payload) == 0 {
+		return nil // empty line with no line ending: nothing to send
+	}
+	if _, err := s.writer.Write(payload); err != nil {
+		return err
+	}
+	rec := core.Record{
+		TS:   time.Now().UTC(),
+		Type: capture.RecordTypeTX,
+		Payload: map[string]any{
+			"line":        line,
+			"line_ending": string(le),
+		},
+	}
+	select {
+	case s.tx <- rec:
+	case <-s.ctx.Done():
+	}
+	return nil
+}
 
 func (s *captureSession) Stop() tui.CaptureSessionResult {
 	s.stopOnce.Do(func() {
 		s.cancel()
+		// Close the port now. The fan-out loop only exits once the source's
+		// frame channel closes, and that needs the blocked Read to return,
+		// which only happens when the port is closed.
+		if s.closeSource != nil {
+			s.closeSource()
+		}
 
 		result := <-s.done
 		if result.Err != nil {
@@ -118,16 +165,20 @@ func (a *captureAdapter) Start(ctx context.Context, cfg tui.CaptureConfig) (tui.
 
 	feedCh := make(chan string, 16)
 	pipelineFramesCh := make(chan []byte, 16)
+	txCh := make(chan core.Record, 16)
+	writer, _ := components.Source.(io.Writer)
 
 	pipelineOpts := capture.Options{
 		Source: &frameChannelSource{
 			framesCh: pipelineFramesCh,
 			meta:     components.Source.Meta(),
 		},
-		Normalizer: normalize.NewLineJSON(),
-		Store:      storage.NewFS(tempRoot),
-		Manifest:   components.Manifest,
-		Capture:    components.CaptureSettings,
+		Normalizer:    normalize.NewLineJSON(),
+		Store:         storage.NewFS(tempRoot),
+		Manifest:      components.Manifest,
+		Capture:       components.CaptureSettings,
+		TX:            txCh,
+		Bidirectional: writer != nil,
 	}
 
 	pipeline, err := capture.NewPipeline(pipelineOpts)
@@ -140,10 +191,20 @@ func (a *captureAdapter) Start(ctx context.Context, cfg tui.CaptureConfig) (tui.
 
 	sess := &captureSession{
 		feed:      feedCh,
+		ctx:       sessionCtx,
 		cancel:    cancel,
 		done:      make(chan tui.CaptureSessionResult, 1),
 		tempRoot:  tempRoot,
 		cacheRoot: a.cacheRoot,
+		writer:    writer,
+		tx:        txCh,
+	}
+	var closeOnce sync.Once
+	sess.closeSource = func() {
+		closeOnce.Do(func() {
+			// No warning output here: printing would garble the TUI screen.
+			_ = components.Source.Close()
+		})
 	}
 
 	// Fan-out goroutine: forward source frames to both the TUI feed and the
@@ -151,11 +212,7 @@ func (a *captureAdapter) Start(ctx context.Context, cfg tui.CaptureConfig) (tui.
 	go func() {
 		defer close(feedCh)
 		defer close(pipelineFramesCh)
-		defer func() {
-			if err := components.Source.Close(); err != nil {
-				a.out.Warning(fmt.Sprintf("Failed to close source: %v", err))
-			}
-		}()
+		defer sess.closeSource()
 		for frame := range components.Source.Frames() {
 			if len(frame) == 0 {
 				continue

@@ -5,10 +5,14 @@ import "strings"
 // MaxBufferedLines defines the maximum number of lines to keep in the buffer
 const MaxBufferedLines = 1000
 
+// EchoPrefix marks lines the operator sent, as shown in the live view.
+const EchoPrefix = "→ "
+
 // LineBuffer manages buffering and processing of incoming text data
 type LineBuffer struct {
 	buffer *strings.Builder
 	lines  []string
+	echo   []bool // echo[i] reports whether lines[i] is an echoed send
 }
 
 // NewLineBuffer creates a new line buffer
@@ -36,7 +40,7 @@ func (lb *LineBuffer) AddData(data string) {
 	// All parts except the last are complete lines
 	for i := 0; i < len(parts)-1; i++ {
 		if parts[i] != "" || i > 0 {
-			lb.lines = append(lb.lines, parts[i])
+			lb.appendLine(parts[i], false)
 		}
 	}
 
@@ -46,9 +50,31 @@ func (lb *LineBuffer) AddData(data string) {
 		lb.buffer.WriteString(parts[len(parts)-1])
 	}
 
-	// Trim to max buffer size
+	lb.trim()
+}
+
+// AddEcho shows a line the operator sent. Any partial received line is
+// ended first so the echo always sits on its own line; received data then
+// continues on the next line.
+func (lb *LineBuffer) AddEcho(line string) {
+	if lb.buffer.Len() > 0 {
+		lb.appendLine(lb.buffer.String(), false)
+		lb.buffer.Reset()
+	}
+	lb.appendLine(EchoPrefix+line, true)
+	lb.trim()
+}
+
+func (lb *LineBuffer) appendLine(line string, echo bool) {
+	lb.lines = append(lb.lines, line)
+	lb.echo = append(lb.echo, echo)
+}
+
+func (lb *LineBuffer) trim() {
 	if len(lb.lines) > MaxBufferedLines {
-		lb.lines = lb.lines[len(lb.lines)-MaxBufferedLines:]
+		cut := len(lb.lines) - MaxBufferedLines
+		lb.lines = lb.lines[cut:]
+		lb.echo = lb.echo[cut:]
 	}
 }
 
@@ -65,10 +91,17 @@ func (lb *LineBuffer) GetDisplayLines() []string {
 	return displayLines
 }
 
+// IsEcho reports whether display line i (as returned by GetDisplayLines) is
+// an echoed send. The trailing partial line is never an echo.
+func (lb *LineBuffer) IsEcho(i int) bool {
+	return i >= 0 && i < len(lb.echo) && lb.echo[i]
+}
+
 // Clear resets the buffer
 func (lb *LineBuffer) Clear() {
 	lb.buffer.Reset()
 	lb.lines = nil
+	lb.echo = nil
 }
 
 // LineCount returns the number of complete lines

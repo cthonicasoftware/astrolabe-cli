@@ -6,9 +6,9 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"io"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 	"go.bug.st/serial"
@@ -76,11 +76,27 @@ var FlowControlOptions = []SerialOption{
 type Serial struct {
 	Config
 
-	mu     sync.Mutex
-	port   serial.Port
-	ch     chan []byte
-	cancel context.CancelFunc
+	mu      sync.Mutex
+	writeMu sync.Mutex
+	port    serial.Port
+	ch      chan []byte
+	cancel  context.CancelFunc
+
+	writeTimeout time.Duration // 0 uses DefaultSerialWriteTimeout
+	charDelay    time.Duration // gap between sent bytes; 0 sends all at once
 }
+
+// DefaultSerialCharDelay is the gap between bytes sent to a serial device.
+// 5ms keeps simple firmware shells from dropping characters while a typical
+// command still goes out in well under a second.
+const DefaultSerialCharDelay = 5 * time.Millisecond
+
+// DefaultSerialWriteTimeout bounds how long a send may wait for the device
+// to accept bytes before it is reported as failed.
+const DefaultSerialWriteTimeout = 3 * time.Second
+
+// writeAbortGrace is how long Write waits for an aborted write to unwind.
+const writeAbortGrace = 500 * time.Millisecond
 
 // NewSerialWithConfig constructs a Serial source from an explicit configuration.
 func NewSerialWithConfig(cfg Config) *Serial {
@@ -103,8 +119,9 @@ func NewSerialWithConfig(cfg Config) *Serial {
 	}
 
 	return &Serial{
-		Config: cfg,
-		ch:     make(chan []byte, 16),
+		Config:    cfg,
+		ch:        make(chan []byte, 16),
+		charDelay: DefaultSerialCharDelay,
 	}
 }
 
@@ -206,11 +223,10 @@ func (s *Serial) readLoop(ctx context.Context) {
 		default:
 			n, err := reader.Read(buf)
 			if err != nil {
-				if err == io.EOF {
-					return
-				}
-				// Log error but continue reading
-				continue
+				// go.bug.st/serial reports timeouts as (0, nil), so any error
+				// means the port is gone (unplugged) or closed. Stop instead of
+				// spinning; closing the channel tells consumers the device left.
+				return
 			}
 
 			if n > 0 {
@@ -224,6 +240,78 @@ func (s *Serial) readLoop(ctx context.Context) {
 					return
 				}
 			}
+		}
+	}
+}
+
+// Write sends p to the open serial port. It is safe to call concurrently
+// with the read loop.
+func (s *Serial) Write(p []byte) (int, error) {
+	// One write at a time: a new send must not interleave with, or queue
+	// silently behind, a write the device has not accepted yet.
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	s.mu.Lock()
+	port := s.port
+	s.mu.Unlock()
+
+	if port == nil {
+		return 0, fmt.Errorf("serial port %s is not open", s.Port)
+	}
+
+	delay := s.charDelay
+	if delay <= 0 {
+		return s.writeChunk(port, p)
+	}
+
+	// Pace bytes like a typing operator. Simple device shells often read one
+	// byte per loop and drop the rest of a USB packet, so a whole line sent
+	// at once arrives as its first character only.
+	for i := range p {
+		if i > 0 {
+			time.Sleep(delay)
+		}
+		if _, err := s.writeChunk(port, p[i:i+1]); err != nil {
+			return i, err
+		}
+	}
+	return len(p), nil
+}
+
+// writeChunk writes p with a timeout. go.bug.st/serial sets no write timeout,
+// so a device that stops reading would otherwise block forever.
+func (s *Serial) writeChunk(port serial.Port, p []byte) (int, error) {
+	type result struct {
+		n   int
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		n, err := port.Write(p)
+		done <- result{n, err}
+	}()
+
+	timeout := s.writeTimeout
+	if timeout <= 0 {
+		timeout = DefaultSerialWriteTimeout
+	}
+
+	select {
+	case r := <-done:
+		if r.err != nil {
+			return r.n, fmt.Errorf("write to serial port %s: %w", s.Port, r.err)
+		}
+		return r.n, nil
+	case <-time.After(timeout):
+		// Purge aborts the pending write on Windows; give it a moment, then
+		// report failure either way.
+		_ = port.ResetOutputBuffer()
+		select {
+		case r := <-done:
+			return r.n, fmt.Errorf("serial port %s: device did not accept data within %s", s.Port, timeout)
+		case <-time.After(writeAbortGrace):
+			return 0, fmt.Errorf("serial port %s: device did not accept data within %s", s.Port, timeout)
 		}
 	}
 }
@@ -246,14 +334,19 @@ func (s *Serial) Close() error {
 		s.cancel()
 	}
 
-	// Close the port
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	port := s.port
+	s.port = nil // makes Close idempotent and fails later Writes fast
+	s.mu.Unlock()
 
-	if s.port != nil {
-		return s.port.Close()
+	if port == nil {
+		return nil
 	}
-	return nil
+	// Abort any write the device never accepted; a pending write can keep
+	// the handle (and the COM port) held even after Close.
+	_ = port.ResetOutputBuffer()
+	// Closing the port also unblocks a Read pending in readLoop.
+	return port.Close()
 }
 
 //TODO: Create goroutine to refresh available port list on a timer or via os event

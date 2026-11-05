@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
@@ -14,6 +15,30 @@ import (
 )
 
 // Source represents an ingest source capable of streaming byte frames along with metadata.
+// Record direction values stored under envelope.direction for runs from
+// bidirectional sources.
+const (
+	DirectionRX = "rx"
+	DirectionTX = "tx"
+
+	// RecordTypeTX is the record type for data the operator sent.
+	RecordTypeTX = "tx"
+
+	// AttrTXRecords is the manifest attribute counting sent records.
+	AttrTXRecords = "tx_records"
+)
+
+// withDirection returns env with envelope.direction set, without mutating a
+// map the normalizer may reuse.
+func withDirection(env map[string]any, dir string) map[string]any {
+	out := make(map[string]any, len(env)+1)
+	for k, v := range env {
+		out[k] = v
+	}
+	out["direction"] = dir
+	return out
+}
+
 type Source interface {
 	Frames() <-chan []byte
 	Meta() core.SourceMeta
@@ -31,6 +56,16 @@ type Options struct {
 	Capture    core.CaptureSettings
 	RunID      string
 	RunIDGenerator
+
+	// TX carries records for data the operator sent to the device. Optional;
+	// a nil channel means the run has no send path. Records bypass the
+	// normalizer so they never split a partially received line.
+	TX <-chan core.Record
+
+	// Bidirectional marks the source as able to send (serial, TCP). Received
+	// records are then tagged envelope.direction="rx", sent ones "tx", and the
+	// manifest gets a tx_records attribute.
+	Bidirectional bool
 }
 
 // Validate ensures the options contain the minimum required pieces to execute a capture.
@@ -93,7 +128,9 @@ func (p *Pipeline) Run(ctx context.Context) (*core.Run, error) {
 
 	var (
 		seq       uint64
+		txCount   uint64
 		framesCh  = p.opts.Source.Frames()
+		txCh      = p.opts.TX
 		cancelErr error
 	)
 
@@ -119,12 +156,57 @@ func (p *Pipeline) Run(ctx context.Context) (*core.Run, error) {
 		return nil
 	}
 
+	writeRX := func(records []core.Record) error {
+		if p.opts.Bidirectional {
+			for i := range records {
+				records[i].Envelope = withDirection(records[i].Envelope, DirectionRX)
+			}
+		}
+		return writeRecords(records)
+	}
+
+	writeTX := func(rec core.Record) error {
+		rec.Envelope = withDirection(rec.Envelope, DirectionTX)
+		if err := writeRecords([]core.Record{rec}); err != nil {
+			return err
+		}
+		txCount++
+		return nil
+	}
+
+	// drainTX records sends still queued when the loop ends; those bytes
+	// already reached the device, so they belong in the run.
+	drainTX := func() error {
+		for txCh != nil {
+			select {
+			case rec, ok := <-txCh:
+				if !ok {
+					return nil
+				}
+				if err := writeTX(rec); err != nil {
+					return err
+				}
+			default:
+				return nil
+			}
+		}
+		return nil
+	}
+
 loop:
 	for {
 		select {
 		case <-ctx.Done():
 			cancelErr = context.Cause(ctx)
 			break loop
+		case rec, ok := <-txCh:
+			if !ok {
+				txCh = nil // stop selecting a closed channel
+				continue
+			}
+			if err := writeTX(rec); err != nil {
+				return nil, err
+			}
 		case frame, ok := <-framesCh:
 			if !ok {
 				break loop
@@ -137,18 +219,32 @@ loop:
 			if err != nil {
 				return nil, fmt.Errorf("normalize frame: %w", err)
 			}
-			if err := writeRecords(records); err != nil {
+			if err := writeRX(records); err != nil {
 				return nil, err
 			}
 		}
 	}
 
+	if err := drainTX(); err != nil {
+		return nil, err
+	}
+
 	// Emit any partial data the normalizer is still holding (e.g. a final
 	// line with no trailing newline).
 	if f, ok := p.opts.Normalizer.(normalize.Flusher); ok {
-		if err := writeRecords(f.Flush()); err != nil {
+		if err := writeRX(f.Flush()); err != nil {
 			return nil, err
 		}
+	}
+
+	if p.opts.Bidirectional {
+		// Copy so the caller's Options.Manifest map is never mutated.
+		attrs := make(map[string]string, len(run.Manifest.Attributes)+1)
+		for k, v := range run.Manifest.Attributes {
+			attrs[k] = v
+		}
+		attrs[AttrTXRecords] = strconv.FormatUint(txCount, 10)
+		run.Manifest.Attributes = attrs
 	}
 
 	completed := time.Now().UTC()
