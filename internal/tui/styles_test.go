@@ -2,13 +2,10 @@ package tui
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/progress"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
+	"charm.land/bubbles/v2/progress"
 )
 
 // TestMockUploadProgressPreview renders the styled progress bar at several
@@ -26,14 +23,10 @@ func TestMockUploadProgressPreview(t *testing.T) {
 		"run-orange-0004",
 	}
 
-	lipgloss.SetDefaultRenderer(lipgloss.NewRenderer(os.Stderr))
-	lipgloss.SetColorProfile(termenv.TrueColor)
-
 	progressBar := progress.New(
 		DefaultProgressGradient,
 		progress.WithWidth(34),
 		progress.WithoutPercentage(),
-		progress.WithColorProfile(termenv.TrueColor),
 	)
 
 	var preview strings.Builder

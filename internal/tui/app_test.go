@@ -3,8 +3,6 @@ package tui
 import (
 	"testing"
 	"time"
-
-	tea "github.com/charmbracelet/bubbletea"
 )
 
 // Only one pullLine may be in flight at a time. If tick or resume also start a
@@ -48,7 +46,7 @@ func TestAppFeedChunksStayInOrder(t *testing.T) {
 	close(feed)
 
 	app := NewApp("test", feed)
-	var model tea.Model = app
+	var model Screen = app
 
 	// Drive the single reader chain the way Bubble Tea would.
 	cmd := app.pullLine()

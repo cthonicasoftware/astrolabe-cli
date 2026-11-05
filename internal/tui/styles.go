@@ -1,9 +1,9 @@
 package tui
 
 import (
-	"github.com/charmbracelet/bubbles/progress"
-	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/progress"
+	"charm.land/bubbles/v2/spinner"
+	"charm.land/lipgloss/v2"
 )
 
 const menuWidth = 44
@@ -166,7 +166,7 @@ const (
 var (
 	ProgressGradientStart   = lipgloss.Color("#c6a664") // Celestial Gold
 	ProgressGradientEnd     = lipgloss.Color("#5e8570") // Verdigris
-	DefaultProgressGradient = progress.WithGradient(string(ProgressGradientStart), string(ProgressGradientEnd))
+	DefaultProgressGradient = progress.WithColors(ProgressGradientStart, ProgressGradientEnd)
 )
 
 // NewDefaultProgress creates a progress bar with consistent styling across the application.

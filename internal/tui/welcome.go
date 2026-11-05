@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 type welcomeModel struct {
@@ -26,8 +26,11 @@ type menuItem struct {
 var (
 	// Logo uses error color for the distinctive pink/red
 	welcomeLogoStyle = lipgloss.NewStyle().
-		Foreground(ColorSecondary).
-		Bold(true)
+				Foreground(ColorSecondary).
+				Bold(true)
+
+	// welcomeTitle replaces the logo on terminals too small for it.
+	welcomeTitle = welcomeLogoStyle.Render("✦ A S T R O L A B E ✦")
 )
 
 const logo = `
@@ -43,7 +46,7 @@ const logo = `
 　　.  　 　　　˚　　　　　*　　 　　✦　　　.　　.　　　✦　　˚ 　　　 　　˚　.　*　　. 　˚　　. 
 `
 
-func NewWelcome(status *StatusMessage) tea.Model {
+func NewWelcome(status *StatusMessage) Screen {
 	return &welcomeModel{
 		cursor: 0,
 		menuItems: []menuItem{
@@ -61,14 +64,14 @@ func (m *welcomeModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m *welcomeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *welcomeModel) Update(msg tea.Msg) (Screen, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "ctrl+c", "q", "esc":
 			return m, func() tea.Msg {
@@ -91,7 +94,7 @@ func (m *welcomeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor = 0
 			}
 
-		case "enter", " ":
+		case "enter", "space":
 			action := m.menuItems[m.cursor].action
 			switch action {
 			case "capture":
@@ -126,22 +129,6 @@ func (m *welcomeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *welcomeModel) View() string {
-	var s strings.Builder
-
-	// Center the logo as a single block
-	s.WriteString("\n\n")
-	styledLogo := welcomeLogoStyle.Render(logo)
-	centeredLogo := lipgloss.PlaceHorizontal(m.width, lipgloss.Center, styledLogo)
-	s.WriteString(centeredLogo)
-
-	s.WriteString("\n\n")
-
-	if m.status != nil {
-		statusView := lipgloss.PlaceHorizontal(m.width, lipgloss.Center, m.status.Render(m.width))
-		s.WriteString(statusView)
-		s.WriteString("\n\n")
-	}
-
 	// Menu items
 	menuBlock := strings.Builder{}
 	for i, item := range m.menuItems {
@@ -159,22 +146,44 @@ func (m *welcomeModel) View() string {
 		menuBlock.WriteString("\n")
 	}
 
-	// Center the menu
-	centeredMenu := lipgloss.PlaceHorizontal(m.width, lipgloss.Center, menuBlock.String())
-	s.WriteString(centeredMenu)
-
-	s.WriteString("\n\n")
-
-	// Footer
 	footer := lipgloss.JoinVertical(lipgloss.Center,
 		StyleHelp.Render("enter: select • q: quit • ?: help"),
 		"",
 		StyleHelp.Render("Astrolabe CLI, by Cthonica Software."))
-	centeredFooter := lipgloss.PlaceHorizontal(m.width, lipgloss.Center, footer)
-	s.WriteString(centeredFooter)
 
-	// Fill remaining vertical space
-	content := s.String()
+	layout := func(top, header, status string) string {
+		var s strings.Builder
+		s.WriteString(top)
+		for _, part := range []string{header, status, menuBlock.String(), footer} {
+			if part == "" {
+				continue
+			}
+			s.WriteString(lipgloss.PlaceHorizontal(m.width, lipgloss.Center, part))
+			s.WriteString("\n\n")
+		}
+		return strings.TrimSuffix(s.String(), "\n\n")
+	}
+	fits := func(s string) bool {
+		return (m.height <= 0 || lipgloss.Height(s) <= m.height) &&
+			(m.width <= 0 || lipgloss.Width(s) <= m.width)
+	}
+
+	status := m.status.Render(m.width) // "" when there is no status
+
+	// Shrink until the screen fits: drop the logo for a one-line title, then
+	// the top gap, then trim the status body.
+	content := layout("\n\n", welcomeLogoStyle.Render(logo), status)
+	if !fits(content) {
+		content = layout("\n\n", welcomeTitle, status)
+	}
+	if !fits(content) {
+		content = layout("", welcomeTitle, status)
+	}
+	if !fits(content) && m.status != nil {
+		room := m.height - (lipgloss.Height(layout("", welcomeTitle, scrollStandIn)) - 1)
+		content = layout("", welcomeTitle, m.status.RenderMax(m.width, room))
+	}
+
 	return lipgloss.PlaceVertical(m.height, lipgloss.Center, content)
 }
 

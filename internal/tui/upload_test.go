@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/upload"
 )
@@ -49,7 +49,7 @@ func TestUploadModel_StandaloneExits(t *testing.T) {
 	}
 
 	// ctrl+c must quit immediately.
-	_, cmd := model.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	_, cmd := model.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	if !isQuit(cmd) {
 		t.Error("ctrl+c did not return tea.Quit")
 	}
@@ -271,7 +271,7 @@ func TestUploadModel_QuitKeys(t *testing.T) {
 	// Test quit key handling
 	// Note: Full keyboard testing in bubbletea requires more sophisticated setup
 	// This is a simplified test to verify the model handles KeyMsg
-	msg := tea.KeyMsg{Type: tea.KeyRunes}
+	msg := tea.KeyPressMsg{Code: 'x', Text: "x"}
 	_, cmd := model.Update(msg)
 
 	// The model should handle key messages without panicking
@@ -414,7 +414,7 @@ func TestUploadModel_Cancellation(t *testing.T) {
 	}
 
 	// User cancels (hits ESC)
-	keyMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	keyMsg := tea.KeyPressMsg{Code: tea.KeyEscape}
 	updatedModel, _ = model.Update(keyMsg)
 	model = updatedModel.(uploadModel)
 

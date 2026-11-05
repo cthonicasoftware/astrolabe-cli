@@ -5,11 +5,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
 )
@@ -18,7 +18,7 @@ import (
 const (
 	marginWidth       = 8
 	minViewportWidth  = 40
-	minViewportHeight = 10
+	minViewportHeight = 3 // keep small: a taller frame than the terminal loses rows
 	tickInterval      = 250 * time.Millisecond
 	maxSendLength     = 1024
 	maxHistory        = 100
@@ -54,7 +54,7 @@ var keys = keymap{
 	Save:    key.NewBinding(key.WithKeys("ctrl+w"), key.WithHelp("ctrl+w", "stop & save run")),
 	Scroll:  key.NewBinding(key.WithKeys("up", "down", "pgup", "pgdown"), key.WithHelp("↑/↓ pgup/pgdn", "scroll")),
 	History: key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑/↓", "recall earlier lines")),
-	Pause:   key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "pause/resume capture")),
+	Pause:   key.NewBinding(key.WithKeys("space"), key.WithHelp("space", "pause/resume capture")),
 	Clear:   key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "clear buffer")),
 	Spot:    key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "toggle spotlight")),
 	Time:    key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "toggle timestamps")),
@@ -103,11 +103,10 @@ type App struct {
 
 // NewApp creates a new App instance
 func NewApp(title string, feed <-chan FeedChunk) *App {
-	vp := viewport.New(0, 0)
+	vp := viewport.New()
 	vp.SetContent("")
 	vp.MouseWheelEnabled = true
 	vp.MouseWheelDelta = 3
-	vp.HighPerformanceRendering = false
 	vp.Style = lipgloss.NewStyle()
 
 	boxStyle := lipgloss.NewStyle().
@@ -119,7 +118,10 @@ func NewApp(title string, feed <-chan FeedChunk) *App {
 	input.Prompt = "› "
 	input.Placeholder = "type a line, enter to send, esc to stop"
 	input.CharLimit = maxSendLength
-	input.PromptStyle = lipgloss.NewStyle().Foreground(ColorPrimary)
+	inputStyles := input.Styles()
+	inputStyles.Focused.Prompt = lipgloss.NewStyle().Foreground(ColorPrimary)
+	inputStyles.Blurred.Prompt = inputStyles.Focused.Prompt
+	input.SetStyles(inputStyles)
 
 	return &App{
 		title:            title,
@@ -173,7 +175,7 @@ func (a *App) Init() tea.Cmd {
 }
 
 // Update handles messages and updates the model
-func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (a *App) Update(msg tea.Msg) (Screen, tea.Cmd) {
 	model, cmd := a.update(msg)
 	// Any message can change the rows around the viewport (mode, errors,
 	// settings), so re-fit the layout after each one.
@@ -181,7 +183,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return model, cmd
 }
 
-func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (a *App) update(msg tea.Msg) (Screen, tea.Cmd) {
 	switch m := msg.(type) {
 	case tea.WindowSizeMsg:
 		return a.handleWindowResize(m)
@@ -196,11 +198,19 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case prefsSaveErrMsg:
 		a.sendErr = "could not save settings: " + m.err.Error()
 		return a, nil
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if a.inputMode {
 			return a.handleInputKey(m)
 		}
 		return a.handleKeyPress(m)
+	case tea.PasteMsg:
+		// Bubble Tea v2 delivers pastes separately from key presses.
+		if !a.inputMode {
+			return a, nil
+		}
+		var cmd tea.Cmd
+		a.input, cmd = a.input.Update(m)
+		return a, cmd
 	}
 
 	// Pass other messages to viewport (like mouse events)
@@ -210,14 +220,14 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // handleWindowResize handles terminal window resize events
-func (a *App) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
+func (a *App) handleWindowResize(msg tea.WindowSizeMsg) (Screen, tea.Cmd) {
 	a.width = msg.Width
 	a.height = msg.Height
 
 	// Width first: the status and help rows wrap to it, which sets how
 	// much height is left for the viewport.
-	a.vp.Width = max(msg.Width-marginWidth-a.boxStyle.GetHorizontalFrameSize()-1, minViewportWidth)
-	a.input.Width = max(a.vp.Width-lipgloss.Width(a.input.Prompt), 10)
+	a.vp.SetWidth(max(msg.Width-marginWidth-a.boxStyle.GetHorizontalFrameSize()-1, minViewportWidth))
+	a.input.SetWidth(max(a.vp.Width()-lipgloss.Width(a.input.Prompt), 10))
 	a.syncLayout()
 
 	// Reset position and re-wrap content
@@ -229,7 +239,7 @@ func (a *App) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 }
 
 // handleTick handles periodic tick events
-func (a *App) handleTick(msg tickMsg) (tea.Model, tea.Cmd) {
+func (a *App) handleTick(msg tickMsg) (Screen, tea.Cmd) {
 	a.lastTick = time.Time(msg)
 	// Don't pull from the feed here: exactly one pullLine must be in flight at
 	// a time (started in Init, re-armed by handleLineData). Extra concurrent
@@ -238,7 +248,7 @@ func (a *App) handleTick(msg tickMsg) (tea.Model, tea.Cmd) {
 }
 
 // handleLineData handles incoming line data
-func (a *App) handleLineData(msg lineMsg) (tea.Model, tea.Cmd) {
+func (a *App) handleLineData(msg lineMsg) (Screen, tea.Cmd) {
 	// Always drain the channel to prevent blocking the pipeline. While paused,
 	// hold chunks so resuming shows them instead of silently dropping data.
 	if a.paused {
@@ -252,7 +262,7 @@ func (a *App) handleLineData(msg lineMsg) (tea.Model, tea.Cmd) {
 }
 
 // handleFeedClosed marks the device as gone. The run can still be saved.
-func (a *App) handleFeedClosed() (tea.Model, tea.Cmd) {
+func (a *App) handleFeedClosed() (Screen, tea.Cmd) {
 	a.disconnected = true
 	a.inputMode = false
 	a.input.Blur()
@@ -273,7 +283,7 @@ func (a *App) appendData(chunks ...FeedChunk) {
 }
 
 // handleKeyPress handles keyboard input in view mode
-func (a *App) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (a *App) handleKeyPress(msg tea.KeyPressMsg) (Screen, tea.Cmd) {
 	switch {
 	case key.Matches(msg, keys.Quit):
 		return a.quit()
@@ -306,21 +316,21 @@ func (a *App) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleInputKey handles keys while the input field has focus. Bare keys
 // like q and space go to the field; only chords and control keys act.
-func (a *App) handleInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.Type {
-	case tea.KeyEsc:
+func (a *App) handleInputKey(msg tea.KeyPressMsg) (Screen, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
 		a.inputMode = false
 		a.input.Blur()
 		return a, nil
-	case tea.KeyEnter:
+	case "enter":
 		return a.submit()
-	case tea.KeyUp:
+	case "up":
 		a.historyPrev()
 		return a, nil
-	case tea.KeyDown:
+	case "down":
 		a.historyNext()
 		return a, nil
-	case tea.KeyPgUp, tea.KeyPgDown:
+	case "pgup", "pgdown":
 		var cmd tea.Cmd
 		a.vp, cmd = a.vp.Update(msg)
 		return a, cmd
@@ -336,7 +346,7 @@ func (a *App) handleInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // submit sends the current field text. Only one send runs at a time so
 // lines reach the device in the order they were typed.
-func (a *App) submit() (tea.Model, tea.Cmd) {
+func (a *App) submit() (Screen, tea.Cmd) {
 	if a.sending || !a.canSend() {
 		return a, nil
 	}
@@ -349,7 +359,7 @@ func (a *App) submit() (tea.Model, tea.Cmd) {
 	}
 }
 
-func (a *App) handleSendResult(msg sendResultMsg) (tea.Model, tea.Cmd) {
+func (a *App) handleSendResult(msg sendResultMsg) (Screen, tea.Cmd) {
 	a.sending = false
 	a.pushHistory(msg.line)
 	if msg.err != nil {
@@ -420,7 +430,7 @@ func (a *App) persistPrefs() tea.Cmd {
 	}
 }
 
-func (a *App) quit() (tea.Model, tea.Cmd) {
+func (a *App) quit() (Screen, tea.Cmd) {
 	a.saveRequested = false
 	return a, func() tea.Msg {
 		return NavigateMsg{
@@ -430,7 +440,7 @@ func (a *App) quit() (tea.Model, tea.Cmd) {
 	}
 }
 
-func (a *App) save() (tea.Model, tea.Cmd) {
+func (a *App) save() (Screen, tea.Cmd) {
 	a.saveRequested = true
 	return a, func() tea.Msg {
 		return NavigateMsg{
@@ -441,7 +451,7 @@ func (a *App) save() (tea.Model, tea.Cmd) {
 }
 
 // togglePause toggles the pause state
-func (a *App) togglePause() (tea.Model, tea.Cmd) {
+func (a *App) togglePause() (Screen, tea.Cmd) {
 	a.paused = !a.paused
 	// handleLineData keeps pulling while paused, so resuming needs no new
 	// reader. Apply anything held while paused.
@@ -453,7 +463,7 @@ func (a *App) togglePause() (tea.Model, tea.Cmd) {
 }
 
 // clearBuffer clears the line buffer and viewport
-func (a *App) clearBuffer() (tea.Model, tea.Cmd) {
+func (a *App) clearBuffer() (Screen, tea.Cmd) {
 	a.lineBuffer.Clear()
 	a.vp.SetContent("")
 	return a, nil
@@ -465,7 +475,7 @@ func (a *App) clearBuffer() (tea.Model, tea.Cmd) {
 func (a *App) updateViewportContent() {
 	// With timestamps on, text wraps short of a right-hand gutter so the
 	// timestamp never pushes the line's text sideways.
-	textWidth := a.vp.Width
+	textWidth := a.vp.Width()
 	if a.prefs.Timestamps && textWidth > 0 {
 		textWidth = max(textWidth-timestampGutter, 1)
 	}
@@ -491,10 +501,10 @@ func (a *App) updateViewportContent() {
 	wrappedContent := strings.Join(parts, "\n")
 
 	// Bottom-align shorter content so new lines appear at the base of the viewport
-	if a.vp.Height > 0 && wrappedContent != "" {
+	if a.vp.Height() > 0 && wrappedContent != "" {
 		lineCount := CountLines(wrappedContent)
-		if lineCount < a.vp.Height {
-			padding := strings.Repeat("\n", a.vp.Height-lineCount)
+		if lineCount < a.vp.Height() {
+			padding := strings.Repeat("\n", a.vp.Height()-lineCount)
 			wrappedContent = padding + wrappedContent
 		}
 	}
@@ -508,7 +518,7 @@ func (a *App) timestampSuffix(at time.Time, rowWidth int) string {
 	if at.IsZero() {
 		return ""
 	}
-	start := a.vp.Width - 1 - len(timestampLayout)
+	start := a.vp.Width() - 1 - len(timestampLayout)
 	pad := max(start-rowWidth, 1)
 	return strings.Repeat(" ", pad) + StyleMuted.Render(at.Local().Format(timestampLayout))
 }
@@ -564,11 +574,11 @@ func (a *App) syncLayout() {
 	header, footer := a.renderChrome()
 	chrome := lipgloss.Height(header+"x"+footer) - 1 // minus the stand-in box row
 	h := max(a.height-chrome-a.boxStyle.GetVerticalFrameSize(), minViewportHeight)
-	if h == a.vp.Height {
+	if h == a.vp.Height() {
 		return
 	}
 	wasAtBottom := a.vp.AtBottom()
-	a.vp.Height = h
+	a.vp.SetHeight(h)
 	a.updateViewportContent()
 	if wasAtBottom {
 		a.vp.GotoBottom()
@@ -638,10 +648,10 @@ func (a *App) renderInput() string {
 // fitBox wraps s to the bordered box's width. View centers the layout on
 // its widest row, so a row wider than the box would shift everything left.
 func (a *App) fitBox(s string) string {
-	if a.vp.Width <= 0 {
+	if a.vp.Width() <= 0 {
 		return s // not sized yet
 	}
-	return lipgloss.NewStyle().Width(a.vp.Width + a.boxStyle.GetHorizontalFrameSize()).Render(s)
+	return lipgloss.NewStyle().Width(a.vp.Width() + a.boxStyle.GetHorizontalFrameSize()).Render(s)
 }
 
 // renderViewport renders the viewport in a bordered box with fade effect
@@ -661,8 +671,8 @@ func (a *App) renderViewport() string {
 	}
 
 	vpContent := lipgloss.NewStyle().
-		Width(a.vp.Width).
-		Height(a.vp.Height).
+		Width(a.vp.Width()).
+		Height(a.vp.Height()).
 		Render(fadedContent)
 	return a.boxStyle.Render(vpContent)
 }
@@ -710,14 +720,14 @@ func (a *App) HelpSections() []HelpSection {
 }
 
 // toggleSpotlight toggles the spotlight fade effect
-func (a *App) toggleSpotlight() (tea.Model, tea.Cmd) {
+func (a *App) toggleSpotlight() (Screen, tea.Cmd) {
 	a.spotlightEnabled = !a.spotlightEnabled
 	return a, nil
 }
 
 // toggleTimestamps shows or hides each line's arrival time and remembers
 // the choice.
-func (a *App) toggleTimestamps() (tea.Model, tea.Cmd) {
+func (a *App) toggleTimestamps() (Screen, tea.Cmd) {
 	a.prefs.Timestamps = !a.prefs.Timestamps
 	wasAtBottom := a.vp.AtBottom()
 	a.updateViewportContent()

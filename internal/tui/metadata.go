@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 )
 
@@ -60,7 +60,7 @@ var metadataFields = [totalMetadataInputs]metadataField{
 }
 
 // NewMetadataEditor constructs the metadata TUI model pre-populated with existing values.
-func NewMetadataEditor(repo MetadataPort, meta MetadataValues, path string, loadErr error) tea.Model {
+func NewMetadataEditor(repo MetadataPort, meta MetadataValues, path string, loadErr error) Screen {
 	model := &metadataModel{
 		inputs:     make([]textinput.Model, totalMetadataInputs),
 		attributes: textarea.New(),
@@ -75,7 +75,7 @@ func NewMetadataEditor(repo MetadataPort, meta MetadataValues, path string, load
 		ti.Placeholder = metadataFields[i].placeholder
 		ti.Prompt = ""
 		ti.CharLimit = 256
-		ti.Width = 40
+		ti.SetWidth(40)
 		model.inputs[i] = ti
 	}
 
@@ -93,7 +93,7 @@ func NewMetadataEditor(repo MetadataPort, meta MetadataValues, path string, load
 
 	model.attributes.Placeholder = "key=value (one per line)"
 	model.attributes.Prompt = ""
-	model.attributes.SetHeight(5)
+	model.attributes.SetHeight(metadataAttrHeight)
 	model.attributes.SetWidth(40)
 	model.attributes.SetValue(formatAttributeLines(meta.Attributes))
 
@@ -106,7 +106,7 @@ func (m *metadataModel) Init() tea.Cmd {
 	return textinput.Blink
 }
 
-func (m *metadataModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *metadataModel) Update(msg tea.Msg) (Screen, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -114,7 +114,7 @@ func (m *metadataModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.resizeInputs()
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc":
 			return m, func() tea.Msg { return NavigateMsg{To: ScreenWelcome} }
@@ -172,7 +172,21 @@ func (m *metadataModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// metadataAttrHeight is the attributes box height when the terminal has room.
+const metadataAttrHeight = 5
+
 func (m *metadataModel) View() string {
+	// Shrink the attributes box on short terminals so the form fits.
+	m.attributes.SetHeight(metadataAttrHeight)
+	view := m.render()
+	if over := lipgloss.Height(view) - m.height; m.height > 0 && over > 0 {
+		m.attributes.SetHeight(max(metadataAttrHeight-over, 1))
+		view = m.render()
+	}
+	return view
+}
+
+func (m *metadataModel) render() string {
 	var content strings.Builder
 
 	title := StyleTitle.Render("📝 Run Metadata")
@@ -260,7 +274,7 @@ func (m *metadataModel) resizeInputs() {
 	}
 	inputWidth := max(m.width-40, 24)
 	for i := range m.inputs {
-		m.inputs[i].Width = inputWidth
+		m.inputs[i].SetWidth(inputWidth)
 	}
 	m.attributes.SetWidth(inputWidth)
 }

@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/table"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/table"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/runs"
 )
@@ -91,6 +91,7 @@ type runsViewModel struct {
 
 	mode                runsViewMode
 	detailSummary       runs.Summary
+	detailViewport      viewport.Model
 	payloadViewport     viewport.Model
 	payloadContent      string
 	payloadLoading      bool
@@ -105,13 +106,18 @@ type runsViewModel struct {
 }
 
 // NewRunsViewer constructs the runs viewer TUI model.
-func NewRunsViewer(cacheRoot string) tea.Model {
+func NewRunsViewer(cacheRoot string) Screen {
+	detail := viewport.New()
+	detail.SoftWrap = true
+	payload := viewport.New()
+	payload.FillHeight = true
 	return &runsViewModel{
 		cacheRoot:       cacheRoot,
 		loading:         true,
 		table:           newRunsTable(nil),
 		mode:            modeTable,
-		payloadViewport: viewport.New(0, 0),
+		detailViewport:  detail,
+		payloadViewport: payload,
 	}
 }
 
@@ -119,13 +125,12 @@ func (m *runsViewModel) Init() tea.Cmd {
 	return loadRuns(m.cacheRoot)
 }
 
-func (m *runsViewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *runsViewModel) Update(msg tea.Msg) (Screen, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 		m.resizeTable()
-		m.resizePayloadViewport()
 		return m, nil
 
 	case runsLoadedMsg:
@@ -152,6 +157,7 @@ func (m *runsViewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.mode == modeDetail || m.mode == modePayload {
 			if summary := findSummaryByID(msg.result.Runs, m.detailSummary.ID); summary != nil {
 				m.detailSummary = *summary
+				m.detailViewport.SetContent(renderRunDetails(*summary))
 				if m.mode == modePayload {
 					return m, m.reloadPayload()
 				}
@@ -183,7 +189,7 @@ func (m *runsViewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return m.handleRunsKey(msg)
 	}
 
@@ -230,12 +236,15 @@ func (m *runsViewModel) View() string {
 	sections = append(sections, StyleHelp.Render(fmt.Sprintf("Cache root: %s", m.result.Root)))
 	switch m.mode {
 	case modeDetail:
-		sections = append(sections, renderRunDetails(m.detailSummary))
-		sections = append(sections, StyleHelp.Render("d: view data • esc: back • ?: help"))
+		help := StyleHelp.Render("↑/↓: scroll • d: view data • esc: back • ?: help")
+		m.fitViewport(&m.detailViewport, sections, help, false)
+		sections = append(sections, runsDetailContainerStyle.Render(m.detailViewport.View()), help)
 		return m.centerContent(strings.Join(sections, "\n\n"))
 	case modePayload:
-		sections = append(sections, m.renderPayloadView())
-		sections = append(sections, StyleHelp.Render("↑/↓: scroll • esc: back • ?: help"))
+		help := StyleHelp.Render("↑/↓: scroll • esc: back • ?: help")
+		sections = append(sections, m.renderPayloadInfo())
+		m.fitViewport(&m.payloadViewport, sections, help, true)
+		sections = append(sections, runsDetailContainerStyle.Render(m.payloadBody()), help)
 		return m.centerContent(strings.Join(sections, "\n\n"))
 	}
 
@@ -296,7 +305,7 @@ func (m *runsViewModel) HelpSections() []HelpSection {
 	}
 }
 
-func (m *runsViewModel) handleRunsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *runsViewModel) handleRunsKey(msg tea.KeyPressMsg) (Screen, tea.Cmd) {
 	switch m.mode {
 	case modeTable:
 		switch msg.String() {
@@ -313,6 +322,8 @@ func (m *runsViewModel) handleRunsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if summary := m.selectedSummary(); summary != nil {
 				m.mode = modeDetail
 				m.detailSummary = *summary
+				m.detailViewport.SetContent(renderRunDetails(*summary))
+				m.detailViewport.GotoTop()
 			}
 			return m, nil
 		default:
@@ -335,7 +346,9 @@ func (m *runsViewModel) handleRunsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.err = nil
 			return m, loadRuns(m.cacheRoot)
 		default:
-			return m, nil
+			var cmd tea.Cmd
+			m.detailViewport, cmd = m.detailViewport.Update(msg)
+			return m, cmd
 		}
 	case modePayload:
 		switch msg.String() {
@@ -353,24 +366,17 @@ func (m *runsViewModel) handleRunsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-func (m *runsViewModel) resizePayloadViewport() {
-	if m.width == 0 || m.height == 0 {
-		return
-	}
-	width := m.width - 6
-	if width < 20 {
-		width = 20
-	}
-	height := m.height - 12
-	if height < 6 {
-		height = 6
-	}
-	if m.payloadViewport.Width != width {
-		m.payloadViewport.Width = width
-	}
-	if m.payloadViewport.Height != height {
-		m.payloadViewport.Height = height
-	}
+// fitViewport sizes vp so the boxed viewport, the sections above it and the
+// help line below fit the terminal. Rows are measured, not assumed: a frame
+// taller than the terminal loses its bottom rows. With fill the box takes all
+// spare space; otherwise it hugs the content and scrolls only when needed.
+// fitViewport sizes vp to fit between the sections above it and the help
+// line, inside the detail box.
+func (m *runsViewModel) fitViewport(vp *viewport.Model, above []string, help string, fill bool) {
+	box := runsDetailContainerStyle
+	parts := append(append([]string{}, above...), box.Render(scrollStandIn), help)
+	maxWidth := max(m.width-box.GetHorizontalFrameSize(), 20)
+	sizeScrollArea(vp, maxWidth, m.height, strings.Join(parts, "\n\n"), fill)
 }
 
 func (m *runsViewModel) resizeTable() {
@@ -500,7 +506,6 @@ func (m *runsViewModel) openPayloadView() tea.Cmd {
 	m.payloadContent = ""
 	m.payloadViewport.SetContent("")
 	m.payloadViewport.GotoTop()
-	m.resizePayloadViewport()
 	return loadPayload(m.detailSummary)
 }
 
@@ -517,9 +522,10 @@ func (m *runsViewModel) reloadPayload() tea.Cmd {
 	return loadPayload(m.detailSummary)
 }
 
-func (m *runsViewModel) renderPayloadView() string {
-	keyStyle := StyleKey.Copy().Width(14)
-	valueStyle := StyleValue.Copy()
+// renderPayloadInfo returns the boxed file info shown above the payload.
+func (m *runsViewModel) renderPayloadInfo() string {
+	keyStyle := StyleKey.Width(14)
+	valueStyle := StyleValue
 
 	infoLines := []string{
 		fmt.Sprintf("%s %s", keyStyle.Render("Run ID:"), valueStyle.Render(m.detailSummary.ID)),
@@ -565,8 +571,11 @@ func (m *runsViewModel) renderPayloadView() string {
 		infoLines = append(infoLines, StyleMuted.Render(fmt.Sprintf("Checked paths: %s", strings.Join(paths, ", "))))
 	}
 
-	infoBox := runsDetailContainerStyle.Render(strings.Join(infoLines, "\n"))
+	return runsDetailContainerStyle.Render(strings.Join(infoLines, "\n"))
+}
 
+// payloadBody returns the unboxed payload area.
+func (m *runsViewModel) payloadBody() string {
 	var content string
 	switch {
 	case m.payloadLoading:
@@ -579,9 +588,7 @@ func (m *runsViewModel) renderPayloadView() string {
 		content = m.payloadViewport.View()
 	}
 
-	payloadBox := runsDetailContainerStyle.Render(content)
-
-	return strings.Join([]string{infoBox, payloadBox}, "\n\n")
+	return content
 }
 
 func payloadCandidates(summary runs.Summary) []string {
@@ -896,9 +903,10 @@ func findSummaryByID(summaries []runs.Summary, id string) *runs.Summary {
 	return nil
 }
 
+// renderRunDetails returns the detail lines, unboxed, for the detail viewport.
 func renderRunDetails(summary runs.Summary) string {
-	keyStyle := StyleKey.Copy().Width(14)
-	valueStyle := StyleValue.Copy()
+	keyStyle := StyleKey.Width(14)
+	valueStyle := StyleValue
 	lines := []string{
 		StyleHeader.Render("Run Details"),
 		fmt.Sprintf("%s %s", keyStyle.Render("Run ID:"), valueStyle.Render(summary.ID)),
@@ -965,7 +973,7 @@ func renderRunDetails(summary runs.Summary) string {
 	lines = append(lines, dataLine)
 	lines = append(lines, fmt.Sprintf("%s %s", keyStyle.Render("Run Dir:"), valueStyle.Render(summary.RunDir)))
 
-	return runsDetailContainerStyle.Render(strings.Join(lines, "\n"))
+	return strings.Join(lines, "\n")
 }
 
 func renderAttributes(attrs map[string]string) []string {

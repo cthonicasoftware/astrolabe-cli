@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/spf13/viper"
 )
 
@@ -47,7 +47,7 @@ var configFields = [totalConfigInputs]configField{
 }
 
 // NewConfigEditor constructs the config TUI model pre-populated with existing values.
-func NewConfigEditor() tea.Model {
+func NewConfigEditor() Screen {
 	// Try to find existing config file
 	configPath := viper.ConfigFileUsed()
 	if configPath == "" {
@@ -70,7 +70,7 @@ func NewConfigEditor() tea.Model {
 		ti.Placeholder = configFields[i].placeholder
 		ti.Prompt = ""
 		ti.CharLimit = 512
-		ti.Width = 60
+		ti.SetWidth(60)
 
 		// Load existing value
 		val := viper.GetString(configFields[i].key)
@@ -100,7 +100,7 @@ func (m *configModel) Init() tea.Cmd {
 	return textinput.Blink
 }
 
-func (m *configModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *configModel) Update(msg tea.Msg) (Screen, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -108,7 +108,7 @@ func (m *configModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.resizeInputs()
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc":
 			return m, func() tea.Msg {
@@ -235,7 +235,7 @@ func (m *configModel) resizeInputs() {
 	}
 	inputWidth := max(m.width-40, 30)
 	for i := range m.inputs {
-		m.inputs[i].Width = inputWidth
+		m.inputs[i].SetWidth(inputWidth)
 	}
 }
 

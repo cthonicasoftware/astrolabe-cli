@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
 )
@@ -34,7 +34,10 @@ func newSendApp(t *testing.T, sendErr error) (*App, *[]sentLine, *[]LiveViewPref
 	return app, &sent, &saved
 }
 
-func keyRunes(s string) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)} }
+func keyRunes(s string) tea.KeyPressMsg {
+	r := []rune(s)
+	return tea.KeyPressMsg{Code: r[0], Text: s}
+}
 
 // run executes cmd and feeds its message back into the app, like Bubble Tea.
 func run(app *App, cmd tea.Cmd) {
@@ -76,9 +79,28 @@ func TestAppInputModeKeepsViewBindingsOutOfField(t *testing.T) {
 		t.Fatalf("input = %q, want %q", got, "q ")
 	}
 
-	app.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	app.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	if app.inputMode {
 		t.Fatal("esc should leave input mode")
+	}
+}
+
+// Bubble Tea v2 delivers pasted text as tea.PasteMsg, not key presses.
+func TestAppPasteGoesToInputField(t *testing.T) {
+	app, sent, _ := newSendApp(t, nil)
+
+	app.Update(tea.PasteMsg{Content: "ignored"})
+	if app.input.Value() != "" {
+		t.Fatalf("paste outside input mode reached the field: %q", app.input.Value())
+	}
+
+	app.Update(keyRunes("i"))
+	app.Update(tea.PasteMsg{Content: "AT+GMR"})
+	_, cmd := app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	run(app, cmd)
+
+	if len(*sent) != 1 || (*sent)[0].line != "AT+GMR" {
+		t.Fatalf("sent = %+v, want AT+GMR", *sent)
 	}
 }
 
@@ -88,7 +110,7 @@ func TestAppSendEchoesAndClears(t *testing.T) {
 
 	app.Update(keyRunes("i"))
 	typeText(app, "AT")
-	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	_, cmd := app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	run(app, cmd)
 
 	if len(*sent) != 1 || (*sent)[0] != (sentLine{"AT", sources.LineEndingLF}) {
@@ -144,7 +166,7 @@ func TestAppTimestampToggleRightAlignsAndPersists(t *testing.T) {
 	if !strings.HasSuffix(plain, timestampText(testAt)) {
 		t.Fatalf("row = %q, want timestamp at the right", plain)
 	}
-	if got, want := len(plain), app.vp.Width-1; got != want {
+	if got, want := len(plain), app.vp.Width()-1; got != want {
 		t.Errorf("row width = %d, want timestamp ending at column %d", got, want)
 	}
 }
@@ -220,7 +242,7 @@ func TestAppSendWithEchoOff(t *testing.T) {
 	app.Update(keyRunes("o")) // echo off
 	app.Update(keyRunes("i"))
 	typeText(app, "x")
-	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	_, cmd := app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	run(app, cmd)
 
 	if len(*sent) != 1 {
@@ -234,7 +256,7 @@ func TestAppSendWithEchoOff(t *testing.T) {
 func TestAppEmptyEnterSendsLineEnding(t *testing.T) {
 	app, sent, _ := newSendApp(t, nil)
 	app.Update(keyRunes("i"))
-	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	_, cmd := app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	run(app, cmd)
 	if len(*sent) != 1 || (*sent)[0].line != "" {
 		t.Fatalf("sent = %+v, want one empty line", *sent)
@@ -245,7 +267,7 @@ func TestAppSendErrorKeepsText(t *testing.T) {
 	app, _, _ := newSendApp(t, errors.New("port gone"))
 	app.Update(keyRunes("i"))
 	typeText(app, "retry")
-	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	_, cmd := app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	run(app, cmd)
 
 	if app.input.Value() != "retry" {
@@ -262,8 +284,8 @@ func TestAppSendErrorKeepsText(t *testing.T) {
 func TestAppIgnoresEnterWhileSending(t *testing.T) {
 	app, _, _ := newSendApp(t, nil)
 	app.Update(keyRunes("i"))
-	_, first := app.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	_, second := app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	_, first := app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	_, second := app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if first == nil {
 		t.Fatal("first enter should start a send")
 	}
@@ -277,22 +299,22 @@ func TestAppHistory(t *testing.T) {
 	app.Update(keyRunes("i"))
 	for _, s := range []string{"one", "two"} {
 		typeText(app, s)
-		_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+		_, cmd := app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 		run(app, cmd)
 	}
 	typeText(app, "dra")
 
-	app.Update(tea.KeyMsg{Type: tea.KeyUp})
+	app.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 	if app.input.Value() != "two" {
 		t.Fatalf("up = %q, want two", app.input.Value())
 	}
-	app.Update(tea.KeyMsg{Type: tea.KeyUp})
-	app.Update(tea.KeyMsg{Type: tea.KeyUp}) // already at oldest
+	app.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	app.Update(tea.KeyPressMsg{Code: tea.KeyUp}) // already at oldest
 	if app.input.Value() != "one" {
 		t.Fatalf("up up = %q, want one", app.input.Value())
 	}
-	app.Update(tea.KeyMsg{Type: tea.KeyDown})
-	app.Update(tea.KeyMsg{Type: tea.KeyDown})
+	app.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	app.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	if app.input.Value() != "dra" {
 		t.Fatalf("down to draft = %q, want dra", app.input.Value())
 	}
@@ -331,7 +353,7 @@ func TestAppFeedClosedDisablesInput(t *testing.T) {
 		t.Fatal("i should not focus input after disconnect")
 	}
 	// Saving must still work.
-	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyCtrlW})
+	_, cmd := app.Update(tea.KeyPressMsg{Code: 'w', Mod: tea.ModCtrl})
 	if cmd == nil {
 		t.Fatal("ctrl+w should still save after disconnect")
 	}

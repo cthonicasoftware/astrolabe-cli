@@ -2,9 +2,10 @@ package tui
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // StatusKind determines the styling applied to a status message.
@@ -43,7 +44,7 @@ var (
 )
 
 var statusPalette = map[StatusKind]struct {
-	border lipgloss.Color
+	border color.Color
 	icon   string
 }{
 	StatusInfo:    {ColorPrimary, IconStatusInfo},
@@ -54,6 +55,12 @@ var statusPalette = map[StatusKind]struct {
 
 // Render draws the status message within the provided width.
 func (m *StatusMessage) Render(width int) string {
+	return m.RenderMax(width, 0)
+}
+
+// RenderMax is Render limited to maxHeight rows (0 means no limit). Body
+// lines that do not fit become an ellipsis, so the box keeps its border.
+func (m *StatusMessage) RenderMax(width, maxHeight int) string {
 	if m == nil {
 		return ""
 	}
@@ -83,6 +90,14 @@ func (m *StatusMessage) Render(width int) string {
 			} else {
 				lines = append(lines, "") // Preserve empty lines
 			}
+		}
+	}
+
+	// Each line is one row: body lines are truncated to width, not wrapped.
+	if frame := statusBoxStyle.GetVerticalFrameSize(); maxHeight > 0 && len(lines)+frame > maxHeight {
+		keep := max(maxHeight-frame-1, 1)
+		if keep < len(lines) {
+			lines = append(lines[:keep], StyleMuted.Render("…"))
 		}
 	}
 
