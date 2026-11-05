@@ -71,3 +71,23 @@ func TestConfig_RelocateIgnoresVIDPIDOnlyMatch(t *testing.T) {
 		t.Error("Relocate matched on VID/PID alone")
 	}
 }
+
+func TestConfig_RelocateAmbiguousSerialDeclines(t *testing.T) {
+	fakePorts(t,
+		&enumerator.PortDetails{Name: "/dev/ttyACM1", IsUSB: true, SerialNumber: "E66138"},
+		&enumerator.PortDetails{Name: "/dev/ttyACM3", IsUSB: true, SerialNumber: "E66138"},
+	)
+	if _, ok := (Config{Port: "/dev/ttyACM0"}).Relocate("E66138"); ok {
+		t.Error("Relocate followed an ambiguous serial")
+	}
+}
+
+func TestConfig_IdentityAmbiguousSerialIsEmpty(t *testing.T) {
+	fakePorts(t,
+		&enumerator.PortDetails{Name: "/dev/ttyACM0", IsUSB: true, SerialNumber: "E66138"},
+		&enumerator.PortDetails{Name: "/dev/ttyACM1", IsUSB: true, SerialNumber: "E66138"},
+	)
+	if got := (Config{Port: "/dev/ttyACM0"}).Identity(); got != "" {
+		t.Errorf("Identity = %q, want empty", got)
+	}
+}

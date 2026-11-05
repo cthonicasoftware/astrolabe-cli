@@ -247,8 +247,9 @@ func (r *Reconnecting) emit(ctx context.Context, at time.Time, ev core.LinkEvent
 }
 
 // reconnect retries until a new inner source opens, returning it and the
-// number of attempts, plus the new port name if the device moved. It returns nil when ctx ends, reconnect is disabled, or
-// the outage outlasts policy.Timeout.
+// number of attempts, plus the new port name if the device moved. It returns
+// nil when ctx ends, reconnect is disabled, or the outage outlasts
+// policy.Timeout.
 func (r *Reconnecting) reconnect(ctx context.Context, dead ManagedSource) (ManagedSource, int, string) {
 	// A held handle (serial especially) can block reopening the same port.
 	_ = dead.Close()
