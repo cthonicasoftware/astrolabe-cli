@@ -930,21 +930,67 @@ func (m *captureTabsModel) renderButtons(s *strings.Builder, width int) {
 
 func (m *captureTabsModel) renderHelp(s *strings.Builder) {
 	var helpText string
-	switch m.focusMode {
-	case FocusModeTabs:
-		helpText = "←/→ or Tab: switch tabs • ↑/↓: enter fields • a: advanced • q: cancel"
-	case FocusModeFields:
-		helpText = "↑/↓: navigate • Enter: select/edit • ←/→: adjust • i/p: info • a: advanced • q: cancel"
-	case FocusModeButtons:
-		helpText = "←/→: select button • Enter: confirm • ↑: back to fields • q: cancel"
-	case FocusModeInfo:
-		helpText = "esc/q: close info • ↑/↓: resume navigation"
+	switch {
+	case m.TextFocused():
+		helpText = "enter/esc: done editing • f1: help"
+	case m.focusMode == FocusModeInfo:
+		helpText = "esc: close • ?: help"
+	case m.focusMode == FocusModeButtons:
+		helpText = "enter: confirm • q: cancel • ?: help"
 	default:
-		helpText = "Tab: switch tabs • ↑/↓: navigate • Enter: select • a: advanced • q: cancel"
+		helpText = "tab: switch source • enter: select • q: cancel • ?: help"
 	}
 
 	help := StyleHelp.Render(helpText)
 	s.WriteString(lipgloss.PlaceHorizontal(m.width, lipgloss.Center, help))
+}
+
+// TextFocused reports whether a TCP field is being edited, so ? is typed
+// rather than opening help.
+func (m *captureTabsModel) TextFocused() bool {
+	return m.activeTab == TabIndexTCP && m.focusMode == FocusModeFields && m.editingField
+}
+
+// HelpSections lists the keys for the source picker's current mode.
+func (m *captureTabsModel) HelpSections() []HelpSection {
+	switch {
+	case m.showInfo:
+		return []HelpSection{{
+			Title: "Source info",
+			Keys:  []KeyHelp{{"q/esc", "close"}},
+		}}
+	case m.showAdvanced:
+		return []HelpSection{{
+			Title: "Advanced serial settings",
+			Keys: []KeyHelp{
+				{"↑/↓ k/j", "move between settings and buttons"},
+				{"←/→ h/l", "change setting / pick button"},
+				{"space/enter", "next option, or press button"},
+				{"q/esc", "close without applying"},
+			},
+		}}
+	case m.TextFocused():
+		return []HelpSection{{
+			Title: "Editing a field",
+			Keys: []KeyHelp{
+				{"type", "edit the value (port: digits only)"},
+				{"backspace", "delete a character"},
+				{"enter/esc", "done editing"},
+			},
+		}}
+	}
+	return []HelpSection{{
+		Title: "Choose a source",
+		Keys: []KeyHelp{
+			{"tab/shift+tab", "switch source tab"},
+			{"↑/↓ k/j", "move between tabs, fields and buttons"},
+			{"←/→ h/l", "change value / switch tab / pick button"},
+			{"enter/space", "select, edit a field, or press button"},
+			{"i/p", "show source info (ports, interfaces)"},
+			{"a", "advanced settings (serial)"},
+			{"q/esc", "cancel and return"},
+		},
+	}}
 }
 
 // buildCaptureConfig constructs a CaptureConfig from the current model state.

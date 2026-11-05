@@ -262,7 +262,7 @@ func (m *advancedSettingsModel) View() string {
 	// Help text
 	var help strings.Builder
 	help.WriteString("\n\n")
-	help.WriteString(StyleHelp.Render(helpNavigateChange))
+	help.WriteString(StyleHelp.Render(helpNavigateChange + " • ?: help"))
 
 	// Combine box and help
 	var s strings.Builder

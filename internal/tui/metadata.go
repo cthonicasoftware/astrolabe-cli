@@ -230,11 +230,28 @@ func (m *metadataModel) View() string {
 		content.WriteString("\n")
 	}
 
-	help := " ↑/↓ tab/tabshift+tab: navigate • ctrl+s: save • esc: close"
+	help := " tab: next field • ctrl+s: save • esc: close • f1: help"
 	content.WriteString(StyleHelp.Render(help))
 
 	return lipgloss.PlaceVertical(m.height, lipgloss.Center,
 		lipgloss.PlaceHorizontal(m.width, lipgloss.Center, content.String()))
+}
+
+// TextFocused is always true: a metadata field always has focus.
+func (m *metadataModel) TextFocused() bool { return true }
+
+// HelpSections lists the metadata editor's keys for the help dialog.
+func (m *metadataModel) HelpSections() []HelpSection {
+	return []HelpSection{{
+		Title: "Metadata",
+		Keys: []KeyHelp{
+			{"tab/↓", "next field"},
+			{"shift+tab/↑", "previous field"},
+			{"enter", "next field (new line in attributes)"},
+			{"ctrl+s", "save and return"},
+			{"esc", "close without saving"},
+		},
+	}}
 }
 
 func (m *metadataModel) resizeInputs() {

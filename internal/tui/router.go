@@ -43,13 +43,13 @@ type ScreenFactory func(ctx ScreenContext) (tea.Model, func(), error)
 
 // RouterConfig holds router dependencies.
 type RouterConfig struct {
-	InitialScreen ScreenID
-	InitialStatus *StatusMessage
-	CapturePort   CaptureSessionPort
-	MetadataPort  MetadataPort
-	UploadPort    UploadPort
-	SendPrefsPort SendPrefsPort // optional; nil uses defaults and does not persist
-	RunsCacheRoot string
+	InitialScreen     ScreenID
+	InitialStatus     *StatusMessage
+	CapturePort       CaptureSessionPort
+	MetadataPort      MetadataPort
+	UploadPort        UploadPort
+	LiveViewPrefsPort LiveViewPrefsPort // optional; nil uses defaults and does not persist
+	RunsCacheRoot     string
 }
 
 type router struct {
@@ -59,6 +59,9 @@ type router struct {
 	cleanup   func()
 	width     int
 	height    int
+	// helpOpen shows the help dialog over the current screen. The screen
+	// still gets every non-key message, so captures keep running.
+	helpOpen bool
 }
 
 func newRouter(cfg RouterConfig) *router {
@@ -100,6 +103,17 @@ func (r *router) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			r.runCleanup()
 			return r, tea.Quit
 		}
+		if r.helpOpen {
+			// The dialog takes all keys; the screen never sees them.
+			if closesHelp(msg) {
+				r.helpOpen = false
+			}
+			return r, nil
+		}
+		if opensHelp(msg, r.current) {
+			r.helpOpen = true
+			return r, nil
+		}
 	}
 
 	newCurrent, cmd := r.current.Update(msg)
@@ -108,12 +122,16 @@ func (r *router) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (r *router) View() string {
+	if r.helpOpen {
+		return renderHelpDialog(r.current, r.width, r.height)
+	}
 	return r.current.View()
 }
 
 func (r *router) navigate(msg NavigateMsg) tea.Cmd {
 	// Clean up current screen
 	r.runCleanup()
+	r.helpOpen = false // help described the screen being left
 
 	// Quit if navigating to empty screen (welcome quit path)
 	if msg.To == "" {
@@ -173,9 +191,9 @@ func buildFactories(cfg RouterConfig) map[ScreenID]ScreenFactory {
 				return nil, nil, fmt.Errorf("start capture: %w", err)
 			}
 			appModel := NewApp("Live Capture", session.Feed())
+			appModel.SetPrefs(loadLiveViewPrefs(cfg.LiveViewPrefsPort))
 			if session.CanSend() {
-				prefs, savePrefs := loadSendPrefs(cfg.SendPrefsPort)
-				appModel.EnableSend(session.Send, prefs, savePrefs)
+				appModel.EnableSend(session.Send)
 			}
 			cleanup := func() {
 				if appModel.SaveRequested() {
@@ -213,15 +231,15 @@ func buildFactories(cfg RouterConfig) map[ScreenID]ScreenFactory {
 }
 
 // NewRouterForTest exposes router construction for white-box tests.
-// loadSendPrefs reads remembered send settings. Load errors fall back to
+// loadLiveViewPrefs reads remembered live-view settings. Load errors fall back to
 // defaults; a capture should never fail because a prefs file is bad.
-func loadSendPrefs(port SendPrefsPort) (SendPrefs, func(SendPrefs) error) {
+func loadLiveViewPrefs(port LiveViewPrefsPort) (LiveViewPrefs, func(LiveViewPrefs) error) {
 	if port == nil {
-		return DefaultSendPrefs(), nil
+		return DefaultLiveViewPrefs(), nil
 	}
 	prefs, err := port.Load()
 	if err != nil {
-		prefs = DefaultSendPrefs()
+		prefs = DefaultLiveViewPrefs()
 	}
 	return prefs, port.Save
 }

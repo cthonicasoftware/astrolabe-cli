@@ -4,7 +4,61 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
+
+// testAt is an arbitrary arrival time for tests that do not check timing.
+var testAt = time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+
+func TestLineBuffer_LineTimeIsFirstByteArrival(t *testing.T) {
+	lb := NewLineBuffer()
+	t0 := testAt
+	t1 := t0.Add(50 * time.Millisecond)
+	t2 := t1.Add(50 * time.Millisecond)
+
+	lb.AddData("Te", t0)
+	if got := lb.LineTime(0); !got.Equal(t0) {
+		t.Fatalf("partial line time = %v, want %v", got, t0)
+	}
+	lb.AddData("mp\nHu", t1)
+	lb.AddData("m\n", t2)
+
+	want := []time.Time{t0, t1}
+	for i, w := range want {
+		if got := lb.LineTime(i); !got.Equal(w) {
+			t.Errorf("line %d time = %v, want %v", i, got, w)
+		}
+	}
+	if got := lb.LineTime(2); !got.IsZero() {
+		t.Errorf("out of range time = %v, want zero", got)
+	}
+}
+
+func TestLineBuffer_EchoKeepsTimes(t *testing.T) {
+	lb := NewLineBuffer()
+	t0 := testAt
+	t1 := t0.Add(time.Second)
+
+	lb.AddData("partial", t0)
+	lb.AddEcho("AT", t1)
+
+	if got := lb.LineTime(0); !got.Equal(t0) {
+		t.Errorf("ended partial time = %v, want %v", got, t0)
+	}
+	if got := lb.LineTime(1); !got.Equal(t1) {
+		t.Errorf("echo time = %v, want %v", got, t1)
+	}
+}
+
+func TestLineBuffer_TrimKeepsTimesAligned(t *testing.T) {
+	lb := NewLineBuffer()
+	for i := 0; i < MaxBufferedLines+5; i++ {
+		lb.AddData("x\n", testAt.Add(time.Duration(i)*time.Second))
+	}
+	if got, want := lb.LineTime(0), testAt.Add(5*time.Second); !got.Equal(want) {
+		t.Errorf("first line time after trim = %v, want %v", got, want)
+	}
+}
 
 func TestNewLineBuffer(t *testing.T) {
 	lb := NewLineBuffer()
@@ -71,7 +125,7 @@ func TestLineBuffer_AddData(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			lb := NewLineBuffer()
 			for _, input := range tt.inputs {
-				lb.AddData(input)
+				lb.AddData(input, testAt)
 			}
 
 			displayLines := lb.GetDisplayLines()
@@ -88,7 +142,7 @@ func TestLineBuffer_AddData(t *testing.T) {
 
 func TestLineBuffer_CarriageReturnStripping(t *testing.T) {
 	lb := NewLineBuffer()
-	lb.AddData("hello\r\nworld\r\n")
+	lb.AddData("hello\r\nworld\r\n", testAt)
 
 	expectedLines := []string{"hello", "world"}
 	displayLines := lb.GetDisplayLines()
@@ -104,7 +158,7 @@ func TestLineBuffer_MaxBufferedLines(t *testing.T) {
 
 	// Add more than MaxBufferedLines
 	for i := 0; i < MaxBufferedLines+100; i++ {
-		lb.AddData("line\n")
+		lb.AddData("line\n", testAt)
 	}
 
 	if lb.LineCount() != MaxBufferedLines {
@@ -116,7 +170,7 @@ func TestLineBuffer_MaxBufferedLines(t *testing.T) {
 func TestLineBuffer_GetDisplayLines(t *testing.T) {
 	t.Run("complete lines only", func(t *testing.T) {
 		lb := NewLineBuffer()
-		lb.AddData("line1\nline2\n")
+		lb.AddData("line1\nline2\n", testAt)
 
 		expected := []string{"line1", "line2"}
 		result := lb.GetDisplayLines()
@@ -128,7 +182,7 @@ func TestLineBuffer_GetDisplayLines(t *testing.T) {
 
 	t.Run("with partial line", func(t *testing.T) {
 		lb := NewLineBuffer()
-		lb.AddData("line1\npartial")
+		lb.AddData("line1\npartial", testAt)
 
 		expected := []string{"line1", "partial"}
 		result := lb.GetDisplayLines()
@@ -140,7 +194,7 @@ func TestLineBuffer_GetDisplayLines(t *testing.T) {
 
 	t.Run("only partial line", func(t *testing.T) {
 		lb := NewLineBuffer()
-		lb.AddData("partial")
+		lb.AddData("partial", testAt)
 
 		expected := []string{"partial"}
 		result := lb.GetDisplayLines()
@@ -164,7 +218,7 @@ func TestLineBuffer_GetDisplayLines(t *testing.T) {
 
 func TestLineBuffer_Clear(t *testing.T) {
 	lb := NewLineBuffer()
-	lb.AddData("line1\nline2\npartial")
+	lb.AddData("line1\nline2\npartial", testAt)
 
 	lb.Clear()
 
@@ -214,7 +268,7 @@ func TestLineBuffer_LineCount(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			lb := NewLineBuffer()
-			lb.AddData(tt.input)
+			lb.AddData(tt.input, testAt)
 
 			if lb.LineCount() != tt.expected {
 				t.Errorf("LineCount() = %d, want %d", lb.LineCount(), tt.expected)
@@ -227,11 +281,11 @@ func TestLineBuffer_IncrementalAdds(t *testing.T) {
 	lb := NewLineBuffer()
 
 	// Simulate streaming data
-	lb.AddData("hello ")
-	lb.AddData("world")
-	lb.AddData("\n")
-	lb.AddData("second")
-	lb.AddData(" line\n")
+	lb.AddData("hello ", testAt)
+	lb.AddData("world", testAt)
+	lb.AddData("\n", testAt)
+	lb.AddData("second", testAt)
+	lb.AddData(" line\n", testAt)
 
 	expected := []string{"hello world", "second line"}
 	result := lb.GetDisplayLines()
@@ -244,7 +298,7 @@ func TestLineBuffer_IncrementalAdds(t *testing.T) {
 func TestLineBuffer_EdgeCases(t *testing.T) {
 	t.Run("single newline", func(t *testing.T) {
 		lb := NewLineBuffer()
-		lb.AddData("\n")
+		lb.AddData("\n", testAt)
 
 		// A single newline creates an empty line, but the first empty line is skipped
 		// due to the condition: if parts[i] != "" || i > 0
@@ -255,8 +309,8 @@ func TestLineBuffer_EdgeCases(t *testing.T) {
 
 	t.Run("trailing newline", func(t *testing.T) {
 		lb := NewLineBuffer()
-		lb.AddData("line1\n")
-		lb.AddData("line2\n")
+		lb.AddData("line1\n", testAt)
+		lb.AddData("line2\n", testAt)
 
 		// Should have exactly 2 lines, no empty line at the end
 		expected := []string{"line1", "line2"}
@@ -272,7 +326,7 @@ func TestLineBuffer_EdgeCases(t *testing.T) {
 
 		// Add a very long line without newlines
 		longLine := strings.Repeat("a", 10000)
-		lb.AddData(longLine)
+		lb.AddData(longLine, testAt)
 
 		// Should still be in partial buffer
 		if lb.LineCount() != 0 {
@@ -280,7 +334,7 @@ func TestLineBuffer_EdgeCases(t *testing.T) {
 		}
 
 		// Complete the line
-		lb.AddData("\n")
+		lb.AddData("\n", testAt)
 
 		if lb.LineCount() != 1 {
 			t.Errorf("After completing long line, should have 1 line, got %d", lb.LineCount())

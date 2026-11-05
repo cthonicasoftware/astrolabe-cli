@@ -166,11 +166,26 @@ func (m *welcomeModel) View() string {
 	s.WriteString("\n\n")
 
 	// Footer
-	footer := StyleHelp.Render("Astrolabe CLI, by Cthonica Software.")
+	footer := lipgloss.JoinVertical(lipgloss.Center,
+		StyleHelp.Render("enter: select • q: quit • ?: help"),
+		"",
+		StyleHelp.Render("Astrolabe CLI, by Cthonica Software."))
 	centeredFooter := lipgloss.PlaceHorizontal(m.width, lipgloss.Center, footer)
 	s.WriteString(centeredFooter)
 
 	// Fill remaining vertical space
 	content := s.String()
 	return lipgloss.PlaceVertical(m.height, lipgloss.Center, content)
+}
+
+// HelpSections lists the menu's keys for the help dialog.
+func (m *welcomeModel) HelpSections() []HelpSection {
+	return []HelpSection{{
+		Title: "Menu",
+		Keys: []KeyHelp{
+			{"↑/↓ k/j", "move"},
+			{"enter/space", "open the selected item"},
+			{"q/esc", "quit"},
+		},
+	}}
 }

@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -17,65 +16,67 @@ import (
 
 // Layout constants for viewport sizing
 const (
-	headerFooterHeight = 8
-	inputRowHeight     = 2 // input line plus the blank line above it
-	marginWidth        = 8
-	minViewportWidth   = 40
-	minViewportHeight  = 10
-	tickInterval       = 250 * time.Millisecond
-	maxSendLength      = 1024
-	maxHistory         = 100
+	marginWidth       = 8
+	minViewportWidth  = 40
+	minViewportHeight = 10
+	tickInterval      = 250 * time.Millisecond
+	maxSendLength     = 1024
+	maxHistory        = 100
+
+	// timestampLayout formats the per-line arrival time shown at the right
+	// edge of the live view.
+	timestampLayout = "15:04:05.000"
+	// timestampGutter is the space kept free for a timestamp and the gap
+	// before it, so long lines wrap short of it.
+	timestampGutter = len(timestampLayout) + 1
 )
 
-// keymap defines the key bindings for the application
+// keymap defines the key bindings for the live view. Scroll and History
+// only document keys the viewport and input field handle themselves.
 type keymap struct {
-	Quit   key.Binding
-	Save   key.Binding
-	Help   key.Binding
-	Pause  key.Binding
-	Clear  key.Binding
-	Spot   key.Binding
-	Input  key.Binding
-	Ending key.Binding
-	Echo   key.Binding
-	Send   key.Binding
-	Leave  key.Binding
-}
-
-func (k keymap) ShortHelp() []key.Binding { return []key.Binding{k.Save, k.Pause, k.Spot, k.Help} }
-func (k keymap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{
-		{k.Quit, k.Save, k.Pause, k.Spot, k.Clear, k.Help},
-		{k.Input, k.Send, k.Leave, k.Ending, k.Echo},
-	}
+	Quit    key.Binding
+	Save    key.Binding
+	Scroll  key.Binding
+	History key.Binding
+	Pause   key.Binding
+	Clear   key.Binding
+	Spot    key.Binding
+	Time    key.Binding
+	Input   key.Binding
+	Ending  key.Binding
+	Echo    key.Binding
+	Send    key.Binding
+	Leave   key.Binding
 }
 
 var keys = keymap{
-	Quit:   key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q/ctrl+c", "quit without saving")),
-	Save:   key.NewBinding(key.WithKeys("ctrl+w"), key.WithHelp("ctrl+w", "stop & save run")),
-	Help:   key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "toggle help")),
-	Pause:  key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "pause/resume capture")),
-	Clear:  key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "clear buffer")),
-	Spot:   key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "toggle spotlight")),
-	Input:  key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "type to device")),
-	Ending: key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "cycle line ending")),
-	Echo:   key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "toggle echo")),
-	Send:   key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "send line")),
-	Leave:  key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "stop typing")),
+	Quit:    key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "discard run and return")),
+	Save:    key.NewBinding(key.WithKeys("ctrl+w"), key.WithHelp("ctrl+w", "stop & save run")),
+	Scroll:  key.NewBinding(key.WithKeys("up", "down", "pgup", "pgdown"), key.WithHelp("↑/↓ pgup/pgdn", "scroll")),
+	History: key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑/↓", "recall earlier lines")),
+	Pause:   key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "pause/resume capture")),
+	Clear:   key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "clear buffer")),
+	Spot:    key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "toggle spotlight")),
+	Time:    key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "toggle timestamps")),
+	Input:   key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "type to device")),
+	Ending:  key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "cycle line ending")),
+	Echo:    key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "toggle echo")),
+	Send:    key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "send line")),
+	Leave:   key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "stop typing")),
 }
 
-// SendFunc writes a line plus line ending to the device. It may block.
-type SendFunc func(line string, le sources.LineEnding) error
+// SendFunc writes a line plus line ending to the device and returns the time
+// recorded for it. It may block.
+type SendFunc func(line string, le sources.LineEnding) (time.Time, error)
 
 // App represents the live capture TUI application
 type App struct {
 	title            string
 	vp               viewport.Model
-	help             help.Model
 	paused           bool
-	pending          []string // chunks received while paused, applied on resume
+	pending          []FeedChunk // chunks received while paused, applied on resume
 	saveRequested    bool
-	feed             <-chan string
+	feed             <-chan FeedChunk
 	lineBuffer       *LineBuffer
 	lastTick         time.Time
 	width            int
@@ -84,10 +85,12 @@ type App struct {
 	spotlightEnabled bool
 	spotlight        *SpotlightEffect
 
+	// Remembered view settings. savePrefs is nil when they do not persist.
+	savePrefs func(LiveViewPrefs) error
+	prefs     LiveViewPrefs
+
 	// Send path. send is nil when the source cannot accept input.
 	send         SendFunc
-	savePrefs    func(SendPrefs) error
-	prefs        SendPrefs
 	input        textinput.Model
 	inputMode    bool
 	sending      bool
@@ -99,7 +102,7 @@ type App struct {
 }
 
 // NewApp creates a new App instance
-func NewApp(title string, feed <-chan string) *App {
+func NewApp(title string, feed <-chan FeedChunk) *App {
 	vp := viewport.New(0, 0)
 	vp.SetContent("")
 	vp.MouseWheelEnabled = true
@@ -121,7 +124,6 @@ func NewApp(title string, feed <-chan string) *App {
 	return &App{
 		title:            title,
 		vp:               vp,
-		help:             help.New(),
 		paused:           false,
 		saveRequested:    false,
 		feed:             feed,
@@ -129,23 +131,28 @@ func NewApp(title string, feed <-chan string) *App {
 		lineBuffer:       NewLineBuffer(),
 		spotlightEnabled: false,
 		spotlight:        NewSpotlightEffect(),
-		prefs:            DefaultSendPrefs(),
+		prefs:            DefaultLiveViewPrefs(),
 		input:            input,
 	}
 }
 
-// EnableSend turns on the input field. savePrefs may be nil.
-func (a *App) EnableSend(send SendFunc, prefs SendPrefs, savePrefs func(SendPrefs) error) {
-	a.send = send
+// SetPrefs applies remembered view settings. save is called with the new
+// settings whenever the operator changes one; it may be nil.
+func (a *App) SetPrefs(prefs LiveViewPrefs, save func(LiveViewPrefs) error) {
 	a.prefs = prefs
-	a.savePrefs = savePrefs
+	a.savePrefs = save
+}
+
+// EnableSend turns on the input field.
+func (a *App) EnableSend(send SendFunc) {
+	a.send = send
 }
 
 func (a *App) canSend() bool { return a.send != nil && !a.disconnected }
 
 // Message types
 type tickMsg time.Time
-type lineMsg string
+type lineMsg FeedChunk
 
 // feedClosedMsg reports that the source stopped (e.g. device unplugged).
 type feedClosedMsg struct{}
@@ -153,10 +160,11 @@ type feedClosedMsg struct{}
 // sendResultMsg reports the outcome of an asynchronous Send.
 type sendResultMsg struct {
 	line string
+	at   time.Time
 	err  error
 }
 
-// prefsSaveErrMsg reports a failure to persist send preferences.
+// prefsSaveErrMsg reports a failure to persist live-view preferences.
 type prefsSaveErrMsg struct{ err error }
 
 // Init initializes the app
@@ -166,6 +174,14 @@ func (a *App) Init() tea.Cmd {
 
 // Update handles messages and updates the model
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	model, cmd := a.update(msg)
+	// Any message can change the rows around the viewport (mode, errors,
+	// settings), so re-fit the layout after each one.
+	a.syncLayout()
+	return model, cmd
+}
+
+func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case tea.WindowSizeMsg:
 		return a.handleWindowResize(m)
@@ -178,7 +194,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case sendResultMsg:
 		return a.handleSendResult(m)
 	case prefsSaveErrMsg:
-		a.sendErr = "could not save send settings: " + m.err.Error()
+		a.sendErr = "could not save settings: " + m.err.Error()
 		return a, nil
 	case tea.KeyMsg:
 		if a.inputMode {
@@ -198,27 +214,11 @@ func (a *App) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	a.width = msg.Width
 	a.height = msg.Height
 
-	// Calculate viewport dimensions
-	frameWidth := a.boxStyle.GetHorizontalFrameSize()
-	frameHeight := a.boxStyle.GetVerticalFrameSize()
-
-	reserved := headerFooterHeight
-	if a.send != nil {
-		reserved += inputRowHeight
-	}
-
-	a.vp.Width = msg.Width - marginWidth - frameWidth - 1
-	a.vp.Height = msg.Height - reserved - frameHeight
-
-	// Apply minimum dimensions
-	if a.vp.Width < minViewportWidth {
-		a.vp.Width = minViewportWidth
-	}
-	if a.vp.Height < minViewportHeight {
-		a.vp.Height = minViewportHeight
-	}
-
+	// Width first: the status and help rows wrap to it, which sets how
+	// much height is left for the viewport.
+	a.vp.Width = max(msg.Width-marginWidth-a.boxStyle.GetHorizontalFrameSize()-1, minViewportWidth)
 	a.input.Width = max(a.vp.Width-lipgloss.Width(a.input.Prompt), 10)
+	a.syncLayout()
 
 	// Reset position and re-wrap content
 	a.vp.YPosition = 0
@@ -242,9 +242,9 @@ func (a *App) handleLineData(msg lineMsg) (tea.Model, tea.Cmd) {
 	// Always drain the channel to prevent blocking the pipeline. While paused,
 	// hold chunks so resuming shows them instead of silently dropping data.
 	if a.paused {
-		a.pending = append(a.pending, string(msg))
+		a.pending = append(a.pending, FeedChunk(msg))
 	} else {
-		a.appendData(string(msg))
+		a.appendData(FeedChunk(msg))
 	}
 
 	// Always pull the next line, even when paused, to prevent blocking
@@ -261,10 +261,10 @@ func (a *App) handleFeedClosed() (tea.Model, tea.Cmd) {
 
 // appendData adds chunks to the line buffer and refreshes the viewport,
 // following the tail only if the user was already at the bottom.
-func (a *App) appendData(chunks ...string) {
+func (a *App) appendData(chunks ...FeedChunk) {
 	wasAtBottom := a.vp.AtBottom()
 	for _, c := range chunks {
-		a.lineBuffer.AddData(c)
+		a.lineBuffer.AddData(c.Data, c.At)
 	}
 	a.updateViewportContent()
 	if wasAtBottom {
@@ -279,15 +279,14 @@ func (a *App) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.quit()
 	case key.Matches(msg, keys.Save):
 		return a.save()
-	case key.Matches(msg, keys.Help):
-		a.help.ShowAll = !a.help.ShowAll
-		return a, nil
 	case key.Matches(msg, keys.Pause):
 		return a.togglePause()
 	case key.Matches(msg, keys.Clear):
 		return a.clearBuffer()
 	case key.Matches(msg, keys.Spot):
 		return a.toggleSpotlight()
+	case key.Matches(msg, keys.Time):
+		return a.toggleTimestamps()
 	case key.Matches(msg, keys.Input) && a.canSend():
 		a.inputMode = true
 		return a, a.input.Focus()
@@ -345,7 +344,8 @@ func (a *App) submit() (tea.Model, tea.Cmd) {
 	a.sending = true
 	send, le := a.send, a.prefs.LineEnding
 	return a, func() tea.Msg {
-		return sendResultMsg{line: line, err: send(line, le)}
+		at, err := send(line, le)
+		return sendResultMsg{line: line, at: at, err: err}
 	}
 }
 
@@ -361,7 +361,7 @@ func (a *App) handleSendResult(msg sendResultMsg) (tea.Model, tea.Cmd) {
 	a.input.SetValue("")
 	if a.prefs.Echo {
 		wasAtBottom := a.vp.AtBottom()
-		a.lineBuffer.AddEcho(msg.line)
+		a.lineBuffer.AddEcho(msg.line, msg.at)
 		a.updateViewportContent()
 		if wasAtBottom {
 			a.vp.GotoBottom()
@@ -406,7 +406,7 @@ func (a *App) historyNext() {
 	a.input.CursorEnd()
 }
 
-// persistPrefs saves send settings off the UI loop.
+// persistPrefs saves live-view settings off the UI loop.
 func (a *App) persistPrefs() tea.Cmd {
 	if a.savePrefs == nil {
 		return nil
@@ -463,17 +463,30 @@ func (a *App) clearBuffer() (tea.Model, tea.Cmd) {
 // is wrapped on its own so echoed sends can be styled after wrapping (the
 // wrapper measures bytes and would miscount ANSI codes).
 func (a *App) updateViewportContent() {
-	wrapper := NewLineWrapper(a.vp.Width)
+	// With timestamps on, text wraps short of a right-hand gutter so the
+	// timestamp never pushes the line's text sideways.
+	textWidth := a.vp.Width
+	if a.prefs.Timestamps && textWidth > 0 {
+		textWidth = max(textWidth-timestampGutter, 1)
+	}
+	wrapper := NewLineWrapper(textWidth)
 	echoStyle := lipgloss.NewStyle().Foreground(ColorSecondary)
 
 	lines := a.lineBuffer.GetDisplayLines()
 	parts := make([]string, len(lines))
 	for i, line := range lines {
-		wrapped := wrapper.Wrap([]string{line})
+		rows := strings.Split(wrapper.Wrap([]string{line}), "\n")
+		// Measure before styling: widths of styled text include ANSI codes.
+		firstWidth := lipgloss.Width(rows[0])
 		if a.lineBuffer.IsEcho(i) {
-			wrapped = echoStyle.Render(wrapped)
+			for j := range rows {
+				rows[j] = echoStyle.Render(rows[j])
+			}
 		}
-		parts[i] = wrapped
+		if a.prefs.Timestamps {
+			rows[0] += a.timestampSuffix(a.lineBuffer.LineTime(i), firstWidth)
+		}
+		parts[i] = strings.Join(rows, "\n")
 	}
 	wrappedContent := strings.Join(parts, "\n")
 
@@ -489,6 +502,17 @@ func (a *App) updateViewportContent() {
 	a.vp.SetContent(wrappedContent)
 }
 
+// timestampSuffix right-aligns at in muted style after a row rowWidth cells
+// wide. It ends one cell short of the viewport edge, like the wrapper.
+func (a *App) timestampSuffix(at time.Time, rowWidth int) string {
+	if at.IsZero() {
+		return ""
+	}
+	start := a.vp.Width - 1 - len(timestampLayout)
+	pad := max(start-rowWidth, 1)
+	return strings.Repeat(" ", pad) + StyleMuted.Render(at.Local().Format(timestampLayout))
+}
+
 // tickCmd returns a command that sends a tick message
 func (a *App) tickCmd() tea.Cmd {
 	return tea.Tick(tickInterval, func(t time.Time) tea.Msg {
@@ -502,42 +526,53 @@ func (a *App) pullLine() tea.Cmd {
 		if a.feed == nil {
 			return nil
 		}
-		s, ok := <-a.feed
+		c, ok := <-a.feed
 		if !ok {
 			return feedClosedMsg{}
 		}
-		return lineMsg(s)
+		return lineMsg(c)
 	}
 }
 
 // View renders the application UI
 func (a *App) View() string {
-	var s strings.Builder
-
-	// Title
-	s.WriteString(StyleTitle.Render(a.title))
-	s.WriteString("\n\n")
-
-	// Status line
-	s.WriteString(a.renderStatus())
-	s.WriteString("\n\n")
-
-	// Viewport in bordered box
-	s.WriteString(a.renderViewport())
-	s.WriteString("\n\n")
-
-	if a.send != nil {
-		s.WriteString(a.renderInput())
-		s.WriteString("\n\n")
-	}
-
-	// Help text
-	s.WriteString(a.renderHelp())
-
-	// Center content
-	content := s.String()
+	header, footer := a.renderChrome()
+	content := header + a.renderViewport() + footer
 	return lipgloss.PlaceVertical(a.height, lipgloss.Top,
 		lipgloss.PlaceHorizontal(a.width, lipgloss.Center, content))
+}
+
+// renderChrome renders everything above and below the viewport box.
+func (a *App) renderChrome() (header, footer string) {
+	header = StyleTitle.Render(a.title) + "\n\n" + a.renderStatus() + "\n\n"
+	footer = "\n\n"
+	if a.send != nil {
+		footer += a.renderInput() + "\n\n"
+	}
+	footer += a.renderHelp()
+	return header, footer
+}
+
+// syncLayout sizes the viewport so the whole view fits the terminal. The
+// rows around the box are measured, not assumed: status and help wrap on
+// narrow terminals and change with mode, and a view taller than the
+// terminal loses its top rows (the title).
+func (a *App) syncLayout() {
+	if a.height <= 0 {
+		return
+	}
+	header, footer := a.renderChrome()
+	chrome := lipgloss.Height(header+"x"+footer) - 1 // minus the stand-in box row
+	h := max(a.height-chrome-a.boxStyle.GetVerticalFrameSize(), minViewportHeight)
+	if h == a.vp.Height {
+		return
+	}
+	wasAtBottom := a.vp.AtBottom()
+	a.vp.Height = h
+	a.updateViewportContent()
+	if wasAtBottom {
+		a.vp.GotoBottom()
+	}
 }
 
 // renderStatus renders the status line with metadata
@@ -563,6 +598,12 @@ func (a *App) renderStatus() string {
 		statusText += " • " + StyleMuted.Render("Spotlight off")
 	}
 
+	if a.prefs.Timestamps {
+		statusText += " • " + StyleMuted.Render("Timestamps on")
+	} else {
+		statusText += " • " + StyleMuted.Render("Timestamps off")
+	}
+
 	if a.send != nil {
 		echo := "echo off"
 		if a.prefs.Echo {
@@ -571,7 +612,7 @@ func (a *App) renderStatus() string {
 		statusText += " • " + StyleMuted.Render(string(a.prefs.LineEnding)+" • "+echo)
 	}
 
-	return statusText
+	return a.fitBox(statusText)
 }
 
 // renderInput renders the send field, or a hint when it is not focused.
@@ -591,7 +632,16 @@ func (a *App) renderInput() string {
 	if a.sendErr != "" {
 		line += "  " + StyleError.Render(a.sendErr)
 	}
-	return lipgloss.NewStyle().Width(a.vp.Width + a.boxStyle.GetHorizontalFrameSize()).Render(line)
+	return a.fitBox(line)
+}
+
+// fitBox wraps s to the bordered box's width. View centers the layout on
+// its widest row, so a row wider than the box would shift everything left.
+func (a *App) fitBox(s string) string {
+	if a.vp.Width <= 0 {
+		return s // not sized yet
+	}
+	return lipgloss.NewStyle().Width(a.vp.Width + a.boxStyle.GetHorizontalFrameSize()).Render(s)
 }
 
 // renderViewport renders the viewport in a bordered box with fade effect
@@ -619,25 +669,62 @@ func (a *App) renderViewport() string {
 
 // renderHelp renders the help text
 func (a *App) renderHelp() string {
-	if a.help.ShowAll {
-		return StyleHelp.Render(a.help.View(keys))
-	}
 	var helpText string
 	switch {
 	case a.inputMode:
-		helpText = "enter: send • esc: stop typing • ↑/↓: history • pgup/pgdn: scroll • ctrl+w: save & quit"
+		helpText = "enter: send • esc: stop typing • f1: help"
 	case a.send != nil:
-		helpText = "i: type • e: line ending • o: echo • ctrl+w: save & quit • space: pause • s: spotlight • ↑/↓: scroll • ctrl+l: clear • q: quit"
+		helpText = "i: type • ctrl+w: save & quit • q: quit • ?: help"
 	default:
-		helpText = "ctrl+w: save & quit • space: pause/resume • s: spotlight • ↑/↓: scroll • ctrl+l: clear • q: quit without saving"
+		helpText = "space: pause • ctrl+w: save & quit • q: quit • ?: help"
 	}
-	return StyleHelp.Render(helpText)
+	return a.fitBox(StyleHelp.Render(helpText))
+}
+
+// TextFocused reports whether the send field has focus, so ? is typed
+// rather than opening help.
+func (a *App) TextFocused() bool { return a.inputMode }
+
+// HelpSections lists the live view's keys for the help dialog.
+func (a *App) HelpSections() []HelpSection {
+	if a.inputMode {
+		return []HelpSection{{
+			Title: "Typing to the device",
+			Keys:  keyHelpFrom(keys.Send, keys.History, keys.Leave, keys.Save),
+		}, {
+			Title: "Scrolling",
+			Keys:  []KeyHelp{{"pgup/pgdn", "scroll"}},
+		}}
+	}
+	sections := []HelpSection{{
+		Title: "Live capture",
+		Keys:  keyHelpFrom(keys.Save, keys.Quit, keys.Pause, keys.Time, keys.Spot, keys.Clear, keys.Scroll),
+	}}
+	if a.send != nil {
+		sections = append(sections, HelpSection{
+			Title: "Sending",
+			Keys:  keyHelpFrom(keys.Input, keys.Ending, keys.Echo),
+		})
+	}
+	return sections
 }
 
 // toggleSpotlight toggles the spotlight fade effect
 func (a *App) toggleSpotlight() (tea.Model, tea.Cmd) {
 	a.spotlightEnabled = !a.spotlightEnabled
 	return a, nil
+}
+
+// toggleTimestamps shows or hides each line's arrival time and remembers
+// the choice.
+func (a *App) toggleTimestamps() (tea.Model, tea.Cmd) {
+	a.prefs.Timestamps = !a.prefs.Timestamps
+	wasAtBottom := a.vp.AtBottom()
+	a.updateViewportContent()
+	if wasAtBottom {
+		a.vp.GotoBottom()
+	}
+	return a, a.persistPrefs()
 }
 
 // SaveRequested returns true if the user requested to save the run

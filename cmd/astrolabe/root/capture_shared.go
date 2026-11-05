@@ -94,14 +94,21 @@ func buildCaptureManifest(opts core.ManifestOptions, attrs map[string]string) co
 	return manifest
 }
 
-// frameChannelSource wraps a frames channel and implements the capture.Source interface.
+// frameChannelSource wraps a channel of timestamped frames and implements
+// capture.TimedSource, so records keep the arrival times the live view shows.
 type frameChannelSource struct {
-	framesCh <-chan []byte
+	framesCh <-chan capture.Frame
 	meta     core.SourceMeta
 }
 
-func (f *frameChannelSource) Frames() <-chan []byte {
+func (f *frameChannelSource) TimedFrames() <-chan capture.Frame {
 	return f.framesCh
+}
+
+// Frames satisfies capture.Source. The pipeline reads TimedFrames instead,
+// so this is never consumed.
+func (f *frameChannelSource) Frames() <-chan []byte {
+	return nil
 }
 
 func (f *frameChannelSource) Meta() core.SourceMeta {

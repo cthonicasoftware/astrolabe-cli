@@ -205,11 +205,28 @@ func (m *configModel) View() string {
 		content.WriteString("\n")
 	}
 
-	help := " ↑/↓ tab/shift+tab: navigate • ctrl+t: toggle token visibility • ctrl+s: save • esc: close"
+	help := " tab: next field • ctrl+s: save • esc: close • f1: help"
 	content.WriteString(StyleHelp.Render(help))
 
 	return lipgloss.PlaceVertical(m.height, lipgloss.Center,
 		lipgloss.PlaceHorizontal(m.width, lipgloss.Center, content.String()))
+}
+
+// TextFocused is always true: a config field always has focus.
+func (m *configModel) TextFocused() bool { return true }
+
+// HelpSections lists the config editor's keys for the help dialog.
+func (m *configModel) HelpSections() []HelpSection {
+	return []HelpSection{{
+		Title: "Connection settings",
+		Keys: []KeyHelp{
+			{"tab/↓/enter", "next field"},
+			{"shift+tab/↑", "previous field"},
+			{"ctrl+t", "show/hide auth token (on its field)"},
+			{"ctrl+s", "save and return"},
+			{"esc", "close without saving"},
+		},
+	}}
 }
 
 func (m *configModel) resizeInputs() {

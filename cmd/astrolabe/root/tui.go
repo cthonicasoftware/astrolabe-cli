@@ -58,11 +58,11 @@ func runTUI(out *cliout.Printer, appCfg config.Config, initialScreen tui.ScreenI
 	}
 
 	return tui.RunTUI(tui.RouterConfig{
-		InitialScreen: initialScreen,
-		CapturePort:   capturePort,
-		MetadataPort:  metadataPort,
-		UploadPort:    uploadPort,
-		SendPrefsPort: sendPrefsAdapter{},
-		RunsCacheRoot: appCfg.OfflineCache,
+		InitialScreen:     initialScreen,
+		CapturePort:       capturePort,
+		MetadataPort:      metadataPort,
+		UploadPort:        uploadPort,
+		LiveViewPrefsPort: liveViewPrefsAdapter{},
+		RunsCacheRoot:     appCfg.OfflineCache,
 	})
 }

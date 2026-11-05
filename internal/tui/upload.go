@@ -217,6 +217,14 @@ func (m uploadModel) View() string {
 	return spin + info + gap + prog + runCount
 }
 
+// HelpSections lists the upload screen's keys for the help dialog.
+func (m uploadModel) HelpSections() []HelpSection {
+	return []HelpSection{{
+		Title: "Upload",
+		Keys:  []KeyHelp{{"q/esc", "stop uploading and return"}},
+	}}
+}
+
 func uploadRun(client UploadPort, ctx context.Context, runID string) tea.Cmd {
 	return func() tea.Msg {
 		// Add a small delay to make the UI feel responsive
