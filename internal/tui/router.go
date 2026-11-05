@@ -122,6 +122,12 @@ func (r *router) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			r.helpOpen = true
 			return r, nil
 		}
+
+	case tea.PasteMsg:
+		// v2 pastes are not key presses; the open dialog swallows them too.
+		if r.helpOpen {
+			return r, nil
+		}
 	}
 
 	newCurrent, cmd := r.current.Update(msg)

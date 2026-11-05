@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/cthonicasoftware/astrolabe-cli/internal/runs"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/upload"
 )
@@ -87,6 +88,12 @@ func TestScreensFitTerminal(t *testing.T) {
 			app.EnableSend(func(string, sources.LineEnding) (time.Time, error) { return time.Time{}, nil })
 			return sized(app, w, h).View()
 		},
+		"capture-info-error": func(w, h int) string {
+			m := NewSourceInfo(SourceTypeSerial, w, h)
+			long := strings.Repeat("enumerating /dev/serial/by-id/usb-FTDI_device failed: permission denied\n", 30)
+			m.Update(sourceInfoLoadedMsg{sourceType: SourceTypeSerial, err: errors.New(long)})
+			return m.View()
+		},
 		"help-over-live": func(w, h int) string {
 			app := NewApp("Live Capture", nil)
 			app.EnableSend(func(string, sources.LineEnding) (time.Time, error) { return time.Time{}, nil })
@@ -104,6 +111,52 @@ func TestScreensFitTerminal(t *testing.T) {
 			if got := lipgloss.Width(view); got > w {
 				t.Errorf("%dx%d %s: %d columns wide", w, h, name, got)
 			}
+		}
+	}
+}
+
+
+func manyRuns() runs.Result {
+	res := runs.Result{Root: "/tmp/cache"}
+	for i := range 30 {
+		res.Runs = append(res.Runs, runs.Summary{ID: fmt.Sprintf("run-%02d", i), RunDir: fmt.Sprintf("/tmp/cache/run-%02d", i)})
+	}
+	for i := range 3 {
+		res.Warnings = append(res.Warnings, runs.Warning{RunDir: fmt.Sprintf("bad-%d", i), Reason: "manifest unreadable"})
+	}
+	return res
+}
+
+// Short terminals: the status box and runs table must shrink, not push
+// the frame past the bottom edge.
+func TestScreensFitShortTerminal(t *testing.T) {
+	body := strings.Repeat("Something went wrong talking to the device on COM3.\n", 6)
+	for h := 8; h <= 24; h++ {
+		plain, _ := NewWelcome(nil).Update(tea.WindowSizeMsg{Width: 80, Height: h})
+		// Below the menu's own height nothing can fit; only the status
+		// must not add rows on top of it.
+		limit := max(h, lipgloss.Height(plain.View()))
+		s, _ := NewWelcome(NewStatusMessage(StatusError, "Capture failed", body)).Update(tea.WindowSizeMsg{Width: 80, Height: h})
+		if got := lipgloss.Height(s.View()); got > limit {
+			t.Errorf("welcome+error at 80x%d: %d rows (limit %d)", h, got, limit)
+		}
+	}
+	// The runs table needs 84 columns at its narrowest, so test at 100.
+	// Below 18 rows the title, root, help and a 3-row table can't all fit.
+	for h := 18; h <= 40; h++ {
+		s, _ := NewRunsViewer("").Update(tea.WindowSizeMsg{Width: 100, Height: h})
+		s, _ = s.Update(runsLoadedMsg{result: manyRuns()})
+		if got := lipgloss.Height(s.View()); got > h {
+			t.Errorf("runs at 100x%d: %d rows", h, got)
+		}
+	}
+}
+
+func TestStatusRenderMaxHonoursSmallHeights(t *testing.T) {
+	msg := NewStatusMessage(StatusError, "Capture failed", "line one\nline two\nline three\nline four")
+	for maxH := 1; maxH <= 8; maxH++ {
+		if got := lipgloss.Height(msg.RenderMax(60, maxH)); got > maxH {
+			t.Errorf("RenderMax(60, %d) = %d rows", maxH, got)
 		}
 	}
 }

@@ -102,6 +102,8 @@ type runsViewModel struct {
 	payloadLineCount    int
 	payloadPath         string
 	payloadOriginal     string
+	// compactWarnings folds the warning list into one line on short terminals.
+	compactWarnings bool
 	payloadCheckedPaths []string
 }
 
@@ -231,9 +233,7 @@ func (m *runsViewModel) View() string {
 		return m.centerContent(strings.Join(content, "\n"))
 	}
 
-	var sections []string
-	sections = append(sections, StyleTitle.Render("📊 Cached Runs"))
-	sections = append(sections, StyleHelp.Render(fmt.Sprintf("Cache root: %s", m.result.Root)))
+	sections := m.headerSections()
 	switch m.mode {
 	case modeDetail:
 		help := StyleHelp.Render("↑/↓: scroll • d: view data • esc: back • ?: help")
@@ -248,10 +248,25 @@ func (m *runsViewModel) View() string {
 		return m.centerContent(strings.Join(sections, "\n\n"))
 	}
 
-	tableView := runsTableContainerStyle.Render(m.table.View())
-	sections = append(sections, tableView)
+	return m.centerContent(m.listView(sections))
+}
 
-	if len(m.result.Warnings) > 0 {
+// headerSections are the title and cache root shown above every mode.
+func (m *runsViewModel) headerSections() []string {
+	return []string{
+		StyleTitle.Render("📊 Cached Runs"),
+		StyleHelp.Render(fmt.Sprintf("Cache root: %s", m.result.Root)),
+	}
+}
+
+// listView renders the run table below the header sections, with any
+// warnings and the help line.
+func (m *runsViewModel) listView(sections []string) string {
+	sections = append(sections, runsTableContainerStyle.Render(m.table.View()))
+
+	if n := len(m.result.Warnings); n > 0 && m.compactWarnings {
+		sections = append(sections, StyleError.Render(fmt.Sprintf("Warnings: %d run(s) could not be read", n)))
+	} else if n > 0 {
 		var warns []string
 		warns = append(warns, StyleError.Render("Warnings:"))
 		for _, warn := range m.result.Warnings {
@@ -266,7 +281,7 @@ func (m *runsViewModel) View() string {
 		sections = append(sections, StyleHelp.Render("enter: details • q: back • ?: help"))
 	}
 
-	return m.centerContent(strings.Join(sections, "\n\n"))
+	return strings.Join(sections, "\n\n")
 }
 
 // HelpSections lists the keys for the current runs view.
@@ -370,8 +385,6 @@ func (m *runsViewModel) handleRunsKey(msg tea.KeyPressMsg) (Screen, tea.Cmd) {
 // help line below fit the terminal. Rows are measured, not assumed: a frame
 // taller than the terminal loses its bottom rows. With fill the box takes all
 // spare space; otherwise it hugs the content and scrolls only when needed.
-// fitViewport sizes vp to fit between the sections above it and the help
-// line, inside the detail box.
 func (m *runsViewModel) fitViewport(vp *viewport.Model, above []string, help string, fill bool) {
 	box := runsDetailContainerStyle
 	parts := append(append([]string{}, above...), box.Render(scrollStandIn), help)
@@ -384,19 +397,26 @@ func (m *runsViewModel) resizeTable() {
 		return
 	}
 
-	tableWidth := m.width - 6
-	if tableWidth < 60 {
-		tableWidth = 60
-	}
-
-	tableHeight := m.height - 14
-	if tableHeight < 6 {
-		tableHeight = 6
-	}
+	tableWidth := max(m.width-runsTableContainerStyle.GetHorizontalFrameSize(), 60)
 
 	m.table.SetColumns(buildRunsTableColumns(tableWidth))
 	m.table.SetWidth(tableWidth)
-	m.table.SetHeight(tableHeight)
+
+	// Measure the real layout (warnings included) at a probe height, then
+	// give the table whatever rows are left. A frame taller than the
+	// terminal loses its bottom rows.
+	const probe, minTable = 6, 3
+	fit := func() int {
+		m.table.SetHeight(probe)
+		return probe + m.height - lipgloss.Height(m.listView(m.headerSections()))
+	}
+	m.compactWarnings = false
+	h := fit()
+	if h < minTable && len(m.result.Warnings) > 0 {
+		m.compactWarnings = true // one summary line instead of the list
+		h = fit()
+	}
+	m.table.SetHeight(max(h, minTable))
 }
 
 func buildRunsTableColumns(tableWidth int) []table.Column {

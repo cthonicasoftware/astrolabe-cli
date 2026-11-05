@@ -264,6 +264,11 @@ func (m *captureTabsModel) Update(msg tea.Msg) (Screen, tea.Cmd) {
 		// Bubble Tea v2 delivers pastes separately from key presses.
 		if m.editingField {
 			for _, r := range msg.Content {
+				// Host and port are printable ASCII only; drop the
+				// whitespace and CR/LF that copied text often carries.
+				if r <= ' ' || r > '~' {
+					continue
+				}
 				m.handleTextInput(string(r))
 			}
 		}

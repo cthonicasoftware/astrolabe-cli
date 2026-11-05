@@ -34,6 +34,19 @@ func newHelpRouter(screen Screen) *router {
 	return &router{current: screen, width: 100, height: 30}
 }
 
+// v2 pastes are not key presses, so the help guard must catch them too.
+func TestHelpSwallowsPaste(t *testing.T) {
+	app, _, _ := newSendApp(t, nil)
+	r := newHelpRouter(app)
+
+	r.Update(keyRunes("i"))
+	r.Update(tea.KeyPressMsg{Code: tea.KeyF1})
+	r.Update(tea.PasteMsg{Content: "reboot"})
+	if app.input.Value() != "" {
+		t.Fatalf("paste reached hidden input while help open: %q", app.input.Value())
+	}
+}
+
 func TestHelpOpensAndClosesWithoutReachingScreen(t *testing.T) {
 	screen := &keyScreen{}
 	r := newHelpRouter(screen)

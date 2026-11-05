@@ -301,19 +301,15 @@ func (m *sourceInfoModel) View() string {
 		return m.wrap(body.String())
 	}
 
-	if m.loadErr != nil {
+	switch {
+	case m.loadErr != nil:
+		// A long error scrolls like diagnostics so the frame still fits.
 		body.WriteString(StyleError.Render(fmt.Sprintf("Unable to load diagnostics: %v", m.loadErr)))
-		body.WriteString("\n\n")
-		body.WriteString(StyleHelp.Render("esc: close"))
-		return m.wrap(body.String())
-	}
-
-	switch m.sourceType {
-	case SourceTypeSerial:
+	case m.sourceType == SourceTypeSerial:
 		m.renderSerialInfo(&body)
-	case SourceTypeTCP:
+	case m.sourceType == SourceTypeTCP:
 		m.renderNetworkInfo(&body)
-	case SourceTypeSCPI:
+	case m.sourceType == SourceTypeSCPI:
 		m.renderSCPIPlaceholder(&body)
 	default:
 		body.WriteString(StyleWarning.Render("Unsupported source diagnostics"))

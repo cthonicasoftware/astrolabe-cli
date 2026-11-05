@@ -181,7 +181,11 @@ func (m *welcomeModel) View() string {
 	}
 	if !fits(content) && m.status != nil {
 		room := m.height - (lipgloss.Height(layout("", welcomeTitle, scrollStandIn)) - 1)
-		content = layout("", welcomeTitle, m.status.RenderMax(m.width, room))
+		status = "" // RenderMax treats maxHeight <= 0 as no limit
+		if room > 0 {
+			status = m.status.RenderMax(m.width, room)
+		}
+		content = layout("", welcomeTitle, status)
 	}
 
 	return lipgloss.PlaceVertical(m.height, lipgloss.Center, content)

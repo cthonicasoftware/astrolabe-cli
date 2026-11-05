@@ -95,9 +95,17 @@ func (m *StatusMessage) RenderMax(width, maxHeight int) string {
 
 	// Each line is one row: body lines are truncated to width, not wrapped.
 	if frame := statusBoxStyle.GetVerticalFrameSize(); maxHeight > 0 && len(lines)+frame > maxHeight {
-		keep := max(maxHeight-frame-1, 1)
-		if keep < len(lines) {
-			lines = append(lines[:keep], StyleMuted.Render("…"))
+		switch {
+		case maxHeight <= frame:
+			// No room for the box: a bare first line (the title when set).
+			if len(lines) == 0 {
+				return ""
+			}
+			return lipgloss.NewStyle().MaxWidth(available).Render(lines[0])
+		case maxHeight == frame+1:
+			lines = lines[:1] // no room for an ellipsis row
+		default:
+			lines = append(lines[:maxHeight-frame-1], StyleMuted.Render("…"))
 		}
 	}
 
