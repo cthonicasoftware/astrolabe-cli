@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
 )
@@ -83,7 +83,7 @@ func (m *advancedSettingsModel) Update(msg tea.Msg) (*advancedSettingsModel, tea
 		m.height = msg.Height
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "esc", "q":
 			// Cancel without applying
@@ -137,7 +137,7 @@ func (m *advancedSettingsModel) Update(msg tea.Msg) (*advancedSettingsModel, tea
 				m.cycleOption(-1)
 			}
 
-		case "right", "l", " ":
+		case "right", "l", "space":
 			switch m.focusMode {
 			case "buttons":
 				// Wrap button navigation
@@ -254,8 +254,9 @@ func (m *advancedSettingsModel) View() string {
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(ColorSecondary).
-		Padding(1, 2).
-		Width(50)
+		Padding(1, 2)
+	// lipgloss v2 Width includes borders; add them so the box keeps its v1 size.
+	boxStyle = boxStyle.Width(50 + boxStyle.GetHorizontalBorderSize())
 
 	box := boxStyle.Render(content.String())
 

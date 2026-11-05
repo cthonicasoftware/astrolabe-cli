@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/runs"
 )
@@ -35,11 +35,19 @@ type ScreenContext struct {
 	Args   any
 }
 
+// Screen is a routable child model. Only the router is a tea.Model; screens
+// render plain strings and the router wraps them in a tea.View.
+type Screen interface {
+	Init() tea.Cmd
+	Update(msg tea.Msg) (Screen, tea.Cmd)
+	View() string
+}
+
 // ScreenFactory constructs a screen on demand.
 // The returned func() is a cleanup hook called when the router navigates away.
 // Return nil for the func() if no cleanup is needed.
 // Return a non-nil error to navigate back to welcome with a StatusError.
-type ScreenFactory func(ctx ScreenContext) (tea.Model, func(), error)
+type ScreenFactory func(ctx ScreenContext) (Screen, func(), error)
 
 // RouterConfig holds router dependencies.
 type RouterConfig struct {
@@ -55,7 +63,7 @@ type RouterConfig struct {
 type router struct {
 	cfg       RouterConfig
 	factories map[ScreenID]ScreenFactory
-	current   tea.Model
+	current   Screen
 	cleanup   func()
 	width     int
 	height    int
@@ -97,9 +105,9 @@ func (r *router) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case NavigateMsg:
 		return r, r.navigate(msg)
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		// Global quit on ctrl+c
-		if msg.Type == tea.KeyCtrlC {
+		if msg.String() == "ctrl+c" {
 			r.runCleanup()
 			return r, tea.Quit
 		}
@@ -114,6 +122,12 @@ func (r *router) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			r.helpOpen = true
 			return r, nil
 		}
+
+	case tea.PasteMsg:
+		// v2 pastes are not key presses; the open dialog swallows them too.
+		if r.helpOpen {
+			return r, nil
+		}
 	}
 
 	newCurrent, cmd := r.current.Update(msg)
@@ -121,7 +135,14 @@ func (r *router) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return r, cmd
 }
 
-func (r *router) View() string {
+func (r *router) View() tea.View {
+	v := tea.NewView(r.render())
+	v.AltScreen = true
+	return v
+}
+
+// render returns the frame content as a string.
+func (r *router) render() string {
 	if r.helpOpen {
 		return renderHelpDialog(r.current, r.width, r.height)
 	}
@@ -169,16 +190,16 @@ func (r *router) navigate(msg NavigateMsg) tea.Cmd {
 
 func buildFactories(cfg RouterConfig) map[ScreenID]ScreenFactory {
 	return map[ScreenID]ScreenFactory{
-		ScreenWelcome: func(ctx ScreenContext) (tea.Model, func(), error) {
+		ScreenWelcome: func(ctx ScreenContext) (Screen, func(), error) {
 			return NewWelcome(ctx.Status), nil, nil
 		},
-		ScreenConfig: func(ctx ScreenContext) (tea.Model, func(), error) {
+		ScreenConfig: func(ctx ScreenContext) (Screen, func(), error) {
 			return NewConfigEditor(), nil, nil
 		},
-		ScreenCaptureTabs: func(ctx ScreenContext) (tea.Model, func(), error) {
+		ScreenCaptureTabs: func(ctx ScreenContext) (Screen, func(), error) {
 			return NewCaptureTabs(), nil, nil
 		},
-		ScreenCaptureLive: func(ctx ScreenContext) (tea.Model, func(), error) {
+		ScreenCaptureLive: func(ctx ScreenContext) (Screen, func(), error) {
 			if cfg.CapturePort == nil {
 				return nil, nil, fmt.Errorf("capture not configured")
 			}
@@ -203,7 +224,7 @@ func buildFactories(cfg RouterConfig) map[ScreenID]ScreenFactory {
 			}
 			return appModel, cleanup, nil
 		},
-		ScreenMetadata: func(ctx ScreenContext) (tea.Model, func(), error) {
+		ScreenMetadata: func(ctx ScreenContext) (Screen, func(), error) {
 			if cfg.MetadataPort == nil {
 				return nil, nil, fmt.Errorf("metadata not configured")
 			}
@@ -211,10 +232,10 @@ func buildFactories(cfg RouterConfig) map[ScreenID]ScreenFactory {
 			path, _ := cfg.MetadataPort.Path()
 			return NewMetadataEditor(cfg.MetadataPort, meta, path, loadErr), nil, nil
 		},
-		ScreenRuns: func(ctx ScreenContext) (tea.Model, func(), error) {
+		ScreenRuns: func(ctx ScreenContext) (Screen, func(), error) {
 			return NewRunsViewer(cfg.RunsCacheRoot), nil, nil
 		},
-		ScreenUpload: func(ctx ScreenContext) (tea.Model, func(), error) {
+		ScreenUpload: func(ctx ScreenContext) (Screen, func(), error) {
 			if cfg.UploadPort == nil {
 				return nil, nil, fmt.Errorf("upload not configured")
 			}
@@ -258,6 +279,25 @@ func (r *router) runCleanup() {
 // RunTUI launches the single Bubble Tea program for the entire application lifetime.
 func RunTUI(cfg RouterConfig) error {
 	r := newRouter(cfg)
-	_, err := tea.NewProgram(r, tea.WithAltScreen()).Run()
+	_, err := tea.NewProgram(r).Run()
+	return err
+}
+
+// standalone runs a single Screen as its own program (inline, no alt screen).
+type standalone struct{ s Screen }
+
+func (p standalone) Init() tea.Cmd { return p.s.Init() }
+
+func (p standalone) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	p.s, cmd = p.s.Update(msg)
+	return p, cmd
+}
+
+func (p standalone) View() tea.View { return tea.NewView(p.s.View()) }
+
+// RunScreen runs s as a standalone Bubble Tea program.
+func RunScreen(s Screen) error {
+	_, err := tea.NewProgram(standalone{s: s}).Run()
 	return err
 }

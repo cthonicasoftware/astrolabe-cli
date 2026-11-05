@@ -8,9 +8,10 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/charmbracelet/bubbles/spinner"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"go.bug.st/serial"
 	"go.bug.st/serial/enumerator"
 )
@@ -35,6 +36,9 @@ type sourceInfoModel struct {
 	networkInterfaces []networkInterfaceInfo
 
 	loadErr error
+
+	// vp scrolls the diagnostics when they are taller than the terminal.
+	vp viewport.Model
 }
 
 type sourceInfoLoadedMsg struct {
@@ -59,12 +63,15 @@ type networkInterfaceInfo struct {
 
 // NewSourceInfo builds the contextual diagnostics dialog for the given source type.
 func NewSourceInfo(sourceType string, width, height int) *sourceInfoModel {
+	vp := viewport.New()
+	vp.SoftWrap = true
 	return &sourceInfoModel{
 		sourceType: sourceType,
 		width:      width,
 		height:     height,
 		loading:    true,
 		spinner:    NewDefaultSpinner(),
+		vp:         vp,
 	}
 }
 
@@ -263,7 +270,7 @@ func (m *sourceInfoModel) Update(msg tea.Msg) (*sourceInfoModel, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "esc", "q":
 			m.shouldClose = true
@@ -272,6 +279,9 @@ func (m *sourceInfoModel) Update(msg tea.Msg) (*sourceInfoModel, tea.Cmd) {
 			m.shouldClose = true
 			return m, tea.Quit
 		}
+		var cmd tea.Cmd
+		m.vp, cmd = m.vp.Update(msg)
+		return m, cmd
 	}
 
 	return m, nil
@@ -291,29 +301,30 @@ func (m *sourceInfoModel) View() string {
 		return m.wrap(body.String())
 	}
 
-	if m.loadErr != nil {
+	switch {
+	case m.loadErr != nil:
+		// A long error scrolls like diagnostics so the frame still fits.
 		body.WriteString(StyleError.Render(fmt.Sprintf("Unable to load diagnostics: %v", m.loadErr)))
-		body.WriteString("\n\n")
-		body.WriteString(StyleHelp.Render("esc: close"))
-		return m.wrap(body.String())
-	}
-
-	switch m.sourceType {
-	case SourceTypeSerial:
+	case m.sourceType == SourceTypeSerial:
 		m.renderSerialInfo(&body)
-	case SourceTypeTCP:
+	case m.sourceType == SourceTypeTCP:
 		m.renderNetworkInfo(&body)
-	case SourceTypeSCPI:
+	case m.sourceType == SourceTypeSCPI:
 		m.renderSCPIPlaceholder(&body)
 	default:
 		body.WriteString(StyleWarning.Render("Unsupported source diagnostics"))
 		body.WriteString("\n")
 	}
 
-	body.WriteString("\n")
-	body.WriteString(StyleHelp.Render("esc/q: close"))
+	// The diagnostics scroll; the title and help stay put.
+	head := StyleTitle.Render(title) + "\n\n"
+	help := "\n\n" + StyleHelp.Render("↑/↓: scroll • esc/q: close")
+	m.vp.SetContent(strings.TrimRight(strings.TrimPrefix(body.String(), head), "\n"))
+	box := m.boxStyle()
+	sizeScrollArea(&m.vp, infoBoxWidth-box.GetHorizontalPadding(), m.height,
+		box.Render(head+scrollStandIn+help), false)
 
-	return m.wrap(body.String())
+	return m.wrap(head + m.vp.View() + help)
 }
 
 func (m *sourceInfoModel) title() string {
@@ -329,14 +340,17 @@ func (m *sourceInfoModel) title() string {
 	}
 }
 
-func (m *sourceInfoModel) wrap(content string) string {
-	boxStyle := lipgloss.NewStyle().
+func (m *sourceInfoModel) boxStyle() lipgloss.Style {
+	box := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(ColorSecondary).
-		Padding(1, 2).
-		Width(infoBoxWidth)
+		Padding(1, 2)
+	// lipgloss v2 Width includes borders; add them so the box keeps its v1 size.
+	return box.Width(infoBoxWidth + box.GetHorizontalBorderSize())
+}
 
-	box := boxStyle.Render(content)
+func (m *sourceInfoModel) wrap(content string) string {
+	box := m.boxStyle().Render(content)
 	return lipgloss.PlaceVertical(m.height, lipgloss.Center,
 		lipgloss.PlaceHorizontal(m.width, lipgloss.Center, box))
 }

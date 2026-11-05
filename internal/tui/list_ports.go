@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"go.bug.st/serial/enumerator"
 )
 
@@ -143,7 +143,7 @@ type listPortsLoadedMsg struct {
 	err   error
 }
 
-func NewListPorts() tea.Model {
+func NewListPorts() Screen {
 	return &listPortsModel{
 		loading: true,
 	}
@@ -181,7 +181,7 @@ func (m *listPortsModel) Init() tea.Cmd {
 	return loadListPortsCmd()
 }
 
-func (m *listPortsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *listPortsModel) Update(msg tea.Msg) (Screen, tea.Cmd) {
 	switch msg := msg.(type) {
 	case listPortsLoadedMsg:
 		m.loading = false
@@ -194,7 +194,7 @@ func (m *listPortsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "ctrl+c", "q", "esc", "enter":
 			return m, tea.Quit

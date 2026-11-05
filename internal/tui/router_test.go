@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
@@ -15,9 +15,9 @@ import (
 
 type stubModel struct{}
 
-func (stubModel) Init() tea.Cmd                             { return nil }
-func (m stubModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) { return m, nil }
-func (stubModel) View() string                              { return "" }
+func (stubModel) Init() tea.Cmd                          { return nil }
+func (m stubModel) Update(msg tea.Msg) (Screen, tea.Cmd) { return m, nil }
+func (stubModel) View() string                           { return "" }
 
 type stubCapturePort struct {
 	session CaptureSession
@@ -64,7 +64,7 @@ func TestRouterCtrlCTriggersCleanup(t *testing.T) {
 	cleaned := false
 	r := &router{
 		factories: map[ScreenID]ScreenFactory{
-			ScreenWelcome: func(ctx ScreenContext) (tea.Model, func(), error) {
+			ScreenWelcome: func(ctx ScreenContext) (Screen, func(), error) {
 				return stubModel{}, func() { cleaned = true }, nil
 			},
 		},
@@ -72,7 +72,7 @@ func TestRouterCtrlCTriggersCleanup(t *testing.T) {
 		cleanup: func() { cleaned = true },
 	}
 
-	model, cmd := r.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	model, cmd := r.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	if model != r {
 		t.Fatalf("Update() returned unexpected model")
 	}

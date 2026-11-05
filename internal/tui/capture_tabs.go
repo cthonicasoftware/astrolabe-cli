@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"go.bug.st/serial"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
@@ -142,7 +142,7 @@ const (
 	CursorPadding = "  "
 )
 
-func NewCaptureTabs() tea.Model {
+func NewCaptureTabs() Screen {
 	// Initialize with defaults
 	defaultCfg := sources.DefaultConfig()
 
@@ -199,7 +199,7 @@ func loadSerialPortsCmd() tea.Cmd {
 	}
 }
 
-func (m *captureTabsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *captureTabsModel) Update(msg tea.Msg) (Screen, tea.Cmd) {
 	// When the info dialog is visible, route all messages to it first.
 	if m.showInfo && m.infoModel != nil {
 		if sizeMsg, ok := msg.(tea.WindowSizeMsg); ok {
@@ -260,14 +260,28 @@ func (m *captureTabsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.PasteMsg:
+		// Bubble Tea v2 delivers pastes separately from key presses.
+		if m.editingField {
+			for _, r := range msg.Content {
+				// Host and port are printable ASCII only; drop the
+				// whitespace and CR/LF that copied text often carries.
+				if r <= ' ' || r > '~' {
+					continue
+				}
+				m.handleTextInput(string(r))
+			}
+		}
+		return m, nil
+
+	case tea.KeyPressMsg:
 		return m.handleKeyPress(msg)
 	}
 
 	return m, nil
 }
 
-func (m *captureTabsModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *captureTabsModel) handleKeyPress(msg tea.KeyPressMsg) (Screen, tea.Cmd) {
 	// Handle text input first when in editing mode
 	if m.activeTab == TabIndexTCP && m.focusMode == FocusModeFields && m.editingField {
 		key := msg.String()
@@ -337,14 +351,14 @@ func (m *captureTabsModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "down", "j":
 		return m.handleDown(), nil
 
-	case "enter", " ":
+	case "enter", "space":
 		return m.handleEnter()
 	}
 
 	return m, nil
 }
 
-func (m *captureTabsModel) handleLeft() tea.Model {
+func (m *captureTabsModel) handleLeft() Screen {
 	switch m.focusMode {
 	case FocusModeTabs:
 		// Wrap tab navigation
@@ -362,7 +376,7 @@ func (m *captureTabsModel) handleLeft() tea.Model {
 	return m
 }
 
-func (m *captureTabsModel) handleRight() tea.Model {
+func (m *captureTabsModel) handleRight() Screen {
 	switch m.focusMode {
 	case FocusModeTabs:
 		// Wrap tab navigation
@@ -380,7 +394,7 @@ func (m *captureTabsModel) handleRight() tea.Model {
 	return m
 }
 
-func (m *captureTabsModel) handleUp() tea.Model {
+func (m *captureTabsModel) handleUp() Screen {
 	switch m.focusMode {
 	case FocusModeTabs:
 		// Enter fields mode
@@ -396,7 +410,7 @@ func (m *captureTabsModel) handleUp() tea.Model {
 	return m
 }
 
-func (m *captureTabsModel) handleDown() tea.Model {
+func (m *captureTabsModel) handleDown() Screen {
 	switch m.focusMode {
 	case FocusModeTabs:
 		// Enter fields mode
@@ -469,7 +483,7 @@ func (m *captureTabsModel) handleFieldRight() {
 	}
 }
 
-func (m *captureTabsModel) handleEnter() (tea.Model, tea.Cmd) {
+func (m *captureTabsModel) handleEnter() (Screen, tea.Cmd) {
 	switch m.focusMode {
 	case FocusModeTabs:
 		// Enter fields mode
@@ -532,7 +546,7 @@ func (m *captureTabsModel) handleFieldSelect() {
 	}
 }
 
-func (m *captureTabsModel) handleTextInput(key string) tea.Model {
+func (m *captureTabsModel) handleTextInput(key string) Screen {
 	if m.activeTab != TabIndexTCP {
 		return m
 	}
@@ -758,7 +772,9 @@ func (m *captureTabsModel) View() string {
 
 	m.renderButtons(&windowContent, tabWidth)
 
-	window := windowStyle.Width(tabWidth).Render(windowContent.String())
+	// lipgloss v2 Width includes borders; add them back so the content
+	// area stays tabWidth wide.
+	window := windowStyle.Width(tabWidth + windowStyle.GetHorizontalBorderSize()).Render(windowContent.String())
 
 	// combine tabs and window
 	var tabbedBox strings.Builder

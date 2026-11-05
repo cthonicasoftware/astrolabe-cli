@@ -3,9 +3,9 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // KeyHelp is one row of the help dialog: the keys and what they do.
@@ -52,7 +52,7 @@ var globalHelp = HelpSection{
 }
 
 // opensHelp reports whether msg should open the help dialog on screen.
-func opensHelp(msg tea.KeyMsg, screen tea.Model) bool {
+func opensHelp(msg tea.KeyPressMsg, screen Screen) bool {
 	switch msg.String() {
 	case "f1":
 		return true
@@ -64,7 +64,7 @@ func opensHelp(msg tea.KeyMsg, screen tea.Model) bool {
 }
 
 // closesHelp reports whether msg closes an open help dialog.
-func closesHelp(msg tea.KeyMsg) bool {
+func closesHelp(msg tea.KeyPressMsg) bool {
 	switch msg.String() {
 	case "esc", "?", "f1", "q":
 		return true
@@ -87,7 +87,7 @@ const helpColumnGap = "    "
 // renderHelpDialog draws the help dialog centered in a width x height
 // screen. Sections go in as few columns as fit the terminal's height, since
 // rows past the bottom would push the dialog's top off screen.
-func renderHelpDialog(screen tea.Model, width, height int) string {
+func renderHelpDialog(screen Screen, width, height int) string {
 	var sections []HelpSection
 	if hp, ok := screen.(HelpProvider); ok {
 		sections = hp.HelpSections()
