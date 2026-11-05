@@ -15,6 +15,7 @@ import (
 	"github.com/cthonicasoftware/astrolabe-cli/internal/capture"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/storage"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/tui"
 )
 
@@ -87,8 +88,8 @@ func TestCaptureSession_LinkEventsReachFeed(t *testing.T) {
 		_ = c.Close()
 	}()
 
-	sess := startTCPSession(t, ln, t.TempDir())
-	defer sess.Stop()
+	cacheRoot := t.TempDir()
+	sess := startTCPSession(t, ln, cacheRoot)
 	feed := sess.Feed()
 
 	var order []string
@@ -109,6 +110,28 @@ func TestCaptureSession_LinkEventsReachFeed(t *testing.T) {
 	want := []string{"one", "link_down", "link_up", "two"}
 	if strings.Join(order, ",") != strings.Join(want, ",") {
 		t.Fatalf("feed order = %v, want %v", order, want)
+	}
+
+	sess.RequestSave()
+	res := sess.Stop()
+	if res.Err != nil || !res.Saved {
+		t.Fatalf("Stop = %+v, want saved", res)
+	}
+	data, err := os.ReadFile(filepath.Join(cacheRoot, res.RunID, "data.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, typ := range []string{capture.RecordTypeLinkDown, capture.RecordTypeLinkUp} {
+		if !strings.Contains(string(data), `"type":"`+typ+`"`) {
+			t.Errorf("saved data.jsonl has no %s record", typ)
+		}
+	}
+	doc, err := storage.LoadManifest(filepath.Join(cacheRoot, res.RunID, "manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := doc.Manifest.Attributes[capture.AttrReconnects]; got != "1" {
+		t.Errorf("saved manifest reconnects = %q, want \"1\"", got)
 	}
 }
 
@@ -150,6 +173,7 @@ func TestCaptureSession_SendWhileDownRecordsNothing(t *testing.T) {
 	}
 	defer f.Close()
 	sc := bufio.NewScanner(f)
+	sawDown := false
 	for sc.Scan() {
 		var rec struct {
 			Type string `json:"type"`
@@ -160,5 +184,19 @@ func TestCaptureSession_SendWhileDownRecordsNothing(t *testing.T) {
 		if rec.Type == capture.RecordTypeTX {
 			t.Errorf("run has a tx record for a send that never reached the device: %s", sc.Text())
 		}
+		if rec.Type == capture.RecordTypeLinkDown {
+			sawDown = true
+		}
+	}
+	if !sawDown {
+		t.Error("saved data.jsonl has no link_down record")
+	}
+
+	doc, err := storage.LoadManifest(filepath.Join(cacheRoot, res.RunID, "manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := doc.Manifest.Attributes[capture.AttrReconnects]; got != "0" {
+		t.Errorf("saved manifest reconnects = %q, want \"0\"", got)
 	}
 }
