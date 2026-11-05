@@ -526,3 +526,120 @@ func TestBackoffDelay(t *testing.T) {
 		}
 	}
 }
+
+// relocSpec is a fakeSpec that is also a Relocator. Relocate returns reloc
+// (with port name relocPort) when ok.
+type relocSpec struct {
+	fakeSpec
+	port      string
+	id        string
+	reloc     *relocSpec
+	relocated atomic.Int32
+}
+
+func (s *relocSpec) ManifestAttrs() map[string]string {
+	return map[string]string{"source_kind": s.kind, "port": s.port}
+}
+func (s *relocSpec) Identity() string { return s.id }
+func (s *relocSpec) Relocate(id string) (Spec, bool) {
+	s.relocated.Add(1)
+	if s.reloc == nil || id != s.id {
+		return nil, false
+	}
+	return s.reloc, true
+}
+
+func TestReconnecting_FollowsRelocatedPort(t *testing.T) {
+	first, second, third := newFakeSource(), newFakeSource(), newFakeSource()
+	newSpec := &relocSpec{fakeSpec: fakeSpec{kind: "serial", steps: []fakeStep{{src: second}, {src: third}}}, port: "/dev/ttyACM1", id: "E66138"}
+	spec := &relocSpec{fakeSpec: fakeSpec{kind: "serial", steps: []fakeStep{{src: first}}}, port: "/dev/ttyACM0", id: "E66138", reloc: newSpec}
+	r := NewReconnecting(spec, fastPolicy(), true)
+	if err := r.Open(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	ch := r.TimedFrames()
+
+	first.drop()
+	expectLink(t, recv(t, ch), core.LinkDown)
+	up := expectLink(t, recv(t, ch), core.LinkUp)
+	if up.Port != "/dev/ttyACM1" {
+		t.Fatalf("Up.Port = %q, want /dev/ttyACM1", up.Port)
+	}
+	if got := r.Meta().Port; got != "COM_FAKE" {
+		t.Errorf("Meta changed: %q", got)
+	}
+
+	// Second drop: the relocated spec is tried first, no Relocate call needed.
+	before := spec.relocated.Load()
+	second.drop()
+	expectLink(t, recv(t, ch), core.LinkDown)
+	up = expectLink(t, recv(t, ch), core.LinkUp)
+	if up.Port != "" {
+		t.Errorf("second Up.Port = %q, want empty (same name)", up.Port)
+	}
+	if spec.relocated.Load() != before {
+		t.Error("Relocate called again although the relocated spec worked")
+	}
+	if newSpec.callCount() != 2 {
+		t.Errorf("relocated spec calls = %d, want 2", newSpec.callCount())
+	}
+}
+
+func TestReconnecting_RelocateSameNameNoPort(t *testing.T) {
+	first, second := newFakeSource(), newFakeSource()
+	same := &relocSpec{fakeSpec: fakeSpec{kind: "serial", steps: []fakeStep{{src: second}}}, port: "/dev/ttyACM0", id: "X"}
+	spec := &relocSpec{fakeSpec: fakeSpec{kind: "serial", steps: []fakeStep{{src: first}}}, port: "/dev/ttyACM0", id: "X", reloc: same}
+	r := NewReconnecting(spec, fastPolicy(), true)
+	if err := r.Open(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	ch := r.TimedFrames()
+	first.drop()
+	expectLink(t, recv(t, ch), core.LinkDown)
+	if up := expectLink(t, recv(t, ch), core.LinkUp); up.Port != "" {
+		t.Errorf("Up.Port = %q, want empty", up.Port)
+	}
+}
+
+func TestReconnecting_RelocatedOpenFailureKeepsCurrent(t *testing.T) {
+	first, second := newFakeSource(), newFakeSource()
+	bad := newFakeSource()
+	bad.openErr = errors.New("busy")
+	newSpec := &relocSpec{fakeSpec: fakeSpec{kind: "serial", steps: []fakeStep{{src: bad}}}, port: "/dev/ttyACM1", id: "X"}
+	// Current spec: first open ok, then fails once, then comes back.
+	spec := &relocSpec{fakeSpec: fakeSpec{kind: "serial", steps: []fakeStep{{src: first}, {err: errors.New("gone")}, {src: second}}}, port: "/dev/ttyACM0", id: "X", reloc: newSpec}
+	r := NewReconnecting(spec, fastPolicy(), true)
+	if err := r.Open(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	ch := r.TimedFrames()
+	first.drop()
+	expectLink(t, recv(t, ch), core.LinkDown)
+	if up := expectLink(t, recv(t, ch), core.LinkUp); up.Port != "" {
+		t.Errorf("Up.Port = %q, want empty (stayed on original)", up.Port)
+	}
+	if spec.callCount() != 3 {
+		t.Errorf("original spec calls = %d, want 3", spec.callCount())
+	}
+}
+
+func TestReconnecting_NoIdentitySameNameOnly(t *testing.T) {
+	first, second := newFakeSource(), newFakeSource()
+	newSpec := &relocSpec{fakeSpec: fakeSpec{kind: "serial", steps: []fakeStep{{src: newFakeSource()}}}, port: "/dev/ttyACM1"}
+	spec := &relocSpec{fakeSpec: fakeSpec{kind: "serial", steps: []fakeStep{{src: first}, {err: errors.New("gone")}, {src: second}}}, port: "/dev/ttyACM0", id: "", reloc: newSpec}
+	r := NewReconnecting(spec, fastPolicy(), true)
+	if err := r.Open(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	ch := r.TimedFrames()
+	first.drop()
+	expectLink(t, recv(t, ch), core.LinkDown)
+	expectLink(t, recv(t, ch), core.LinkUp)
+	if n := spec.relocated.Load(); n != 0 {
+		t.Errorf("Relocate called %d times with empty identity", n)
+	}
+}

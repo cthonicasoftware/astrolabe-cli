@@ -261,6 +261,8 @@ Each outage is recorded in `data.jsonl`:
 - `link_down` with an `error` payload when the link drops.
 - `link_up` with `attempts` and `gap_ms` (and `port` if the serial port name changed) when it returns.
 
+If a USB serial device comes back under a new name (for example `/dev/ttyACM0` to `/dev/ttyACM1`), the capture follows it by its USB serial number, and `link_up` records the new `port`. Devices are never matched by VID/PID alone. Adapters that report no USB serial number are only retried under the original name.
+
 The run manifest gets a `reconnects` attribute counting recoveries. Data sent by the device while the link was down is not captured; the gap is bounded by the `link_down` and `link_up` records.
 
 ---

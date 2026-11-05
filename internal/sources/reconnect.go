@@ -47,7 +47,8 @@ func SupportsReconnect(spec Spec) bool {
 // rebuilds and reopens it with backoff, and it reports data and link events
 // in order on one channel (TimedFrames).
 type Reconnecting struct {
-	spec    Spec
+	spec    Spec   // current spec; written before run starts, then only by run
+	id      string // device identity from the first open; "" if none
 	policy  ReconnectPolicy
 	enabled atomic.Bool
 	wake    chan struct{} // nudged by SetEnabled(false) to cut a backoff short
@@ -104,7 +105,7 @@ func (r *Reconnecting) Open(ctx context.Context) error {
 	runCtx := r.ctx
 	r.mu.Unlock()
 
-	src, err := r.openNext(runCtx)
+	src, err := r.openSpec(runCtx, r.spec)
 	if err != nil {
 		r.mu.Lock()
 		r.cancel()
@@ -122,15 +123,48 @@ func (r *Reconnecting) Open(ctx context.Context) error {
 	r.cur, r.up, r.started = src, true, true
 	r.meta = src.Meta()
 	r.mu.Unlock()
+	if rel, ok := r.spec.(Relocator); ok {
+		r.id = rel.Identity()
+	}
 
 	go r.run(runCtx, src)
 	return nil
 }
 
-// openNext builds and opens the next inner source, closing it again if Open
+// openNext opens the current spec; failing that, and when the device has an
+// identity, the spec for wherever the device now appears. A relocated spec
+// that opens becomes current. port is the new port name when it differs from
+// the previous one, else "".
+func (r *Reconnecting) openNext(ctx context.Context) (src ManagedSource, port string, err error) {
+	if src, err = r.openSpec(ctx, r.spec); err == nil {
+		return src, "", nil
+	}
+	if r.id == "" {
+		return nil, "", err
+	}
+	rel, ok := r.spec.(Relocator)
+	if !ok {
+		return nil, "", err
+	}
+	next, ok := rel.Relocate(r.id)
+	if !ok {
+		return nil, "", err
+	}
+	src2, err2 := r.openSpec(ctx, next)
+	if err2 != nil {
+		return nil, "", err // keep the current spec
+	}
+	if np := next.ManifestAttrs()["port"]; np != r.spec.ManifestAttrs()["port"] {
+		port = np
+	}
+	r.spec = next
+	return src2, port, nil
+}
+
+// openSpec builds and opens a source from spec, closing it again if Open
 // fails.
-func (r *Reconnecting) openNext(ctx context.Context) (ManagedSource, error) {
-	src, err := r.spec.NewSource()
+func (r *Reconnecting) openSpec(ctx context.Context, spec Spec) (ManagedSource, error) {
+	src, err := spec.NewSource()
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +197,7 @@ func (r *Reconnecting) run(ctx context.Context, src ManagedSource) {
 			return
 		}
 
-		next, attempts := r.reconnect(ctx, src)
+		next, attempts, port := r.reconnect(ctx, src)
 		if next == nil {
 			return
 		}
@@ -172,7 +206,7 @@ func (r *Reconnecting) run(ctx context.Context, src ManagedSource) {
 		}
 		src = next
 		upAt := time.Now()
-		if !r.emit(ctx, upAt, core.LinkEvent{State: core.LinkUp, Attempts: attempts, Gap: upAt.Sub(downAt)}) {
+		if !r.emit(ctx, upAt, core.LinkEvent{State: core.LinkUp, Attempts: attempts, Gap: upAt.Sub(downAt), Port: port}) {
 			return
 		}
 	}
@@ -213,9 +247,9 @@ func (r *Reconnecting) emit(ctx context.Context, at time.Time, ev core.LinkEvent
 }
 
 // reconnect retries until a new inner source opens, returning it and the
-// number of attempts. It returns nil when ctx ends, reconnect is disabled, or
+// number of attempts, plus the new port name if the device moved. It returns nil when ctx ends, reconnect is disabled, or
 // the outage outlasts policy.Timeout.
-func (r *Reconnecting) reconnect(ctx context.Context, dead ManagedSource) (ManagedSource, int) {
+func (r *Reconnecting) reconnect(ctx context.Context, dead ManagedSource) (ManagedSource, int, string) {
 	// A held handle (serial especially) can block reopening the same port.
 	_ = dead.Close()
 
@@ -232,23 +266,23 @@ func (r *Reconnecting) reconnect(ctx context.Context, dead ManagedSource) (Manag
 		case <-delay.C:
 		case <-ctx.Done():
 			delay.Stop()
-			return nil, 0
+			return nil, 0, ""
 		case <-deadline:
 			delay.Stop()
-			return nil, 0
+			return nil, 0, ""
 		case <-r.wake:
 			delay.Stop()
 		}
 		if !r.Enabled() || ctx.Err() != nil {
-			return nil, 0
+			return nil, 0, ""
 		}
 		select {
 		case <-deadline:
-			return nil, 0
+			return nil, 0, ""
 		default:
 		}
-		if src, err := r.openNext(ctx); err == nil {
-			return src, attempt
+		if src, port, err := r.openNext(ctx); err == nil {
+			return src, attempt, port
 		}
 	}
 }
