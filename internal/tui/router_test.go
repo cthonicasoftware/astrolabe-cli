@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -29,16 +30,38 @@ func (s stubCapturePort) Start(ctx context.Context, cfg CaptureConfig) (CaptureS
 }
 
 type stubCaptureSession struct {
-	feed chan string
+	feed      chan FeedChunk
+	reconnect *[]bool // records SetReconnect calls
 }
 
-func (s stubCaptureSession) Feed() <-chan string        { return s.feed }
+func (s stubCaptureSession) Feed() <-chan FeedChunk     { return s.feed }
 func (s stubCaptureSession) Stop() CaptureSessionResult { return CaptureSessionResult{} }
 func (s stubCaptureSession) RequestSave()               {}
 func (s stubCaptureSession) CanSend() bool              { return false }
-func (s stubCaptureSession) Send(string, sources.LineEnding) error {
-	return nil
+func (s stubCaptureSession) Send(string, sources.LineEnding) (time.Time, error) {
+	return time.Time{}, nil
 }
+func (s stubCaptureSession) SetReconnect(on bool) {
+	if s.reconnect != nil {
+		*s.reconnect = append(*s.reconnect, on)
+	}
+}
+
+// cfgCapturePort records the config Start was given.
+type cfgCapturePort struct {
+	session CaptureSession
+	got     *CaptureConfig
+}
+
+func (p cfgCapturePort) Start(_ context.Context, cfg CaptureConfig) (CaptureSession, error) {
+	*p.got = cfg
+	return p.session, nil
+}
+
+type stubPrefsPort struct{ prefs LiveViewPrefs }
+
+func (p stubPrefsPort) Load() (LiveViewPrefs, error) { return p.prefs, nil }
+func (p stubPrefsPort) Save(LiveViewPrefs) error     { return nil }
 
 type stubMetadataPort struct {
 	values  MetadataValues
@@ -101,6 +124,30 @@ func TestBuildFactoriesCaptureLivePropagatesStartError(t *testing.T) {
 	})
 	if err == nil || err.Error() != "start capture: boom" {
 		t.Fatalf("expected wrapped start error, got %v", err)
+	}
+}
+
+func TestBuildFactoriesCaptureLiveAppliesReconnectPref(t *testing.T) {
+	prefs := DefaultLiveViewPrefs()
+	prefs.Reconnect = false
+	var calls []bool
+	var got CaptureConfig
+	factory := buildFactories(RouterConfig{
+		CapturePort:       cfgCapturePort{session: stubCaptureSession{feed: make(chan FeedChunk), reconnect: &calls}, got: &got},
+		LiveViewPrefsPort: stubPrefsPort{prefs: prefs},
+	})[ScreenCaptureLive]
+	model, _, err := factory(ScreenContext{
+		Args: CaptureConfig{SourceType: SourceTypeTCP, TCPHost: "127.0.0.1", TCPPort: "9000", Reconnect: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Reconnect {
+		t.Error("Start got Reconnect on, want the saved pref (off)")
+	}
+	model.Update(tea.KeyPressMsg{Code: 'r', Text: "r"})
+	if len(calls) != 1 || !calls[0] {
+		t.Errorf("SetReconnect calls = %v, want [true]", calls)
 	}
 }
 

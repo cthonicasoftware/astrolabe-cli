@@ -244,6 +244,33 @@ Before diving into specific issues, verify these basics:
 
 ---
 
+## Device Resets Mid-Capture
+
+If the device reboots, is unplugged, or the TCP server restarts during a headless `astrolabe capture serial` or `capture tcp`, the capture ends by default. Add `--reconnect` to keep the run going:
+
+```bash
+astrolabe capture serial --port /dev/ttyUSB0 --reconnect
+astrolabe capture tcp --host 192.168.1.100 --port 9000 --reconnect --reconnect-timeout 10m
+```
+
+- `--reconnect` retries with backoff (250ms growing to 5s) until the link returns. The same run continues.
+- `--reconnect-timeout` gives up after the link has been down this long in one outage (`0`, the default, never gives up). It is ignored without `--reconnect`.
+
+Each outage is recorded in `data.jsonl`:
+
+- `link_down` with an `error` payload when the link drops.
+- `link_up` with `attempts` and `gap_ms` (and `port` if the serial port name changed) when it returns.
+
+If a USB serial device comes back under a new name (for example `/dev/ttyACM0` to `/dev/ttyACM1`), the capture follows it by its USB serial number, and `link_up` records the new `port`. Devices are never matched by VID/PID alone. Adapters that report no USB serial number are only retried under the original name. So are devices that expose several serial ports under one USB serial number (for example dual CDC-ACM or FT2232).
+
+When `--reconnect-timeout` expires, the command prints "Reconnect timed out after <timeout>; ending capture" and saves the run, which then ends with a `link_down` and no `link_up`.
+
+In the TUI live view, reconnect is on by default and the `r` key toggles it (the status bar shows `↻ on` or `↻ off`; the choice is remembered). While the link is down the status bar shows `RECONNECTING`, and `RECONNECTED` for a few seconds after it returns. Marker lines for the drop and the recovery appear in the buffer. Anything you type while reconnecting is kept in the input field but not sent until the link is back.
+
+The run manifest gets a `reconnects` attribute counting recoveries. Data sent by the device while the link was down is not captured; the gap is bounded by the `link_down` and `link_up` records.
+
+---
+
 ## Upload Issues
 
 ### Network Unreachable

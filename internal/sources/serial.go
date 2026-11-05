@@ -81,6 +81,7 @@ type Serial struct {
 	port    serial.Port
 	ch      chan []byte
 	cancel  context.CancelFunc
+	readErr error // why readLoop ended; nil after Close or ctx cancel
 
 	writeTimeout time.Duration // 0 uses DefaultSerialWriteTimeout
 	charDelay    time.Duration // gap between sent bytes; 0 sends all at once
@@ -226,6 +227,12 @@ func (s *Serial) readLoop(ctx context.Context) {
 				// go.bug.st/serial reports timeouts as (0, nil), so any error
 				// means the port is gone (unplugged) or closed. Stop instead of
 				// spinning; closing the channel tells consumers the device left.
+				// A failure caused by our own Close (or ctx cancel) is not one.
+				if ctx.Err() == nil {
+					s.mu.Lock()
+					s.readErr = err
+					s.mu.Unlock()
+				}
 				return
 			}
 
@@ -314,6 +321,15 @@ func (s *Serial) writeChunk(port serial.Port, p []byte) (int, error) {
 			return 0, fmt.Errorf("serial port %s: device did not accept data within %s", s.Port, timeout)
 		}
 	}
+}
+
+// Err returns the read error that ended the read loop, or nil if the loop
+// ended because of Close or context cancellation (or has not ended). It is
+// meaningful once the Frames channel has closed.
+func (s *Serial) Err() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.readErr
 }
 
 // Frames returns the channel on which raw byte frames are delivered.

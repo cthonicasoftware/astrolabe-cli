@@ -61,4 +61,5 @@ var (
 
 	_ WritableSource = (*Serial)(nil)
 	_ WritableSource = (*TCP)(nil)
+	_ WritableSource = (*Reconnecting)(nil)
 )

@@ -16,15 +16,19 @@ func (liveViewPrefsAdapter) Load() (tui.LiveViewPrefs, error) {
 		LineEnding: sources.ParseLineEnding(s.LiveView.LineEnding),
 		Echo:       s.LiveView.Echo,
 		Timestamps: s.LiveView.Timestamps,
+		// Files saved before reconnect existed have no key: default on.
+		Reconnect: s.LiveView.Reconnect == nil || *s.LiveView.Reconnect,
 	}, err
 }
 
 func (liveViewPrefsAdapter) Save(p tui.LiveViewPrefs) error {
+	reconnect := p.Reconnect
 	return config.UpdateSettings(func(s *config.Settings) {
 		s.LiveView = config.LiveViewPrefs{
 			LineEnding: string(p.LineEnding),
 			Echo:       p.Echo,
 			Timestamps: p.Timestamps,
+			Reconnect:  &reconnect,
 		}
 	})
 }

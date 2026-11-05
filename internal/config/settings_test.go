@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -88,5 +89,29 @@ func TestUpdateSettingsRepairsCorruptFile(t *testing.T) {
 	}
 	if got.LiveView.Echo || got.LiveView.LineEnding != "LF" {
 		t.Errorf("got %+v, want defaults with echo off", got.LiveView)
+	}
+}
+
+func TestSettingsReconnectNilOmittedAndDecoded(t *testing.T) {
+	payload, err := json.Marshal(LiveViewPrefs{LineEnding: "LF", Echo: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(payload), "reconnect") {
+		t.Errorf("nil Reconnect encoded as %s, want key omitted", payload)
+	}
+
+	var got LiveViewPrefs
+	if err := json.Unmarshal([]byte(`{"line_ending":"LF"}`), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Reconnect != nil {
+		t.Errorf("missing key decoded as %v, want nil", *got.Reconnect)
+	}
+	if err := json.Unmarshal([]byte(`{"reconnect":false}`), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Reconnect == nil || *got.Reconnect {
+		t.Errorf("reconnect:false decoded as %v, want pointer to false", got.Reconnect)
 	}
 }

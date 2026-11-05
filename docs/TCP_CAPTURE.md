@@ -85,6 +85,8 @@ astrolabe capture tcp [flags]
 | `--connect-timeout` | Connection timeout | `10s` |
 | `--read-timeout` | Read timeout (0 = no timeout) | `0` |
 | `--buffer-size` | Read buffer size in bytes | `4096` |
+| `--reconnect` | Reconnect if the server drops | `false` |
+| `--reconnect-timeout` | Give up after this long disconnected (0 = never); needs `--reconnect` | `0` |
 
 ### Metadata Flags
 
@@ -384,7 +386,7 @@ astrolabe upload
 |---------|-----|--------|------|
 | **Mode** | Network stream | Hardware port | Disk read |
 | **Duration** | Until Ctrl+C | Until Ctrl+C | Until EOF |
-| **Reconnect** | Manual | Manual | N/A |
+| **Reconnect** | `--reconnect` | `--reconnect` | N/A |
 | **Latency** | Network-dependent | Low | Immediate |
 | **Throughput** | Network-dependent | Baud-limited | Disk-limited |
 | **Use Case** | Remote instruments | Local devices | Historical data |

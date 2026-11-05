@@ -1034,4 +1034,5 @@ type CaptureConfig struct {
 	TCPHost      string
 	TCPPort      string
 	SCPIAddress  string // For future SCPI/VISA implementation
+	Reconnect    bool   // initial reconnect toggle for serial/TCP
 }

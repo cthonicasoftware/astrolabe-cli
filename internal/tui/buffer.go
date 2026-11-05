@@ -18,9 +18,18 @@ type LineBuffer struct {
 	buffer    *strings.Builder
 	partialAt time.Time // arrival time of the partial line in buffer
 	lines     []string
-	echo      []bool      // echo[i] reports whether lines[i] is an echoed send
+	kind      []lineKind  // kind[i] says what lines[i] is
 	at        []time.Time // at[i] is when lines[i] started arriving
 }
+
+// lineKind tells received lines from ones the live view adds.
+type lineKind uint8
+
+const (
+	lineData   lineKind = iota // received from the device
+	lineEcho                   // an echoed send
+	lineMarker                 // a status marker, e.g. link down/up
+)
 
 // NewLineBuffer creates a new line buffer
 func NewLineBuffer() *LineBuffer {
@@ -58,7 +67,7 @@ func (lb *LineBuffer) AddData(data string, at time.Time) {
 			lineAt = lb.partialAt
 		}
 		if parts[i] != "" || i > 0 {
-			lb.appendLine(parts[i], false, lineAt)
+			lb.appendLine(parts[i], lineData, lineAt)
 		}
 	}
 
@@ -76,17 +85,28 @@ func (lb *LineBuffer) AddData(data string, at time.Time) {
 // ended first so the echo always sits on its own line; received data then
 // continues on the next line.
 func (lb *LineBuffer) AddEcho(line string, at time.Time) {
+	lb.addOwnLine(EchoPrefix+line, lineEcho, at)
+}
+
+// AddMarker shows a status line, such as a link drop, at at. Like an echo it
+// sits on its own line, but it is not a send.
+func (lb *LineBuffer) AddMarker(text string, at time.Time) {
+	lb.addOwnLine(text, lineMarker, at)
+}
+
+// addOwnLine ends any partial received line, then adds line on its own.
+func (lb *LineBuffer) addOwnLine(line string, kind lineKind, at time.Time) {
 	if lb.buffer.Len() > 0 {
-		lb.appendLine(lb.buffer.String(), false, lb.partialAt)
+		lb.appendLine(lb.buffer.String(), lineData, lb.partialAt)
 		lb.buffer.Reset()
 	}
-	lb.appendLine(EchoPrefix+line, true, at)
+	lb.appendLine(line, kind, at)
 	lb.trim()
 }
 
-func (lb *LineBuffer) appendLine(line string, echo bool, at time.Time) {
+func (lb *LineBuffer) appendLine(line string, kind lineKind, at time.Time) {
 	lb.lines = append(lb.lines, line)
-	lb.echo = append(lb.echo, echo)
+	lb.kind = append(lb.kind, kind)
 	lb.at = append(lb.at, at)
 }
 
@@ -94,7 +114,7 @@ func (lb *LineBuffer) trim() {
 	if len(lb.lines) > MaxBufferedLines {
 		cut := len(lb.lines) - MaxBufferedLines
 		lb.lines = lb.lines[cut:]
-		lb.echo = lb.echo[cut:]
+		lb.kind = lb.kind[cut:]
 		lb.at = lb.at[cut:]
 	}
 }
@@ -114,8 +134,17 @@ func (lb *LineBuffer) GetDisplayLines() []string {
 
 // IsEcho reports whether display line i (as returned by GetDisplayLines) is
 // an echoed send. The trailing partial line is never an echo.
-func (lb *LineBuffer) IsEcho(i int) bool {
-	return i >= 0 && i < len(lb.echo) && lb.echo[i]
+func (lb *LineBuffer) IsEcho(i int) bool { return lb.kindOf(i) == lineEcho }
+
+// IsMarker reports whether display line i is a status marker.
+func (lb *LineBuffer) IsMarker(i int) bool { return lb.kindOf(i) == lineMarker }
+
+// kindOf returns display line i's kind; the partial line is data.
+func (lb *LineBuffer) kindOf(i int) lineKind {
+	if i >= 0 && i < len(lb.kind) {
+		return lb.kind[i]
+	}
+	return lineData
 }
 
 // LineTime returns when display line i (as returned by GetDisplayLines)
@@ -135,7 +164,7 @@ func (lb *LineBuffer) Clear() {
 	lb.buffer.Reset()
 	lb.partialAt = time.Time{}
 	lb.lines = nil
-	lb.echo = nil
+	lb.kind = nil
 	lb.at = nil
 }
 

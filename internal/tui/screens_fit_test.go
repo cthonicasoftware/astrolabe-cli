@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/runs"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/upload"
@@ -88,6 +89,12 @@ func TestScreensFitTerminal(t *testing.T) {
 			app.EnableSend(func(string, sources.LineEnding) (time.Time, error) { return time.Time{}, nil })
 			return sized(app, w, h).View()
 		},
+		"live+reconnect": func(w, h int) string {
+			return reconnectLiveApp(w, h, false).View()
+		},
+		"live+reconnecting": func(w, h int) string {
+			return reconnectLiveApp(w, h, true).View()
+		},
 		"capture-info-error": func(w, h int) string {
 			m := NewSourceInfo(SourceTypeSerial, w, h)
 			long := strings.Repeat("enumerating /dev/serial/by-id/usb-FTDI_device failed: permission denied\n", 30)
@@ -115,6 +122,20 @@ func TestScreensFitTerminal(t *testing.T) {
 	}
 }
 
+// reconnectLiveApp is a sendable live view with reconnect enabled and the
+// clock showing, optionally with the link down. Its status bar may wrap at
+// 80 columns; the frame must still fit.
+func reconnectLiveApp(w, h int, reconnecting bool) *App {
+	app := NewApp("Live Capture", nil)
+	app.EnableSend(func(string, sources.LineEnding) (time.Time, error) { return time.Time{}, nil })
+	app.EnableReconnect(func(bool) {})
+	app.Update(tea.WindowSizeMsg{Width: w, Height: h})
+	app.Update(tickMsg(time.Date(2026, 1, 2, 15, 4, 5, 0, time.UTC)))
+	if reconnecting {
+		app.Update(lineMsg(FeedChunk{At: time.Now(), Link: &core.LinkEvent{State: core.LinkDown, Err: "EOF"}}))
+	}
+	return app
+}
 
 func manyRuns() runs.Result {
 	res := runs.Result{Root: "/tmp/cache"}

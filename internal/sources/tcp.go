@@ -39,10 +39,11 @@ func DefaultTCPConfig() TCPConfig {
 type TCP struct {
 	TCPConfig
 
-	mu     sync.Mutex
-	conn   net.Conn
-	ch     chan []byte
-	cancel context.CancelFunc
+	mu      sync.Mutex
+	conn    net.Conn
+	ch      chan []byte
+	cancel  context.CancelFunc
+	readErr error // why readLoop ended; nil after Close or ctx cancel
 }
 
 // NewTCPWithConfig constructs a TCP source from an explicit configuration.
@@ -88,9 +89,7 @@ func (t *TCP) Open(ctx context.Context) error {
 	// Create connection with timeout
 	addr := fmt.Sprintf("%s:%d", t.Host, t.Port)
 
-	dialer := &net.Dialer{
-		Timeout: t.ConnectTimeout,
-	}
+	dialer := t.dialer()
 
 	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
@@ -109,6 +108,29 @@ func (t *TCP) Open(ctx context.Context) error {
 	go t.readLoop(readCtx)
 
 	return nil
+}
+
+// Keepalive tuning: a peer that vanishes without closing the socket is
+// detected after roughly Idle + Interval*Count (~20s) so the read fails and
+// the reconnect wrapper can take over.
+const (
+	tcpKeepAliveIdle     = 5 * time.Second
+	tcpKeepAliveInterval = 5 * time.Second
+	tcpKeepAliveCount    = 3
+)
+
+// dialer returns the net.Dialer used by Open, with connect timeout and
+// aggressive TCP keepalive enabled.
+func (t *TCP) dialer() *net.Dialer {
+	return &net.Dialer{
+		Timeout: t.ConnectTimeout,
+		KeepAliveConfig: net.KeepAliveConfig{
+			Enable:   true,
+			Idle:     tcpKeepAliveIdle,
+			Interval: tcpKeepAliveInterval,
+			Count:    tcpKeepAliveCount,
+		},
+	}
 }
 
 // readLoop streams TCP data through the channel.
@@ -135,6 +157,7 @@ func (t *TCP) readLoop(ctx context.Context) {
 			if t.ReadTimeout > 0 {
 				deadline := time.Now().Add(t.ReadTimeout)
 				if err := conn.SetReadDeadline(deadline); err != nil {
+					t.setReadErr(ctx, err)
 					return
 				}
 			}
@@ -142,6 +165,8 @@ func (t *TCP) readLoop(ctx context.Context) {
 			n, err := reader.Read(buf)
 			if err != nil {
 				if err == io.EOF {
+					// The server closed the connection: that is a drop.
+					t.setReadErr(ctx, err)
 					return
 				}
 				// Check if it's a timeout error
@@ -150,6 +175,7 @@ func (t *TCP) readLoop(ctx context.Context) {
 					continue
 				}
 				// Other error - stop reading
+				t.setReadErr(ctx, err)
 				return
 			}
 
@@ -166,6 +192,27 @@ func (t *TCP) readLoop(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// setReadErr records why the read loop ended, unless it ended because of
+// Close or context cancellation.
+func (t *TCP) setReadErr(ctx context.Context, err error) {
+	if ctx.Err() != nil {
+		return
+	}
+	t.mu.Lock()
+	t.readErr = err
+	t.mu.Unlock()
+}
+
+// Err returns the read error that ended the read loop (io.EOF when the
+// server closed the connection), or nil if the loop ended because of Close
+// or context cancellation (or has not ended). It is meaningful once the
+// Frames channel has closed.
+func (t *TCP) Err() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.readErr
 }
 
 // Write sends p over the open TCP connection. It is safe to call
