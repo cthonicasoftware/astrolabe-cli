@@ -27,6 +27,9 @@ type CaptureSession interface {
 	// the run. It returns the time recorded for the send. It may block (e.g.
 	// flow control), so call it off the UI loop.
 	Send(line string, le sources.LineEnding) (time.Time, error)
+	// SendBytes writes data to the device as is, with no line ending, and
+	// records it in the run. Like Send, it may block.
+	SendBytes(data []byte) (time.Time, error)
 	// SetReconnect turns reconnecting after a dropped link on or off. It
 	// does not block.
 	SetReconnect(on bool)
@@ -56,6 +59,9 @@ type LiveViewPrefs struct {
 	Timestamps bool
 	// Reconnect is whether a dropped serial/TCP link is reopened.
 	Reconnect bool
+	// Hex shows received bytes as a hex dump, and makes the input field
+	// take hex bytes, instead of text.
+	Hex bool
 }
 
 // DefaultLiveViewPrefs returns LF with echo on, timestamps off and

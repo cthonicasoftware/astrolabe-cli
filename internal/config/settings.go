@@ -25,6 +25,8 @@ type LiveViewPrefs struct {
 	// Reconnect is whether the live view reconnects after the link drops.
 	// nil (missing from older files) means on.
 	Reconnect *bool `json:"reconnect,omitempty"`
+	// Hex is whether the live view shows a hex dump instead of text.
+	Hex bool `json:"hex"`
 }
 
 // DefaultSettings returns LF line endings, echo on and timestamps off.

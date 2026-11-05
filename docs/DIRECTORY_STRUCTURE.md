@@ -113,7 +113,18 @@ output. `seq` orders sent and received records on one timeline.
 {"ts":"2024-01-15T10:00:00Z","seq":2,"type":"sample","payload":{"line":"OK"},"envelope":{"direction":"rx"}}
 ```
 
-`line_ending` is one of `LF`, `CRLF`, `CR`, or `None`. The manifest of these
+`line_ending` is one of `LF`, `CRLF`, `CR`, or `None`.
+
+Bytes sent from the live view's hex mode are also `type: "tx"`, but their
+payload has only `hex`: the exact bytes sent, as lowercase hex with no
+separators. No line ending is added to hex sends, and they have no `line` or
+`line_ending` field, since raw bytes need not be valid text.
+
+```jsonl
+{"ts":"2024-01-15T10:00:02Z","seq":3,"type":"tx","payload":{"hex":"01ff0a"},"envelope":{"direction":"tx"}}
+```
+
+The manifest of these
 runs includes a `tx_records` attribute with the number of sent records
 (`"0"` for capture-only runs). File imports carry no `envelope.direction`.
 

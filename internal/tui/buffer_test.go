@@ -34,6 +34,49 @@ func TestLineBuffer_LineTimeIsFirstByteArrival(t *testing.T) {
 	}
 }
 
+func TestLineBuffer_LineRawKeepsCRAndNewline(t *testing.T) {
+	lb := NewLineBuffer()
+	lb.AddData("he\x00llo\r", testAt)
+	lb.AddData("\nOK\r\n", testAt)
+	lb.AddData("\r\n", testAt) // empty line at chunk start: hidden, bytes kept
+	lb.AddEcho("AT", testAt)
+	lb.AddData("par", testAt)
+
+	if got := lb.GetDisplayLines(); !reflect.DeepEqual(got, []string{"he\x00llo", "OK", EchoPrefix + "AT", "par"}) {
+		t.Fatalf("lines = %q", got)
+	}
+	want := []string{"he\x00llo\r\n", "OK\r\n\r\n", "", "par"}
+	for i, w := range want {
+		if got := string(lb.LineRaw(i)); got != w {
+			t.Errorf("LineRaw(%d) = %q, want %q", i, got, w)
+		}
+	}
+	if lb.LineRaw(4) != nil {
+		t.Error("out of range LineRaw should be nil")
+	}
+
+	// A send ends the partial line; its bytes go with it.
+	lb.AddEcho("x", testAt)
+	if got := string(lb.LineRaw(3)); got != "par" {
+		t.Errorf("flushed partial raw = %q, want par", got)
+	}
+}
+
+func TestLineBuffer_TrimAndClearDropRaw(t *testing.T) {
+	lb := NewLineBuffer()
+	for range MaxBufferedLines + 5 {
+		lb.AddData("a\n", testAt)
+	}
+	lb.AddData("last\n", testAt)
+	if got := string(lb.LineRaw(lb.LineCount() - 1)); got != "last\n" {
+		t.Errorf("raw out of step with lines after trim: %q", got)
+	}
+	lb.Clear()
+	if lb.LineRaw(0) != nil {
+		t.Error("raw kept after Clear")
+	}
+}
+
 func TestLineBuffer_EchoKeepsTimes(t *testing.T) {
 	lb := NewLineBuffer()
 	t0 := testAt

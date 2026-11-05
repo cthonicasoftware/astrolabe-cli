@@ -219,6 +219,7 @@ func buildFactories(cfg RouterConfig) map[ScreenID]ScreenFactory {
 			appModel.SetPrefs(prefs, savePrefs)
 			if session.CanSend() {
 				appModel.EnableSend(session.Send)
+				appModel.EnableSendBytes(session.SendBytes)
 			}
 			appModel.EnableReconnect(session.SetReconnect)
 			cleanup := func() {

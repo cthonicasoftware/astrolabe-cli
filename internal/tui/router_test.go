@@ -41,6 +41,7 @@ func (s stubCaptureSession) CanSend() bool              { return false }
 func (s stubCaptureSession) Send(string, sources.LineEnding) (time.Time, error) {
 	return time.Time{}, nil
 }
+func (s stubCaptureSession) SendBytes([]byte) (time.Time, error) { return time.Time{}, nil }
 func (s stubCaptureSession) SetReconnect(on bool) {
 	if s.reconnect != nil {
 		*s.reconnect = append(*s.reconnect, on)
