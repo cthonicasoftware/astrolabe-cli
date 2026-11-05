@@ -2,6 +2,7 @@ package root
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -75,27 +76,34 @@ func (s *captureSession) SetReconnect(on bool) {
 // bytes that reached the device are recorded. The returned time is the
 // record's ts, so the live view's echo shows the same time as data.jsonl.
 func (s *captureSession) Send(line string, le sources.LineEnding) (time.Time, error) {
+	return s.write(append([]byte(line), le.Bytes()...), map[string]any{
+		"line":        line,
+		"line_ending": string(le),
+	})
+}
+
+// SendBytes writes data to the device exactly as given, then records it in
+// the run as a tx record with a lowercase hex payload. Raw bytes need not be
+// valid UTF-8, so they are not stored as a line.
+func (s *captureSession) SendBytes(data []byte) (time.Time, error) {
+	return s.write(data, map[string]any{"hex": hex.EncodeToString(data)})
+}
+
+// write sends payload to the device and, once it got there, records a tx
+// record carrying rec. An empty payload sends and records nothing.
+func (s *captureSession) write(payload []byte, rec map[string]any) (time.Time, error) {
 	if s.writer == nil {
 		return time.Time{}, errors.New("this source does not accept input")
 	}
-	payload := append([]byte(line), le.Bytes()...)
 	if len(payload) == 0 {
-		return time.Now().UTC(), nil // empty line with no line ending: nothing to send
+		return time.Now().UTC(), nil
 	}
 	if _, err := s.writer.Write(payload); err != nil {
 		return time.Time{}, err
 	}
 	at := time.Now().UTC()
-	rec := core.Record{
-		TS:   at,
-		Type: capture.RecordTypeTX,
-		Payload: map[string]any{
-			"line":        line,
-			"line_ending": string(le),
-		},
-	}
 	select {
-	case s.tx <- rec:
+	case s.tx <- core.Record{TS: at, Type: capture.RecordTypeTX, Payload: rec}:
 	case <-s.ctx.Done():
 	}
 	return at, nil

@@ -37,14 +37,25 @@ switching to another terminal.
 | `e` | view | Cycle line ending: LF → CRLF → CR → None |
 | `o` | view | Toggle echo of sent lines in the view |
 | `t` | view | Toggle each line's arrival time (`15:04:05.000`, right-aligned) |
+| `x` | view | Toggle hex view: received bytes as a hex dump, and typing sends hex bytes |
 | `?` / `f1` | any | Show every key for the current screen; `esc` closes it |
 
 - `?` opens the help dialog on every screen. While a text field has focus
   (typing to the device, config and metadata fields, TCP host), `?` is typed
   into the field instead; press `f1` to open help.
 
-- The status line shows the current line ending, echo and timestamp settings.
-  All three are remembered under `live_view` in `~/.astrolabe/settings.json`.
+- The status line shows the current line ending, echo, timestamp and hex
+  settings. All are remembered under `live_view` in
+  `~/.astrolabe/settings.json`.
+- Hex view (`x`) shows every received byte, including `\r` and control
+  characters, as offset, hex bytes and an ASCII column (16 bytes per row, or
+  fewer on narrow terminals). Offsets count from the start of the capture and
+  keep counting after `ctrl+l`. Echoes and link markers appear between dump
+  rows. It only changes the view; `data.jsonl` is the same either way.
+- In hex view, the input field takes hex bytes: `01 ff 0a`, `01FF0A` and
+  `0x01,0xff,0x0a` all send the same three bytes. Exactly those bytes are
+  sent, with no line ending, and recorded as a `tx` record with
+  `payload.hex`. Invalid hex is reported and left in the field to fix.
 - Timestamps work for every live capture, including sources you cannot type
   to. A line's time is when its first byte arrived, and it is the same `ts`
   saved for that line in the run's `data.jsonl`. Echoed lines show the time

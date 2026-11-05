@@ -18,6 +18,7 @@ func (liveViewPrefsAdapter) Load() (tui.LiveViewPrefs, error) {
 		Timestamps: s.LiveView.Timestamps,
 		// Files saved before reconnect existed have no key: default on.
 		Reconnect: s.LiveView.Reconnect == nil || *s.LiveView.Reconnect,
+		Hex:       s.LiveView.Hex,
 	}, err
 }
 
@@ -29,6 +30,7 @@ func (liveViewPrefsAdapter) Save(p tui.LiveViewPrefs) error {
 			Echo:       p.Echo,
 			Timestamps: p.Timestamps,
 			Reconnect:  &reconnect,
+			Hex:        p.Hex,
 		}
 	})
 }

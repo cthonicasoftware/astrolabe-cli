@@ -53,6 +53,47 @@ func TestCaptureSessionSendWritesAndRecords(t *testing.T) {
 	}
 }
 
+func TestCaptureSessionSendBytesWritesExactBytesAndRecordsHex(t *testing.T) {
+	var buf bytes.Buffer
+	s := newTestSession(&buf)
+	defer s.cancel()
+
+	raw := []byte{0x01, 0xff, 0x0a}
+	at, err := s.SendBytes(raw)
+	if err != nil {
+		t.Fatalf("SendBytes: %v", err)
+	}
+	if !bytes.Equal(buf.Bytes(), raw) {
+		t.Errorf("device got % x, want % x (no line ending)", buf.Bytes(), raw)
+	}
+
+	rec := <-s.tx
+	if rec.Type != capture.RecordTypeTX {
+		t.Errorf("type = %q, want %q", rec.Type, capture.RecordTypeTX)
+	}
+	if rec.Payload["hex"] != "01ff0a" || len(rec.Payload) != 1 {
+		t.Errorf("payload = %v, want only hex=01ff0a", rec.Payload)
+	}
+	if !rec.TS.Equal(at) {
+		t.Errorf("TX record ts = %v, want %v", rec.TS, at)
+	}
+}
+
+func TestCaptureSessionSendBytesEmptyOrReadOnly(t *testing.T) {
+	var buf bytes.Buffer
+	s := newTestSession(&buf)
+	defer s.cancel()
+	if _, err := s.SendBytes(nil); err != nil || buf.Len() != 0 || len(s.tx) != 0 {
+		t.Errorf("empty SendBytes: err=%v wrote=%d recorded=%d, want nothing", err, buf.Len(), len(s.tx))
+	}
+
+	ro := newTestSession(nil)
+	defer ro.cancel()
+	if _, err := ro.SendBytes([]byte{1}); err == nil {
+		t.Fatal("SendBytes on read-only session should fail")
+	}
+}
+
 func TestCaptureSessionSendFailureNotRecorded(t *testing.T) {
 	s := newTestSession(failWriter{})
 	defer s.cancel()

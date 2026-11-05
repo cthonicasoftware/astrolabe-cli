@@ -42,6 +42,7 @@ type keymap struct {
 	Clear     key.Binding
 	Spot      key.Binding
 	Time      key.Binding
+	Hex       key.Binding
 	Reconnect key.Binding
 	Input     key.Binding
 	Ending    key.Binding
@@ -59,6 +60,7 @@ var keys = keymap{
 	Clear:     key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "clear buffer")),
 	Spot:      key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "toggle spotlight")),
 	Time:      key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "toggle timestamps")),
+	Hex:       key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "toggle hex view and hex input")),
 	Reconnect: key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "toggle reconnect")),
 	Input:     key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "type to device")),
 	Ending:    key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "cycle line ending")),
@@ -71,6 +73,10 @@ var keys = keymap{
 // recorded for it. It may block.
 type SendFunc func(line string, le sources.LineEnding) (time.Time, error)
 
+// SendBytesFunc writes raw bytes to the device and returns the time recorded
+// for them. It may block.
+type SendBytesFunc func(data []byte) (time.Time, error)
+
 // App represents the live capture TUI application
 type App struct {
 	title            string
@@ -80,6 +86,7 @@ type App struct {
 	saveRequested    bool
 	feed             <-chan FeedChunk
 	lineBuffer       *LineBuffer
+	hexLog           *HexLog
 	lastTick         time.Time
 	width            int
 	height           int
@@ -93,6 +100,7 @@ type App struct {
 
 	// Send path. send is nil when the source cannot accept input.
 	send         SendFunc
+	sendBytes    SendBytesFunc // used in hex view
 	input        textinput.Model
 	inputMode    bool
 	sending      bool
@@ -139,6 +147,7 @@ func NewApp(title string, feed <-chan FeedChunk) *App {
 		feed:             feed,
 		boxStyle:         boxStyle,
 		lineBuffer:       NewLineBuffer(),
+		hexLog:           NewHexLog(),
 		spotlightEnabled: false,
 		spotlight:        NewSpotlightEffect(),
 		prefs:            DefaultLiveViewPrefs(),
@@ -152,11 +161,27 @@ func NewApp(title string, feed <-chan FeedChunk) *App {
 func (a *App) SetPrefs(prefs LiveViewPrefs, save func(LiveViewPrefs) error) {
 	a.prefs = prefs
 	a.savePrefs = save
+	a.syncPlaceholder()
 }
 
 // EnableSend turns on the input field.
 func (a *App) EnableSend(send SendFunc) {
 	a.send = send
+}
+
+// EnableSendBytes lets the input field send hex bytes while the hex view is
+// on. It only takes effect together with EnableSend.
+func (a *App) EnableSendBytes(send SendBytesFunc) {
+	a.sendBytes = send
+}
+
+// syncPlaceholder sets the input hint for the current text/hex mode.
+func (a *App) syncPlaceholder() {
+	if a.prefs.Hex {
+		a.input.Placeholder = "hex bytes, e.g. 01 ff 0a; enter to send, esc to stop"
+	} else {
+		a.input.Placeholder = "type a line, enter to send, esc to stop"
+	}
 }
 
 func (a *App) canSend() bool { return a.send != nil && !a.disconnected && !a.reconnecting }
@@ -170,7 +195,8 @@ type feedClosedMsg struct{}
 
 // sendResultMsg reports the outcome of an asynchronous Send.
 type sendResultMsg struct {
-	line string
+	line string // the field text, for history
+	echo string // what the echo line shows
 	at   time.Time
 	err  error
 }
@@ -293,10 +319,13 @@ func (a *App) appendData(chunks ...FeedChunk) {
 	wasAtBottom := a.vp.AtBottom()
 	for _, c := range chunks {
 		if c.Link != nil {
-			a.lineBuffer.AddMarker(linkMarker(*c.Link, c.At), c.At)
+			marker := linkMarker(*c.Link, c.At)
+			a.lineBuffer.AddMarker(marker, c.At)
+			a.hexLog.AddMarker(marker, c.At)
 			continue
 		}
 		a.lineBuffer.AddData(c.Data, c.At)
+		a.hexLog.AddData([]byte(c.Data), c.At)
 	}
 	a.updateViewportContent()
 	if wasAtBottom {
@@ -319,6 +348,8 @@ func (a *App) handleKeyPress(msg tea.KeyPressMsg) (Screen, tea.Cmd) {
 		return a.toggleSpotlight()
 	case key.Matches(msg, keys.Time):
 		return a.toggleTimestamps()
+	case key.Matches(msg, keys.Hex):
+		return a.toggleHex()
 	case key.Matches(msg, keys.Reconnect) && a.setReconnect != nil:
 		return a.toggleReconnect()
 	case key.Matches(msg, keys.Input) && a.send != nil && !a.disconnected:
@@ -375,11 +406,37 @@ func (a *App) submit() (Screen, tea.Cmd) {
 		return a, nil
 	}
 	line := a.input.Value()
+	if a.prefs.Hex {
+		return a.submitHex(line)
+	}
 	a.sending = true
 	send, le := a.send, a.prefs.LineEnding
 	return a, func() tea.Msg {
 		at, err := send(line, le)
-		return sendResultMsg{line: line, at: at, err: err}
+		return sendResultMsg{line: line, echo: line, at: at, err: err}
+	}
+}
+
+// submitHex sends the field's hex as raw bytes, with no line ending. Bad
+// hex is reported and kept in the field to fix.
+func (a *App) submitHex(line string) (Screen, tea.Cmd) {
+	if a.sendBytes == nil {
+		a.sendErr = "this source cannot send hex"
+		return a, nil
+	}
+	data, err := parseHex(line)
+	if err != nil {
+		a.sendErr = err.Error()
+		return a, nil
+	}
+	if len(data) == 0 {
+		return a, nil
+	}
+	a.sending = true
+	send := a.sendBytes
+	return a, func() tea.Msg {
+		at, err := send(data)
+		return sendResultMsg{line: line, echo: formatHexEcho(data), at: at, err: err}
 	}
 }
 
@@ -395,7 +452,8 @@ func (a *App) handleSendResult(msg sendResultMsg) (Screen, tea.Cmd) {
 	a.input.SetValue("")
 	if a.prefs.Echo {
 		wasAtBottom := a.vp.AtBottom()
-		a.lineBuffer.AddEcho(msg.line, msg.at)
+		a.lineBuffer.AddEcho(msg.echo, msg.at)
+		a.hexLog.AddEcho(msg.echo, msg.at)
 		a.updateViewportContent()
 		if wasAtBottom {
 			a.vp.GotoBottom()
@@ -489,6 +547,7 @@ func (a *App) togglePause() (Screen, tea.Cmd) {
 // clearBuffer clears the line buffer and viewport
 func (a *App) clearBuffer() (Screen, tea.Cmd) {
 	a.lineBuffer.Clear()
+	a.hexLog.Clear()
 	a.vp.SetContent("")
 	return a, nil
 }
@@ -506,24 +565,24 @@ func (a *App) updateViewportContent() {
 	wrapper := NewLineWrapper(textWidth)
 	echoStyle := lipgloss.NewStyle().Foreground(ColorSecondary)
 
-	lines := a.lineBuffer.GetDisplayLines()
+	lines := a.viewLines(textWidth)
 	parts := make([]string, len(lines))
 	for i, line := range lines {
-		rows := strings.Split(wrapper.Wrap([]string{line}), "\n")
+		rows := strings.Split(wrapper.Wrap([]string{line.text}), "\n")
 		// Measure before styling: widths of styled text include ANSI codes.
 		firstWidth := lipgloss.Width(rows[0])
-		switch {
-		case a.lineBuffer.IsEcho(i):
+		switch line.kind {
+		case lineEcho:
 			for j := range rows {
 				rows[j] = echoStyle.Render(rows[j])
 			}
-		case a.lineBuffer.IsMarker(i):
+		case lineMarker:
 			for j := range rows {
 				rows[j] = StyleMuted.Render(rows[j])
 			}
 		}
 		if a.prefs.Timestamps {
-			rows[0] += a.timestampSuffix(a.lineBuffer.LineTime(i), firstWidth)
+			rows[0] += a.timestampSuffix(line.at, firstWidth)
 		}
 		parts[i] = strings.Join(rows, "\n")
 	}
@@ -539,6 +598,21 @@ func (a *App) updateViewportContent() {
 	}
 
 	a.vp.SetContent(wrappedContent)
+}
+
+// viewLines returns the lines to show: the text lines, or in hex view the
+// dump rows sized to fit textWidth.
+func (a *App) viewLines(textWidth int) []viewLine {
+	if a.prefs.Hex {
+		// The wrapper ends lines one cell short of the edge; so do rows.
+		return a.hexLog.Rows(hexBytesPerRow(textWidth - 1))
+	}
+	lines := a.lineBuffer.GetDisplayLines()
+	out := make([]viewLine, len(lines))
+	for i, l := range lines {
+		out[i] = viewLine{kind: a.lineBuffer.kindOf(i), text: l, at: a.lineBuffer.LineTime(i)}
+	}
+	return out
 }
 
 // timestampSuffix right-aligns at in muted style after a row rowWidth cells
@@ -617,6 +691,9 @@ func (a *App) syncLayout() {
 // renderStatus renders the status line with metadata
 func (a *App) renderStatus() string {
 	statusText := fmt.Sprintf("Lines: %d", a.lineBuffer.LineCount())
+	if a.prefs.Hex {
+		statusText = fmt.Sprintf("Bytes: %d", a.hexLog.Total())
+	}
 
 	switch {
 	case a.disconnected:
@@ -660,7 +737,11 @@ func (a *App) renderStatus() string {
 		if a.prefs.Echo {
 			echo = "echo on"
 		}
-		statusText += " • " + StyleMuted.Render(string(a.prefs.LineEnding)+" • "+echo)
+		ending := string(a.prefs.LineEnding)
+		if a.prefs.Hex {
+			ending = "hex in"
+		}
+		statusText += " • " + StyleMuted.Render(ending+" • "+echo)
 	}
 
 	return a.fitBox(statusText)
@@ -751,7 +832,7 @@ func (a *App) HelpSections() []HelpSection {
 			Keys:  []KeyHelp{{"pgup/pgdn", "scroll"}},
 		}}
 	}
-	live := []key.Binding{keys.Save, keys.Quit, keys.Pause, keys.Time}
+	live := []key.Binding{keys.Save, keys.Quit, keys.Pause, keys.Time, keys.Hex}
 	if a.setReconnect != nil {
 		live = append(live, keys.Reconnect)
 	}
@@ -784,6 +865,17 @@ func (a *App) toggleTimestamps() (Screen, tea.Cmd) {
 	if wasAtBottom {
 		a.vp.GotoBottom()
 	}
+	return a, a.persistPrefs()
+}
+
+// toggleHex switches between the text and hex views, and the input field
+// between text and hex, and remembers the choice.
+func (a *App) toggleHex() (Screen, tea.Cmd) {
+	a.prefs.Hex = !a.prefs.Hex
+	a.syncPlaceholder()
+	a.sendErr = ""
+	a.updateViewportContent()
+	a.vp.GotoBottom() // offsets differ between views; land on the newest data
 	return a, a.persistPrefs()
 }
 
