@@ -865,3 +865,21 @@ func BenchmarkTCP_Reading(b *testing.B) {
 		tcp.Close()
 	}
 }
+
+func TestTCP_DialerUsesKeepAlive(t *testing.T) {
+	tcp, err := NewTCP("127.0.0.1", 59998)
+	if err != nil {
+		t.Fatalf("NewTCP failed: %v", err)
+	}
+
+	d := tcp.dialer()
+
+	if d.Timeout != tcp.ConnectTimeout {
+		t.Errorf("Expected dialer Timeout=%v, got %v", tcp.ConnectTimeout, d.Timeout)
+	}
+
+	want := net.KeepAliveConfig{Enable: true, Idle: 5 * time.Second, Interval: 5 * time.Second, Count: 3}
+	if d.KeepAliveConfig != want {
+		t.Errorf("Expected KeepAliveConfig=%+v, got %+v", want, d.KeepAliveConfig)
+	}
+}

@@ -89,9 +89,7 @@ func (t *TCP) Open(ctx context.Context) error {
 	// Create connection with timeout
 	addr := fmt.Sprintf("%s:%d", t.Host, t.Port)
 
-	dialer := &net.Dialer{
-		Timeout: t.ConnectTimeout,
-	}
+	dialer := t.dialer()
 
 	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
@@ -110,6 +108,29 @@ func (t *TCP) Open(ctx context.Context) error {
 	go t.readLoop(readCtx)
 
 	return nil
+}
+
+// Keepalive tuning: a peer that vanishes without closing the socket is
+// detected after roughly Idle + Interval*Count (~20s) so the read fails and
+// the reconnect wrapper can take over.
+const (
+	tcpKeepAliveIdle     = 5 * time.Second
+	tcpKeepAliveInterval = 5 * time.Second
+	tcpKeepAliveCount    = 3
+)
+
+// dialer returns the net.Dialer used by Open, with connect timeout and
+// aggressive TCP keepalive enabled.
+func (t *TCP) dialer() *net.Dialer {
+	return &net.Dialer{
+		Timeout: t.ConnectTimeout,
+		KeepAliveConfig: net.KeepAliveConfig{
+			Enable:   true,
+			Idle:     tcpKeepAliveIdle,
+			Interval: tcpKeepAliveInterval,
+			Count:    tcpKeepAliveCount,
+		},
+	}
 }
 
 // readLoop streams TCP data through the channel.
