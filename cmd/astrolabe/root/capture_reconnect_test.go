@@ -2,6 +2,7 @@ package root
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"net"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
 	"github.com/spf13/cobra"
 )
@@ -145,5 +147,42 @@ func TestCaptureService_ReconnectsAcrossTCPServerRestart(t *testing.T) {
 	one, down, up, two := idx("one"), idx("link_down"), idx("link_up"), idx("two")
 	if one < 0 || down < 0 || up < 0 || two < 0 || !(one < down && down < up && up < two) {
 		t.Fatalf("bad order one=%d down=%d up=%d two=%d\n%s", one, down, up, two, strings.Join(lines, "\n"))
+	}
+}
+
+func TestCaptureService_WarnsWhenReconnectTimesOut(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().(*net.TCPAddr)
+	go func() {
+		c, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		_ = ln.Close() // refuse reconnects
+		_, _ = c.Write([]byte("one\n"))
+		time.Sleep(50 * time.Millisecond)
+		_ = c.Close()
+	}()
+
+	var buf bytes.Buffer
+	out := cliout.NewPrinter(&buf, false)
+	svc := newCaptureService(out, t.TempDir())
+	policy := reconnectPolicyWithOutput(out, true, 200*time.Millisecond)
+	policy.Initial, policy.Max = 5*time.Millisecond, 20*time.Millisecond
+	res, err := svc.Run(context.Background(), CaptureRequest{
+		Source:    sources.TCPConfig{Host: "127.0.0.1", Port: addr.Port, ConnectTimeout: 100 * time.Millisecond, BufferSize: 4096},
+		Reconnect: policy,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.Interrupted {
+		t.Fatal("run reported interrupted; want a timeout end")
+	}
+	if got := buf.String(); !strings.Contains(got, "Reconnect timed out after 200ms; ending capture") {
+		t.Errorf("output = %q, want reconnect timeout warning", got)
 	}
 }
