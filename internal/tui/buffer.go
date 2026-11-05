@@ -15,11 +15,13 @@ const EchoPrefix = "→ "
 // line keeps the arrival time of its first byte, matching the ts the capture
 // pipeline records for it in data.jsonl.
 type LineBuffer struct {
-	buffer    *strings.Builder
-	partialAt time.Time // arrival time of the partial line in buffer
-	lines     []string
-	kind      []lineKind  // kind[i] says what lines[i] is
-	at        []time.Time // at[i] is when lines[i] started arriving
+	buffer     *strings.Builder // text of the partial line, \r removed
+	partialRaw []byte           // the partial line's bytes as received
+	partialAt  time.Time        // arrival time of the partial line in buffer
+	lines      []string
+	raw        [][]byte    // raw[i] is lines[i] as received, \r and \n kept; nil for echoes and markers
+	kind       []lineKind  // kind[i] says what lines[i] is
+	at         []time.Time // at[i] is when lines[i] started arriving
 }
 
 // lineKind tells received lines from ones the live view adds.
@@ -41,43 +43,34 @@ func NewLineBuffer() *LineBuffer {
 
 // AddData adds raw data that arrived at at, processing complete lines.
 func (lb *LineBuffer) AddData(data string, at time.Time) {
-	// Strip carriage returns to prevent cursor positioning issues
-	cleaned := strings.ReplaceAll(data, "\r", "")
-	if cleaned == "" {
-		return
-	}
-	if lb.buffer.Len() == 0 {
-		lb.partialAt = at
-	}
-	lb.buffer.WriteString(cleaned)
-
-	// Process complete lines (those ending with \n)
-	bufferContent := lb.buffer.String()
-	if !strings.Contains(bufferContent, "\n") {
-		return
-	}
-
-	parts := strings.Split(bufferContent, "\n")
-
-	// All parts except the last are complete lines. Only the first can have
-	// started in an earlier chunk.
-	for i := 0; i < len(parts)-1; i++ {
-		lineAt := at
-		if i == 0 {
-			lineAt = lb.partialAt
+	newlineSeen := false // a \n came earlier in this chunk
+	for i := 0; i < len(data); i++ {
+		b := data[i]
+		lb.partialRaw = append(lb.partialRaw, b)
+		// Carriage returns are kept in the raw bytes but not shown as text,
+		// where they would move the cursor.
+		if b == '\r' {
+			continue
 		}
-		if parts[i] != "" || i > 0 {
-			lb.appendLine(parts[i], lineData, lineAt)
+		if lb.buffer.Len() == 0 {
+			lb.partialAt = at
 		}
+		if b != '\n' {
+			lb.buffer.WriteByte(b)
+			continue
+		}
+		if lb.buffer.Len() == 0 && !newlineSeen {
+			// An empty line at the start of a chunk is not shown (e.g. the
+			// \n of a CRLF split across reads). Its bytes still belong to
+			// the line before.
+			lb.attachRaw(lb.partialRaw)
+		} else {
+			lb.appendLine(lb.buffer.String(), lb.partialRaw, lineData, lb.partialAt)
+		}
+		newlineSeen = true
+		lb.buffer.Reset()
+		lb.partialRaw = nil
 	}
-
-	// The last part is either empty (if ended with \n) or a partial line
-	lb.buffer.Reset()
-	if last := parts[len(parts)-1]; last != "" {
-		lb.buffer.WriteString(last)
-		lb.partialAt = at
-	}
-
 	lb.trim()
 }
 
@@ -97,23 +90,34 @@ func (lb *LineBuffer) AddMarker(text string, at time.Time) {
 // addOwnLine ends any partial received line, then adds line on its own.
 func (lb *LineBuffer) addOwnLine(line string, kind lineKind, at time.Time) {
 	if lb.buffer.Len() > 0 {
-		lb.appendLine(lb.buffer.String(), lineData, lb.partialAt)
+		lb.appendLine(lb.buffer.String(), lb.partialRaw, lineData, lb.partialAt)
 		lb.buffer.Reset()
+		lb.partialRaw = nil
 	}
-	lb.appendLine(line, kind, at)
+	lb.appendLine(line, nil, kind, at)
 	lb.trim()
 }
 
-func (lb *LineBuffer) appendLine(line string, kind lineKind, at time.Time) {
+func (lb *LineBuffer) appendLine(line string, raw []byte, kind lineKind, at time.Time) {
 	lb.lines = append(lb.lines, line)
+	lb.raw = append(lb.raw, raw)
 	lb.kind = append(lb.kind, kind)
 	lb.at = append(lb.at, at)
+}
+
+// attachRaw adds bytes that end no shown line to the last received line,
+// so the hex view still shows them. With no such line they are dropped.
+func (lb *LineBuffer) attachRaw(b []byte) {
+	if n := len(lb.lines); n > 0 && lb.kind[n-1] == lineData {
+		lb.raw[n-1] = append(lb.raw[n-1], b...)
+	}
 }
 
 func (lb *LineBuffer) trim() {
 	if len(lb.lines) > MaxBufferedLines {
 		cut := len(lb.lines) - MaxBufferedLines
 		lb.lines = lb.lines[cut:]
+		lb.raw = lb.raw[cut:]
 		lb.kind = lb.kind[cut:]
 		lb.at = lb.at[cut:]
 	}
@@ -159,11 +163,25 @@ func (lb *LineBuffer) LineTime(i int) time.Time {
 	return time.Time{}
 }
 
+// LineRaw returns display line i's bytes as received, \r and \n included,
+// or nil for echoes, markers and out-of-range i.
+func (lb *LineBuffer) LineRaw(i int) []byte {
+	switch {
+	case i >= 0 && i < len(lb.raw):
+		return lb.raw[i]
+	case i == len(lb.raw) && lb.buffer.Len() > 0:
+		return lb.partialRaw
+	}
+	return nil
+}
+
 // Clear resets the buffer
 func (lb *LineBuffer) Clear() {
 	lb.buffer.Reset()
+	lb.partialRaw = nil
 	lb.partialAt = time.Time{}
 	lb.lines = nil
+	lb.raw = nil
 	lb.kind = nil
 	lb.at = nil
 }

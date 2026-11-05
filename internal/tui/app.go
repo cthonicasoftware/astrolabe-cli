@@ -86,7 +86,6 @@ type App struct {
 	saveRequested    bool
 	feed             <-chan FeedChunk
 	lineBuffer       *LineBuffer
-	hexLog           *HexLog
 	lastTick         time.Time
 	width            int
 	height           int
@@ -147,7 +146,6 @@ func NewApp(title string, feed <-chan FeedChunk) *App {
 		feed:             feed,
 		boxStyle:         boxStyle,
 		lineBuffer:       NewLineBuffer(),
-		hexLog:           NewHexLog(),
 		spotlightEnabled: false,
 		spotlight:        NewSpotlightEffect(),
 		prefs:            DefaultLiveViewPrefs(),
@@ -319,13 +317,10 @@ func (a *App) appendData(chunks ...FeedChunk) {
 	wasAtBottom := a.vp.AtBottom()
 	for _, c := range chunks {
 		if c.Link != nil {
-			marker := linkMarker(*c.Link, c.At)
-			a.lineBuffer.AddMarker(marker, c.At)
-			a.hexLog.AddMarker(marker, c.At)
+			a.lineBuffer.AddMarker(linkMarker(*c.Link, c.At), c.At)
 			continue
 		}
 		a.lineBuffer.AddData(c.Data, c.At)
-		a.hexLog.AddData([]byte(c.Data), c.At)
 	}
 	a.updateViewportContent()
 	if wasAtBottom {
@@ -453,7 +448,6 @@ func (a *App) handleSendResult(msg sendResultMsg) (Screen, tea.Cmd) {
 	if a.prefs.Echo {
 		wasAtBottom := a.vp.AtBottom()
 		a.lineBuffer.AddEcho(msg.echo, msg.at)
-		a.hexLog.AddEcho(msg.echo, msg.at)
 		a.updateViewportContent()
 		if wasAtBottom {
 			a.vp.GotoBottom()
@@ -547,7 +541,6 @@ func (a *App) togglePause() (Screen, tea.Cmd) {
 // clearBuffer clears the line buffer and viewport
 func (a *App) clearBuffer() (Screen, tea.Cmd) {
 	a.lineBuffer.Clear()
-	a.hexLog.Clear()
 	a.vp.SetContent("")
 	return a, nil
 }
@@ -556,33 +549,53 @@ func (a *App) clearBuffer() (Screen, tea.Cmd) {
 // is wrapped on its own so echoed sends can be styled after wrapping (the
 // wrapper measures bytes and would miscount ANSI codes).
 func (a *App) updateViewportContent() {
-	// With timestamps on, text wraps short of a right-hand gutter so the
-	// timestamp never pushes the line's text sideways.
+	// Right-hand columns are reserved so text wraps short of them and never
+	// pushes them sideways: the timestamp at the edge, and in hex view each
+	// line's bytes in hex just left of it.
 	textWidth := a.vp.Width()
 	if a.prefs.Timestamps && textWidth > 0 {
 		textWidth = max(textWidth-timestampGutter, 1)
 	}
+	perRow := 0
+	if a.prefs.Hex && textWidth > 0 {
+		perRow = hexBytesPerRow(textWidth)
+		textWidth = max(textWidth-hexColumnWidth(perRow)-1, 1)
+	}
 	wrapper := NewLineWrapper(textWidth)
 	echoStyle := lipgloss.NewStyle().Foreground(ColorSecondary)
 
-	lines := a.viewLines(textWidth)
+	lines := a.lineBuffer.GetDisplayLines()
 	parts := make([]string, len(lines))
 	for i, line := range lines {
-		rows := strings.Split(wrapper.Wrap([]string{line.text}), "\n")
+		rows := strings.Split(wrapper.Wrap([]string{line}), "\n")
+		var hexRows []string
+		if perRow > 0 {
+			hexRows = formatHexRows(a.lineBuffer.LineRaw(i), perRow)
+		}
+		for len(rows) < len(hexRows) {
+			rows = append(rows, "")
+		}
 		// Measure before styling: widths of styled text include ANSI codes.
-		firstWidth := lipgloss.Width(rows[0])
-		switch line.kind {
-		case lineEcho:
+		widths := make([]int, len(rows))
+		for j, r := range rows {
+			widths[j] = lipgloss.Width(r)
+		}
+		switch {
+		case a.lineBuffer.IsEcho(i):
 			for j := range rows {
 				rows[j] = echoStyle.Render(rows[j])
 			}
-		case lineMarker:
+		case a.lineBuffer.IsMarker(i):
 			for j := range rows {
 				rows[j] = StyleMuted.Render(rows[j])
 			}
 		}
+		for j, h := range hexRows {
+			rows[j] += strings.Repeat(" ", max(textWidth-widths[j], 0)) + StyleMuted.Render(h)
+			widths[j] = textWidth + len(h)
+		}
 		if a.prefs.Timestamps {
-			rows[0] += a.timestampSuffix(line.at, firstWidth)
+			rows[0] += a.timestampSuffix(a.lineBuffer.LineTime(i), widths[0])
 		}
 		parts[i] = strings.Join(rows, "\n")
 	}
@@ -598,21 +611,6 @@ func (a *App) updateViewportContent() {
 	}
 
 	a.vp.SetContent(wrappedContent)
-}
-
-// viewLines returns the lines to show: the text lines, or in hex view the
-// dump rows sized to fit textWidth.
-func (a *App) viewLines(textWidth int) []viewLine {
-	if a.prefs.Hex {
-		// The wrapper ends lines one cell short of the edge; so do rows.
-		return a.hexLog.Rows(hexBytesPerRow(textWidth - 1))
-	}
-	lines := a.lineBuffer.GetDisplayLines()
-	out := make([]viewLine, len(lines))
-	for i, l := range lines {
-		out[i] = viewLine{kind: a.lineBuffer.kindOf(i), text: l, at: a.lineBuffer.LineTime(i)}
-	}
-	return out
 }
 
 // timestampSuffix right-aligns at in muted style after a row rowWidth cells
@@ -691,9 +689,6 @@ func (a *App) syncLayout() {
 // renderStatus renders the status line with metadata
 func (a *App) renderStatus() string {
 	statusText := fmt.Sprintf("Lines: %d", a.lineBuffer.LineCount())
-	if a.prefs.Hex {
-		statusText = fmt.Sprintf("Bytes: %d", a.hexLog.Total())
-	}
 
 	switch {
 	case a.disconnected:

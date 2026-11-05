@@ -3,7 +3,6 @@ package tui
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -29,8 +28,8 @@ func TestAppHexKeyTogglesViewAndSaves(t *testing.T) {
 	app, _, _, saved := newHexApp(t, nil)
 	app.Update(lineMsg(FeedChunk{Data: "hi\r\n\x00", At: testAt}))
 
-	if strings.Contains(app.vp.View(), "68 69 0d 0a 00") {
-		t.Fatal("hex dump shown before toggling")
+	if strings.Contains(app.vp.View(), "68 69 0d 0a") {
+		t.Fatal("hex shown before toggling")
 	}
 	_, cmd := app.Update(keyRunes("x"))
 	run(app, cmd)
@@ -38,21 +37,30 @@ func TestAppHexKeyTogglesViewAndSaves(t *testing.T) {
 	if !app.prefs.Hex {
 		t.Fatal("x should turn hex view on")
 	}
-	view := app.vp.View()
-	if !strings.Contains(view, "00000000  68 69 0d 0a 00") || !strings.Contains(view, "|hi...|") {
-		t.Errorf("hex view missing raw bytes (\\r kept):\n%s", view)
-	}
-	if !strings.Contains(app.renderStatus(), "Bytes: 5") {
-		t.Errorf("status = %q, want byte count", app.renderStatus())
+	row := rowContaining(t, app, "hi")
+	if !strings.Contains(row, "68 69 0d 0a") {
+		t.Errorf("text row should carry its raw bytes (\\r kept): %q", row)
 	}
 	if len(*saved) != 1 || !(*saved)[0].Hex {
 		t.Errorf("saved prefs = %+v, want Hex on", *saved)
 	}
 
 	app.Update(keyRunes("x"))
-	if app.prefs.Hex || !strings.Contains(app.vp.View(), "hi") || strings.Contains(app.vp.View(), "00000000") {
-		t.Errorf("x again should return to text view:\n%s", app.vp.View())
+	if app.prefs.Hex || strings.Contains(app.vp.View(), "68 69") {
+		t.Errorf("x again should hide hex:\n%s", app.vp.View())
 	}
+}
+
+// rowContaining returns the plain-text viewport row containing s.
+func rowContaining(t *testing.T, app *App, s string) string {
+	t.Helper()
+	for _, r := range strings.Split(stripANSI(app.vp.View()), "\n") {
+		if strings.Contains(r, s) {
+			return r
+		}
+	}
+	t.Fatalf("no row contains %q:\n%s", s, app.vp.View())
+	return ""
 }
 
 func TestAppHexViewRemembered(t *testing.T) {
@@ -63,7 +71,7 @@ func TestAppHexViewRemembered(t *testing.T) {
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	app.Update(lineMsg(FeedChunk{Data: "A", At: testAt}))
 
-	if !strings.Contains(app.vp.View(), "00000000  41") {
+	if !strings.Contains(rowContaining(t, app, "A"), " 41") {
 		t.Errorf("remembered hex pref not applied:\n%s", app.vp.View())
 	}
 	if !strings.Contains(app.input.Placeholder, "hex") {
@@ -71,24 +79,42 @@ func TestAppHexViewRemembered(t *testing.T) {
 	}
 }
 
-func TestAppHexDumpFitsNarrowViewport(t *testing.T) {
+// The hex column sits on the right, muted, in a fixed column that ends where
+// a timestamp starts (or one cell short of the edge without timestamps).
+func TestAppHexColumnAlignsLikeTimestamps(t *testing.T) {
 	for _, width := range []int{60, 75, 120} {
-		app, _, _, _ := newHexApp(t, nil)
-		app.Update(tea.WindowSizeMsg{Width: width, Height: 30})
-		app.Update(keyRunes("x"))
-		app.Update(lineMsg(FeedChunk{Data: strings.Repeat("z", 40), At: testAt}))
+		for _, stamps := range []bool{false, true} {
+			app, _, _, _ := newHexApp(t, nil)
+			app.Update(tea.WindowSizeMsg{Width: width, Height: 40})
+			app.prefs.Timestamps = stamps
+			app.Update(keyRunes("x"))
+			app.Update(lineMsg(FeedChunk{Data: "short\r\n" + strings.Repeat("z", 40) + "\n", At: testAt}))
 
-		perRow := hexBytesPerRow(app.vp.Width() - 1)
-		rows := app.hexLog.Rows(perRow)
-		if len(rows) < 2 || !strings.HasPrefix(rows[1].text, fmt.Sprintf("%08x  ", perRow)) {
-			t.Errorf("width %d: second row = %+v, want offset %d", width, rows, perRow)
-		}
-		for _, row := range strings.Split(app.vp.View(), "\n") {
-			if r := strings.TrimRight(row, " "); len(r) > app.vp.Width()-1 {
-				t.Errorf("width %d: row %q wider than viewport %d", width, r, app.vp.Width())
+			vpWidth := app.vp.Width()
+			avail := vpWidth
+			if stamps {
+				avail -= timestampGutter
 			}
-			if strings.HasPrefix(row, "00000000") && strings.Count(row, "7a") != perRow {
-				t.Errorf("width %d: row %q not %d bytes (wrapped?)", width, row, perRow)
+			perRow := hexBytesPerRow(avail)
+			hexStart := avail - hexColumnWidth(perRow) - 1
+
+			short := rowContaining(t, app, "short")
+			if got := strings.Index(short, "73 68"); got != hexStart {
+				t.Errorf("w=%d ts=%v: hex starts at %d, want %d: %q", width, stamps, got, hexStart, short)
+			}
+			stamp := testAt.Local().Format(timestampLayout)
+			if stamps && strings.Index(short, stamp) != vpWidth-1-len(timestampLayout) {
+				t.Errorf("w=%d: timestamp moved: %q", width, short)
+			}
+			// 41 bytes of z-line take several hex rows; every row fits.
+			for _, r := range strings.Split(stripANSI(app.vp.View()), "\n") {
+				if w := len(strings.TrimRight(r, " ")); w > vpWidth-1 {
+					t.Errorf("w=%d ts=%v: row %d wide > %d: %q", width, stamps, w, vpWidth-1, r)
+				}
+			}
+			if !strings.Contains(app.vp.View(), StyleMuted.Render("73 68 6f 72")) &&
+				!strings.Contains(app.vp.View(), StyleMuted.Render(formatHexRows([]byte("short\r\n"), perRow)[0])) {
+				t.Errorf("w=%d: hex not in muted style", width)
 			}
 		}
 	}
