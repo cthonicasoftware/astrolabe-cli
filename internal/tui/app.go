@@ -53,6 +53,7 @@ type App struct {
 	vp               viewport.Model
 	help             help.Model
 	paused           bool
+	pending          []string // chunks received while paused, applied on resume
 	saveRequested    bool
 	feed             <-chan string
 	lineBuffer       *LineBuffer
@@ -159,26 +160,29 @@ func (a *App) handleTick(msg tickMsg) (tea.Model, tea.Cmd) {
 
 // handleLineData handles incoming line data
 func (a *App) handleLineData(msg lineMsg) (tea.Model, tea.Cmd) {
-	// Always drain the channel to prevent blocking the pipeline
-	// even when paused
-	if !a.paused {
-		// Check if user is at the bottom before adding new data
-		wasAtBottom := a.vp.AtBottom()
-
-		// Process incoming data
-		a.lineBuffer.AddData(string(msg))
-
-		// Update viewport with current state
-		a.updateViewportContent()
-
-		// Only auto-scroll to bottom if user was already at bottom
-		if wasAtBottom {
-			a.vp.GotoBottom()
-		}
+	// Always drain the channel to prevent blocking the pipeline. While paused,
+	// hold chunks so resuming shows them instead of silently dropping data.
+	if a.paused {
+		a.pending = append(a.pending, string(msg))
+	} else {
+		a.appendData(string(msg))
 	}
 
 	// Always pull the next line, even when paused, to prevent blocking
 	return a, a.pullLine()
+}
+
+// appendData adds chunks to the line buffer and refreshes the viewport,
+// following the tail only if the user was already at the bottom.
+func (a *App) appendData(chunks ...string) {
+	wasAtBottom := a.vp.AtBottom()
+	for _, c := range chunks {
+		a.lineBuffer.AddData(c)
+	}
+	a.updateViewportContent()
+	if wasAtBottom {
+		a.vp.GotoBottom()
+	}
 }
 
 // handleKeyPress handles keyboard input
@@ -220,7 +224,12 @@ func (a *App) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // togglePause toggles the pause state
 func (a *App) togglePause() (tea.Model, tea.Cmd) {
 	a.paused = !a.paused
-	// handleLineData keeps pulling while paused, so resuming needs no new reader.
+	// handleLineData keeps pulling while paused, so resuming needs no new
+	// reader. Apply anything held while paused.
+	if !a.paused && len(a.pending) > 0 {
+		a.appendData(a.pending...)
+		a.pending = nil
+	}
 	return a, nil
 }
 

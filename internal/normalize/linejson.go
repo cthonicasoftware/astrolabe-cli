@@ -3,7 +3,6 @@
 package normalize
 
 import (
-	"bytes"
 	"time"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
@@ -25,14 +24,21 @@ type Flusher interface {
 	Flush() []core.Record
 }
 
+// maxLineLen caps the buffered partial line. A stream with no terminator
+// (binary data, wrong baud rate) is force-emitted in chunks of this size
+// instead of growing without bound.
+const maxLineLen = 64 * 1024
+
 // LineJSON is a normalizer that wraps each line in a minimal JSON record with a
 // "line" payload field. It is the default normalizer for interactive captures.
 //
 // Sources such as serial and TCP deliver arbitrary read chunks, not lines, so
-// LineJSON buffers input and emits one record per '\n'-terminated line. Line
-// terminators ("\n" and "\r\n") are stripped from the stored line.
+// LineJSON buffers input and emits one record per terminated line. LF, CRLF
+// and a lone CR all terminate a line and are stripped from the stored line.
+// Lines longer than maxLineLen are split.
 type LineJSON struct {
-	buf []byte
+	buf    []byte
+	skipLF bool // previous byte was CR; swallow an immediately following LF
 }
 
 // NewLineJSON returns a new LineJSON normalizer.
@@ -41,44 +47,52 @@ func NewLineJSON() *LineJSON { return &LineJSON{} }
 // Init resets any buffered partial line.
 func (l *LineJSON) Init(*core.Run) error {
 	l.buf = l.buf[:0]
+	l.skipLF = false
 	return nil
 }
 
-// Ingest appends b to the line buffer and returns a record for each complete line.
+// Ingest scans b and returns a record for each complete line.
 func (l *LineJSON) Ingest(b []byte) ([]core.Record, error) {
-	l.buf = append(l.buf, b...)
-
 	var records []core.Record
-	for {
-		i := bytes.IndexByte(l.buf, '\n')
-		if i < 0 {
-			break
-		}
-		records = append(records, lineRecord(l.buf[:i]))
-		l.buf = l.buf[i+1:]
+	emit := func() {
+		records = append(records, lineRecord(l.buf))
+		l.buf = l.buf[:0] // reuse backing array; lineRecord copies into a string
 	}
-
-	// Compact so the backing array doesn't grow without bound.
-	if len(l.buf) == 0 {
-		l.buf = nil
-	} else {
-		l.buf = append([]byte(nil), l.buf...)
+	for _, c := range b {
+		if l.skipLF {
+			l.skipLF = false
+			if c == '\n' {
+				continue
+			}
+		}
+		switch c {
+		case '\n':
+			emit()
+		case '\r':
+			emit()
+			l.skipLF = true
+		default:
+			l.buf = append(l.buf, c)
+			if len(l.buf) >= maxLineLen {
+				emit()
+			}
+		}
 	}
 	return records, nil
 }
 
 // Flush returns a record for any buffered partial line and clears the buffer.
 func (l *LineJSON) Flush() []core.Record {
+	l.skipLF = false
 	if len(l.buf) == 0 {
 		return nil
 	}
 	rec := lineRecord(l.buf)
-	l.buf = nil
+	l.buf = l.buf[:0]
 	return []core.Record{rec}
 }
 
 func lineRecord(line []byte) core.Record {
-	line = bytes.TrimSuffix(line, []byte("\r"))
 	return core.Record{
 		TS:      time.Now().UTC(),
 		Seq:     0,
