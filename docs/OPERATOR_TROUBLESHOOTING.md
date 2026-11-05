@@ -244,6 +244,27 @@ Before diving into specific issues, verify these basics:
 
 ---
 
+## Device Resets Mid-Capture
+
+If the device reboots, is unplugged, or the TCP server restarts during a headless `astrolabe capture serial` or `capture tcp`, the capture ends by default. Add `--reconnect` to keep the run going:
+
+```bash
+astrolabe capture serial --port /dev/ttyUSB0 --reconnect
+astrolabe capture tcp --host 192.168.1.100 --port 9000 --reconnect --reconnect-timeout 10m
+```
+
+- `--reconnect` retries with backoff (250ms growing to 5s) until the link returns. The same run continues.
+- `--reconnect-timeout` gives up after the link has been down this long in one outage (`0`, the default, never gives up). It is ignored without `--reconnect`.
+
+Each outage is recorded in `data.jsonl`:
+
+- `link_down` with an `error` payload when the link drops.
+- `link_up` with `attempts` and `gap_ms` (and `port` if the serial port name changed) when it returns.
+
+The run manifest gets a `reconnects` attribute counting recoveries. Data sent by the device while the link was down is not captured; the gap is bounded by the `link_down` and `link_up` records.
+
+---
+
 ## Upload Issues
 
 ### Network Unreachable

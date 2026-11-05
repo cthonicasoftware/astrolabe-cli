@@ -14,12 +14,14 @@ import (
 )
 
 type tcpFlags struct {
-	host           string
-	port           int
-	connectTimeout time.Duration
-	readTimeout    time.Duration
-	bufferSize     int
-	name           string
+	host             string
+	port             int
+	connectTimeout   time.Duration
+	readTimeout      time.Duration
+	bufferSize       int
+	name             string
+	reconnect        bool
+	reconnectTimeout time.Duration
 }
 
 func newCaptureTCPCmd(meta *captureMetadataFlags) *cobra.Command {
@@ -38,6 +40,8 @@ func newCaptureTCPCmd(meta *captureMetadataFlags) *cobra.Command {
 	cmd.Flags().DurationVar(&flags.readTimeout, "read-timeout", 0, "read timeout (0 = no timeout)")
 	cmd.Flags().IntVar(&flags.bufferSize, "buffer-size", 4096, "read buffer size in bytes")
 	cmd.Flags().StringVar(&flags.name, "name", "", "optional run name")
+	cmd.Flags().BoolVar(&flags.reconnect, "reconnect", false, "reconnect if the device drops")
+	cmd.Flags().DurationVar(&flags.reconnectTimeout, "reconnect-timeout", 0, "give up after this long disconnected (0 = never); ignored without --reconnect")
 	return cmd
 }
 
@@ -106,9 +110,10 @@ func runCaptureTCP(cmd *cobra.Command, flags tcpFlags, meta *captureMetadataFlag
 	out.Info("Capturing... (press Ctrl+C to stop)")
 	out.Blank()
 	result, err := svc.Run(cmd.Context(), CaptureRequest{
-		Source:   tcpCfg,
-		RunLabel: flags.name,
-		Meta:     metaOpts,
+		Source:    tcpCfg,
+		RunLabel:  flags.name,
+		Meta:      metaOpts,
+		Reconnect: reconnectPolicyWithOutput(out, flags.reconnect, flags.reconnectTimeout),
 	})
 	if err != nil {
 		return err

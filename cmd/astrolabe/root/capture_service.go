@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/capture"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
@@ -24,6 +25,9 @@ type CaptureRequest struct {
 	Normalizer normalize.Normalizer
 	RunLabel   string
 	Meta       core.ManifestOptions
+	// Reconnect, when non-nil, wraps serial and TCP sources so a dropped link
+	// is retried instead of ending the run. Nil leaves the source unwrapped.
+	Reconnect *sources.ReconnectPolicy
 }
 
 type CaptureComponents struct {
@@ -71,6 +75,7 @@ func (s *captureService) Run(ctx context.Context, req CaptureRequest) (CaptureRe
 		// Headless runs never send, but tag RX records from serial/TCP so
 		// the record schema is the same as interactive runs.
 		Bidirectional: sources.IsWritable(components.Source),
+		Reconnecting:  req.Reconnect != nil && sources.SupportsReconnect(req.Source),
 	})
 	if err != nil {
 		return CaptureResult{}, fmt.Errorf("build pipeline: %w", err)
@@ -107,9 +112,15 @@ func (s *captureService) BuildComponents(req CaptureRequest) (CaptureComponents,
 		return CaptureComponents{}, errors.New("capture request must specify a source")
 	}
 
-	source, err := req.Source.NewSource()
-	if err != nil {
-		return CaptureComponents{}, fmt.Errorf("create %s source: %w", req.Source.Kind(), err)
+	var source captureManagedSource
+	if req.Reconnect != nil && sources.SupportsReconnect(req.Source) {
+		source = sources.NewReconnecting(req.Source, *req.Reconnect, true)
+	} else {
+		built, err := req.Source.NewSource()
+		if err != nil {
+			return CaptureComponents{}, fmt.Errorf("create %s source: %w", req.Source.Kind(), err)
+		}
+		source = built
 	}
 
 	normalizer := req.Normalizer
@@ -136,4 +147,31 @@ func (s *captureService) BuildComponents(req CaptureRequest) (CaptureComponents,
 		Manifest:        buildCaptureManifest(req.Meta, attrs),
 		CaptureSettings: req.Source.CaptureSettings(),
 	}, nil
+}
+
+// reconnectPolicyFromFlags returns nil when reconnect is off. Initial and Max
+// stay zero so the wrapper applies its defaults.
+func reconnectPolicyFromFlags(enabled bool, timeout time.Duration) *sources.ReconnectPolicy {
+	if !enabled {
+		return nil
+	}
+	return &sources.ReconnectPolicy{Timeout: timeout}
+}
+
+// reconnectPolicyWithOutput is reconnectPolicyFromFlags plus link-event
+// reporting through out.
+func reconnectPolicyWithOutput(out *cliout.Printer, enabled bool, timeout time.Duration) *sources.ReconnectPolicy {
+	policy := reconnectPolicyFromFlags(enabled, timeout)
+	if policy == nil || out == nil {
+		return policy
+	}
+	policy.OnEvent = func(ev core.LinkEvent) {
+		switch ev.State {
+		case core.LinkDown:
+			out.Warning(fmt.Sprintf("Link down: %s; reconnecting", ev.Err))
+		case core.LinkUp:
+			out.Step(fmt.Sprintf("Link up after %s", ev.Gap.Round(100*time.Millisecond)))
+		}
+	}
+	return policy
 }

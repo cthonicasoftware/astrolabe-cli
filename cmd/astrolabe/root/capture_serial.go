@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/cliout"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/config"
@@ -16,9 +17,11 @@ import (
 )
 
 type serialFlags struct {
-	port string
-	baud int
-	name string
+	port             string
+	baud             int
+	name             string
+	reconnect        bool
+	reconnectTimeout time.Duration
 }
 
 func newCaptureSerialCmd(meta *captureMetadataFlags) *cobra.Command {
@@ -34,6 +37,8 @@ func newCaptureSerialCmd(meta *captureMetadataFlags) *cobra.Command {
 	cmd.Flags().StringVarP(&flags.port, "port", "p", "/dev/ttyUSB0", "serial port path")
 	cmd.Flags().IntVarP(&flags.baud, "baud", "b", 115200, "baud rate")
 	cmd.Flags().StringVar(&flags.name, "name", "", "optional run name")
+	cmd.Flags().BoolVar(&flags.reconnect, "reconnect", false, "reconnect if the device drops")
+	cmd.Flags().DurationVar(&flags.reconnectTimeout, "reconnect-timeout", 0, "give up after this long disconnected (0 = never); ignored without --reconnect")
 	return cmd
 }
 
@@ -96,9 +101,10 @@ func runCaptureSerial(cmd *cobra.Command, flags serialFlags, meta *captureMetada
 	out.Info("Capturing... (press Ctrl+C to stop)")
 	out.Blank()
 	result, err := svc.Run(cmd.Context(), CaptureRequest{
-		Source:   *serialCfg,
-		RunLabel: flags.name,
-		Meta:     metaOpts,
+		Source:    *serialCfg,
+		RunLabel:  flags.name,
+		Meta:      metaOpts,
+		Reconnect: reconnectPolicyWithOutput(out, flags.reconnect, flags.reconnectTimeout),
 	})
 	if err != nil {
 		return err
