@@ -224,6 +224,108 @@ func TestSerial_ReadLoopStopsOnPortError(t *testing.T) {
 	if calls := fp.readCalls(); calls > 2 {
 		t.Errorf("readLoop kept reading after error: %d Read calls", calls)
 	}
+	if err := s.Err(); err == nil || err.Error() != "device disconnected" {
+		t.Errorf("Err() = %v, want %q", err, "device disconnected")
+	}
+}
+
+func TestSerial_ErrNilAfterClose(t *testing.T) {
+	s := NewSerial("COM_TEST", 115200)
+	fp := newFakePort()
+	s.port = fp
+	ctx, cancel := context.WithCancel(context.Background())
+	s.cancel = cancel
+	go s.readLoop(ctx)
+
+	_ = s.Close() // closing the port makes the pending Read fail
+	select {
+	case _, ok := <-s.ch:
+		if ok {
+			t.Fatal("expected channel to close")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("readLoop did not stop after Close")
+	}
+	if err := s.Err(); err != nil {
+		t.Errorf("Err() after Close = %v, want nil", err)
+	}
+}
+
+func TestTCP_ErrIsEOFWhenServerCloses(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer listener.Close()
+	go func() {
+		conn, err := listener.Accept()
+		if err == nil {
+			conn.Close()
+		}
+	}()
+	src, err := NewTCP("127.0.0.1", listener.Addr().(*net.TCPAddr).Port)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := src.Open(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	defer src.Close()
+	select {
+	case <-drain(src.Frames()):
+	case <-time.After(time.Second):
+		t.Fatal("frames channel did not close")
+	}
+	if err := src.Err(); !errors.Is(err, io.EOF) {
+		t.Errorf("Err() = %v, want io.EOF", err)
+	}
+}
+
+func TestTCP_ErrNilAfterClose(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer listener.Close()
+	hold := make(chan net.Conn, 1)
+	go func() {
+		conn, err := listener.Accept()
+		if err == nil {
+			hold <- conn
+		}
+	}()
+	src, err := NewTCP("127.0.0.1", listener.Addr().(*net.TCPAddr).Port)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := src.Open(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	_ = src.Close()
+	select {
+	case <-drain(src.Frames()):
+	case <-time.After(time.Second):
+		t.Fatal("frames channel did not close")
+	}
+	if err := src.Err(); err != nil {
+		t.Errorf("Err() after Close = %v, want nil", err)
+	}
+	select {
+	case c := <-hold:
+		c.Close()
+	default:
+	}
+}
+
+// drain returns a channel closed once ch has been drained and closed.
+func drain(ch <-chan []byte) <-chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		for range ch {
+		}
+		close(done)
+	}()
+	return done
 }
 
 func TestTCP_WriteReachesServer(t *testing.T) {
