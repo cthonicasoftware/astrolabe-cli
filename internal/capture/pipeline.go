@@ -44,6 +44,20 @@ type Source interface {
 	Meta() core.SourceMeta
 }
 
+// Frame is a chunk of source bytes with the time it arrived.
+type Frame struct {
+	Data []byte
+	At   time.Time
+}
+
+// TimedSource is an optional interface for sources that stamp frames as they
+// arrive. The pipeline reads TimedFrames instead of Frames when available, so
+// record timestamps match what a live view showed. Frames from a plain
+// Source are stamped when the pipeline receives them.
+type TimedSource interface {
+	TimedFrames() <-chan Frame
+}
+
 // RunIDGenerator allows callers to supply deterministic run identifiers (useful in tests).
 type RunIDGenerator func() string
 
@@ -126,13 +140,29 @@ func (p *Pipeline) Run(ctx context.Context) (*core.Run, error) {
 		return nil, fmt.Errorf("store start: %w", err)
 	}
 
+	// Exactly one of framesCh and timedCh is set; the other stays nil so its
+	// select case never fires.
 	var (
 		seq       uint64
 		txCount   uint64
-		framesCh  = p.opts.Source.Frames()
+		framesCh  <-chan []byte
+		timedCh   <-chan Frame
 		txCh      = p.opts.TX
 		cancelErr error
 	)
+	if ts, ok := p.opts.Source.(TimedSource); ok {
+		timedCh = ts.TimedFrames()
+	} else {
+		framesCh = p.opts.Source.Frames()
+	}
+
+	timed, _ := p.opts.Normalizer.(normalize.TimedIngester)
+	ingest := func(data []byte, at time.Time) ([]core.Record, error) {
+		if timed != nil {
+			return timed.IngestAt(data, at)
+		}
+		return p.opts.Normalizer.Ingest(data)
+	}
 
 	writeRecords := func(records []core.Record) error {
 		if len(records) == 0 {
@@ -174,6 +204,17 @@ func (p *Pipeline) Run(ctx context.Context) (*core.Run, error) {
 		return nil
 	}
 
+	ingestRX := func(data []byte, at time.Time) error {
+		if len(data) == 0 {
+			return nil
+		}
+		records, err := ingest(data, at)
+		if err != nil {
+			return fmt.Errorf("normalize frame: %w", err)
+		}
+		return writeRX(records)
+	}
+
 	// drainTX records sends still queued when the loop ends; those bytes
 	// already reached the device, so they belong in the run.
 	drainTX := func() error {
@@ -207,19 +248,18 @@ loop:
 			if err := writeTX(rec); err != nil {
 				return nil, err
 			}
-		case frame, ok := <-framesCh:
+		case data, ok := <-framesCh:
 			if !ok {
 				break loop
 			}
-			if len(frame) == 0 {
-				continue
+			if err := ingestRX(data, time.Now().UTC()); err != nil {
+				return nil, err
 			}
-
-			records, err := p.opts.Normalizer.Ingest(frame)
-			if err != nil {
-				return nil, fmt.Errorf("normalize frame: %w", err)
+		case frame, ok := <-timedCh:
+			if !ok {
+				break loop
 			}
-			if err := writeRX(records); err != nil {
+			if err := ingestRX(frame.Data, frame.At); err != nil {
 				return nil, err
 			}
 		}

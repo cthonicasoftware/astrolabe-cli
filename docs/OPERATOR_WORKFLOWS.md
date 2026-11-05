@@ -36,9 +36,19 @@ switching to another terminal.
 | `esc` | typing | Stop typing; view keys work again |
 | `e` | view | Cycle line ending: LF → CRLF → CR → None |
 | `o` | view | Toggle echo of sent lines in the view |
+| `t` | view | Toggle each line's arrival time (`15:04:05.000`, right-aligned) |
+| `?` / `f1` | any | Show every key for the current screen; `esc` closes it |
 
-- The status line shows the current line ending and echo setting. Both are
-  remembered in `~/.astrolabe/send_prefs.json`.
+- `?` opens the help dialog on every screen. While a text field has focus
+  (typing to the device, config and metadata fields, TCP host), `?` is typed
+  into the field instead; press `f1` to open help.
+
+- The status line shows the current line ending, echo and timestamp settings.
+  All three are remembered under `live_view` in `~/.astrolabe/settings.json`.
+- Timestamps work for every live capture, including sources you cannot type
+  to. A line's time is when its first byte arrived, and it is the same `ts`
+  saved for that line in the run's `data.jsonl`. Echoed lines show the time
+  they were sent, matching their `tx` record.
 - Echoed lines appear on their own line with a `→` prefix. Echo only affects
   the view: every sent line is saved in the run as a `tx` record.
 - Serial sends go out one character at a time, 5ms apart, the way typed keys

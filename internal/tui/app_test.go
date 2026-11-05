@@ -12,8 +12,8 @@ import (
 // LineBuffer out of order (e.g. a line's first letter lands on the next line).
 
 func TestAppTickDoesNotPullFromFeed(t *testing.T) {
-	feed := make(chan string, 1)
-	feed <- "T"
+	feed := make(chan FeedChunk, 1)
+	feed <- FeedChunk{Data: "T", At: testAt}
 	app := NewApp("test", feed)
 
 	_, cmd := app.Update(tickMsg(time.Now()))
@@ -29,7 +29,7 @@ func TestAppTickDoesNotPullFromFeed(t *testing.T) {
 }
 
 func TestAppResumeDoesNotStartSecondReader(t *testing.T) {
-	app := NewApp("test", make(chan string))
+	app := NewApp("test", make(chan FeedChunk))
 
 	if _, cmd := app.togglePause(); cmd != nil {
 		t.Fatal("pause returned a command")
@@ -41,9 +41,9 @@ func TestAppResumeDoesNotStartSecondReader(t *testing.T) {
 
 func TestAppFeedChunksStayInOrder(t *testing.T) {
 	chunks := []string{"T", "emp: 22\r\n", "H", "um: 40\r\n"}
-	feed := make(chan string, len(chunks))
+	feed := make(chan FeedChunk, len(chunks))
 	for _, c := range chunks {
-		feed <- c
+		feed <- FeedChunk{Data: c, At: testAt}
 	}
 	close(feed)
 

@@ -38,7 +38,7 @@ func newCaptureAdapter(out *cliout.Printer, cacheRoot string) *captureAdapter {
 
 // captureSession implements tui.CaptureSession.
 type captureSession struct {
-	feed          chan string
+	feed          chan tui.FeedChunk
 	ctx           context.Context
 	cancel        context.CancelFunc
 	done          chan tui.CaptureSessionResult
@@ -58,25 +58,27 @@ type captureSession struct {
 	tx chan core.Record
 }
 
-func (s *captureSession) Feed() <-chan string { return s.feed }
-func (s *captureSession) RequestSave()        { s.saveRequested = true }
-func (s *captureSession) CanSend() bool       { return s.writer != nil }
+func (s *captureSession) Feed() <-chan tui.FeedChunk { return s.feed }
+func (s *captureSession) RequestSave()               { s.saveRequested = true }
+func (s *captureSession) CanSend() bool              { return s.writer != nil }
 
 // Send writes line plus le to the device, then records it in the run. Only
-// bytes that reached the device are recorded.
-func (s *captureSession) Send(line string, le sources.LineEnding) error {
+// bytes that reached the device are recorded. The returned time is the
+// record's ts, so the live view's echo shows the same time as data.jsonl.
+func (s *captureSession) Send(line string, le sources.LineEnding) (time.Time, error) {
 	if s.writer == nil {
-		return errors.New("this source does not accept input")
+		return time.Time{}, errors.New("this source does not accept input")
 	}
 	payload := append([]byte(line), le.Bytes()...)
 	if len(payload) == 0 {
-		return nil // empty line with no line ending: nothing to send
+		return time.Now().UTC(), nil // empty line with no line ending: nothing to send
 	}
 	if _, err := s.writer.Write(payload); err != nil {
-		return err
+		return time.Time{}, err
 	}
+	at := time.Now().UTC()
 	rec := core.Record{
-		TS:   time.Now().UTC(),
+		TS:   at,
 		Type: capture.RecordTypeTX,
 		Payload: map[string]any{
 			"line":        line,
@@ -87,7 +89,7 @@ func (s *captureSession) Send(line string, le sources.LineEnding) error {
 	case s.tx <- rec:
 	case <-s.ctx.Done():
 	}
-	return nil
+	return at, nil
 }
 
 func (s *captureSession) Stop() tui.CaptureSessionResult {
@@ -163,8 +165,8 @@ func (a *captureAdapter) Start(ctx context.Context, cfg tui.CaptureConfig) (tui.
 		return nil, fmt.Errorf("open source: %w", err)
 	}
 
-	feedCh := make(chan string, 16)
-	pipelineFramesCh := make(chan []byte, 16)
+	feedCh := make(chan tui.FeedChunk, 16)
+	pipelineFramesCh := make(chan capture.Frame, 16)
 	txCh := make(chan core.Record, 16)
 	writer, _ := components.Source.(io.Writer)
 
@@ -207,8 +209,9 @@ func (a *captureAdapter) Start(ctx context.Context, cfg tui.CaptureConfig) (tui.
 		})
 	}
 
-	// Fan-out goroutine: forward source frames to both the TUI feed and the
-	// pipeline input channel.
+	// Fan-out goroutine: stamp each source frame with its arrival time once,
+	// then forward it to both the TUI feed and the pipeline, so the live view
+	// and data.jsonl show the same time.
 	go func() {
 		defer close(feedCh)
 		defer close(pipelineFramesCh)
@@ -217,13 +220,14 @@ func (a *captureAdapter) Start(ctx context.Context, cfg tui.CaptureConfig) (tui.
 			if len(frame) == 0 {
 				continue
 			}
+			at := time.Now().UTC()
 			select {
-			case feedCh <- string(frame):
+			case feedCh <- tui.FeedChunk{Data: string(frame), At: at}:
 			case <-sessionCtx.Done():
 				return
 			}
 			select {
-			case pipelineFramesCh <- frame:
+			case pipelineFramesCh <- capture.Frame{Data: frame, At: at}:
 			case <-sessionCtx.Done():
 				return
 			}

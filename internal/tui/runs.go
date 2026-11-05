@@ -231,11 +231,11 @@ func (m *runsViewModel) View() string {
 	switch m.mode {
 	case modeDetail:
 		sections = append(sections, renderRunDetails(m.detailSummary))
-		sections = append(sections, StyleHelp.Render("d: view data • esc/q: back"))
+		sections = append(sections, StyleHelp.Render("d: view data • esc: back • ?: help"))
 		return m.centerContent(strings.Join(sections, "\n\n"))
 	case modePayload:
 		sections = append(sections, m.renderPayloadView())
-		sections = append(sections, StyleHelp.Render("↑/↓ scroll • pgup/pgdn • home/end • r: reload • esc/q: back"))
+		sections = append(sections, StyleHelp.Render("↑/↓: scroll • esc: back • ?: help"))
 		return m.centerContent(strings.Join(sections, "\n\n"))
 	}
 
@@ -252,12 +252,48 @@ func (m *runsViewModel) View() string {
 	}
 
 	if len(m.result.Runs) == 0 {
-		sections = append(sections, StyleHelp.Render("r: refresh • q/esc: return"))
+		sections = append(sections, StyleHelp.Render("r: refresh • q: back • ?: help"))
 	} else {
-		sections = append(sections, StyleHelp.Render("↑/↓ navigate • enter: details • r refresh • q: return"))
+		sections = append(sections, StyleHelp.Render("enter: details • q: back • ?: help"))
 	}
 
 	return m.centerContent(strings.Join(sections, "\n\n"))
+}
+
+// HelpSections lists the keys for the current runs view.
+func (m *runsViewModel) HelpSections() []HelpSection {
+	switch m.mode {
+	case modeDetail:
+		return []HelpSection{{
+			Title: "Run details",
+			Keys: []KeyHelp{
+				{"d", "view the run's data"},
+				{"r", "reload runs"},
+				{"q/esc", "back to the list"},
+			},
+		}}
+	case modePayload:
+		return []HelpSection{{
+			Title: "Run data",
+			Keys: []KeyHelp{
+				{"↑/↓ k/j", "scroll a line"},
+				{"pgup/pgdn", "scroll a page"},
+				{"u/d", "scroll half a page"},
+				{"r", "reload data"},
+				{"q/esc", "back to details"},
+			},
+		}}
+	default:
+		return []HelpSection{{
+			Title: "Runs",
+			Keys: []KeyHelp{
+				{"↑/↓", "move"},
+				{"enter", "show details"},
+				{"r", "reload runs"},
+				{"q/esc", "back to the menu"},
+			},
+		}}
+	}
 }
 
 func (m *runsViewModel) handleRunsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

@@ -2,9 +2,12 @@ package tui
 
 import (
 	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
 )
@@ -14,17 +17,18 @@ type sentLine struct {
 	le   sources.LineEnding
 }
 
-func newSendApp(t *testing.T, sendErr error) (*App, *[]sentLine, *[]SendPrefs) {
+func newSendApp(t *testing.T, sendErr error) (*App, *[]sentLine, *[]LiveViewPrefs) {
 	t.Helper()
 	var sent []sentLine
-	var saved []SendPrefs
-	app := NewApp("test", make(chan string))
-	app.EnableSend(func(line string, le sources.LineEnding) error {
-		sent = append(sent, sentLine{line, le})
-		return sendErr
-	}, DefaultSendPrefs(), func(p SendPrefs) error {
+	var saved []LiveViewPrefs
+	app := NewApp("test", make(chan FeedChunk))
+	app.SetPrefs(DefaultLiveViewPrefs(), func(p LiveViewPrefs) error {
 		saved = append(saved, p)
 		return nil
+	})
+	app.EnableSend(func(line string, le sources.LineEnding) (time.Time, error) {
+		sent = append(sent, sentLine{line, le})
+		return testAt, sendErr
 	})
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	return app, &sent, &saved
@@ -80,7 +84,7 @@ func TestAppInputModeKeepsViewBindingsOutOfField(t *testing.T) {
 
 func TestAppSendEchoesAndClears(t *testing.T) {
 	app, sent, _ := newSendApp(t, nil)
-	app.lineBuffer.AddData("partial") // device mid-line
+	app.lineBuffer.AddData("partial", testAt) // device mid-line
 
 	app.Update(keyRunes("i"))
 	typeText(app, "AT")
@@ -105,6 +109,110 @@ func TestAppSendEchoesAndClears(t *testing.T) {
 	if !app.lineBuffer.IsEcho(1) || app.lineBuffer.IsEcho(0) {
 		t.Error("echo flags wrong")
 	}
+	if got := app.lineBuffer.LineTime(1); !got.Equal(testAt) {
+		t.Errorf("echo time = %v, want the time Send returned (%v)", got, testAt)
+	}
+}
+
+func TestAppTimestampToggleRightAlignsAndPersists(t *testing.T) {
+	app, _, saved := newSendApp(t, nil)
+	app.appendData(FeedChunk{Data: "hello\n", At: testAt})
+
+	if strings.Contains(app.vp.View(), timestampText(testAt)) {
+		t.Fatal("timestamp shown before toggling on")
+	}
+
+	_, cmd := app.Update(keyRunes("t"))
+	run(app, cmd)
+	if !app.prefs.Timestamps {
+		t.Fatal("t should turn timestamps on")
+	}
+	if len(*saved) != 1 || !(*saved)[0].Timestamps {
+		t.Fatalf("saved = %+v, want timestamps on persisted", *saved)
+	}
+
+	var row string
+	for _, r := range strings.Split(app.vp.View(), "\n") {
+		if strings.Contains(r, "hello") {
+			row = r
+		}
+	}
+	if !strings.HasPrefix(row, "hello") {
+		t.Fatalf("row = %q, want text still at the left edge", row)
+	}
+	plain := strings.TrimRight(stripANSI(row), " ")
+	if !strings.HasSuffix(plain, timestampText(testAt)) {
+		t.Fatalf("row = %q, want timestamp at the right", plain)
+	}
+	if got, want := len(plain), app.vp.Width-1; got != want {
+		t.Errorf("row width = %d, want timestamp ending at column %d", got, want)
+	}
+}
+
+func TestAppTimestampToggleWithoutSendPath(t *testing.T) {
+	app := NewApp("test", make(chan FeedChunk))
+	app.Update(keyRunes("t"))
+	if !app.prefs.Timestamps {
+		t.Fatal("t should toggle timestamps on read-only sources too")
+	}
+}
+
+// View centers on its widest row, so a status or help line wider than the
+// bordered box shifts the whole layout left.
+func TestAppRowsFitBoxWidth(t *testing.T) {
+	app, _, _ := newSendApp(t, nil)
+	box := lipgloss.Width(app.renderViewport())
+
+	check := func(mode string) {
+		t.Helper()
+		for name, s := range map[string]string{
+			"status": app.renderStatus(),
+			"input":  app.renderInput(),
+			"help":   app.renderHelp(),
+		} {
+			if w := lipgloss.Width(s); w > box {
+				t.Errorf("%s: %s is %d wide, box is %d", mode, name, w, box)
+			}
+		}
+	}
+
+	check("view")
+	app.Update(keyRunes("i"))
+	check("typing")
+}
+
+// Bubble Tea drops the top rows of a view taller than the terminal, which
+// hides the title.
+func TestAppViewFitsTerminalHeight(t *testing.T) {
+	for _, width := range []int{60, 80, 120, 200} {
+		app, _, _ := newSendApp(t, nil)
+		app.Update(tea.WindowSizeMsg{Width: width, Height: 30})
+		for _, mode := range []string{"view", "typing"} {
+			if mode == "typing" {
+				app.Update(keyRunes("i"))
+			}
+			if h := lipgloss.Height(app.View()); h > 30 {
+				t.Errorf("width %d, %s: view is %d rows, terminal is 30", width, mode, h)
+			}
+		}
+	}
+}
+
+func timestampText(at time.Time) string { return at.Local().Format(timestampLayout) }
+
+// stripANSI removes SGR escape sequences.
+func stripANSI(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == 0x1b {
+			for i < len(s) && s[i] != 'm' {
+				i++
+			}
+			continue
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
 }
 
 func TestAppSendWithEchoOff(t *testing.T) {
@@ -207,10 +315,10 @@ func TestAppLineEndingAndEchoPersist(t *testing.T) {
 }
 
 func TestAppFeedClosedDisablesInput(t *testing.T) {
-	feed := make(chan string)
+	feed := make(chan FeedChunk)
 	close(feed)
 	app := NewApp("test", feed)
-	app.EnableSend(func(string, sources.LineEnding) error { return nil }, DefaultSendPrefs(), nil)
+	app.EnableSend(func(string, sources.LineEnding) (time.Time, error) { return testAt, nil })
 	app.Update(keyRunes("i"))
 
 	run(app, app.pullLine())
@@ -233,7 +341,7 @@ func TestAppFeedClosedDisablesInput(t *testing.T) {
 }
 
 func TestAppWithoutSendIgnoresSendKeys(t *testing.T) {
-	app := NewApp("test", make(chan string))
+	app := NewApp("test", make(chan FeedChunk))
 	app.Update(keyRunes("i"))
 	if app.inputMode {
 		t.Fatal("read-only source should not enter input mode")

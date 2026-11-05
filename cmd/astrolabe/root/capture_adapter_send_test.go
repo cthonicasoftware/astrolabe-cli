@@ -33,7 +33,8 @@ func TestCaptureSessionSendWritesAndRecords(t *testing.T) {
 	if !s.CanSend() {
 		t.Fatal("session with writer should be able to send")
 	}
-	if err := s.Send("AT+RST", sources.LineEndingCRLF); err != nil {
+	at, err := s.Send("AT+RST", sources.LineEndingCRLF)
+	if err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	if buf.String() != "AT+RST\r\n" {
@@ -47,8 +48,8 @@ func TestCaptureSessionSendWritesAndRecords(t *testing.T) {
 	if rec.Payload["line"] != "AT+RST" || rec.Payload["line_ending"] != "CRLF" {
 		t.Errorf("payload = %v", rec.Payload)
 	}
-	if rec.TS.IsZero() {
-		t.Error("TX record has no timestamp")
+	if rec.TS.IsZero() || !rec.TS.Equal(at) {
+		t.Errorf("TX record ts = %v, want the time Send returned (%v)", rec.TS, at)
 	}
 }
 
@@ -56,7 +57,7 @@ func TestCaptureSessionSendFailureNotRecorded(t *testing.T) {
 	s := newTestSession(failWriter{})
 	defer s.cancel()
 
-	if err := s.Send("x", sources.LineEndingLF); err == nil {
+	if _, err := s.Send("x", sources.LineEndingLF); err == nil {
 		t.Fatal("expected write error")
 	}
 	if len(s.tx) != 0 {
@@ -69,7 +70,7 @@ func TestCaptureSessionEmptyNoneSendsNothing(t *testing.T) {
 	s := newTestSession(&buf)
 	defer s.cancel()
 
-	if err := s.Send("", sources.LineEndingNone); err != nil {
+	if _, err := s.Send("", sources.LineEndingNone); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	if buf.Len() != 0 || len(s.tx) != 0 {
@@ -83,7 +84,7 @@ func TestCaptureSessionReadOnlyCannotSend(t *testing.T) {
 	if s.CanSend() {
 		t.Fatal("session without writer reports CanSend")
 	}
-	if err := s.Send("x", sources.LineEndingLF); err == nil {
+	if _, err := s.Send("x", sources.LineEndingLF); err == nil {
 		t.Fatal("Send on read-only session should fail")
 	}
 }

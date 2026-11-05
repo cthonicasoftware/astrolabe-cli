@@ -298,3 +298,48 @@ func TestDefaultRunID_Sortability(t *testing.T) {
 			t1.Time(), t2.Time(), t3.Time())
 	}
 }
+
+type timedSource struct {
+	meta   core.SourceMeta
+	frames []Frame
+}
+
+func (s *timedSource) Frames() <-chan []byte { panic("pipeline should read TimedFrames") }
+func (s *timedSource) Meta() core.SourceMeta { return s.meta }
+func (s *timedSource) TimedFrames() <-chan Frame {
+	ch := make(chan Frame, len(s.frames))
+	for _, f := range s.frames {
+		ch <- f
+	}
+	close(ch)
+	return ch
+}
+
+// Records from a timed source carry the frame's arrival time, not the time
+// the pipeline got around to processing it.
+func TestPipelineUsesFrameArrivalTime(t *testing.T) {
+	t0 := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	t1 := t0.Add(time.Second)
+	store := &recordingStore{}
+	pipeline, err := NewPipeline(Options{
+		Source: &timedSource{frames: []Frame{
+			{Data: []byte("hel"), At: t0},
+			{Data: []byte("lo\nworld\n"), At: t1},
+		}},
+		Normalizer: normalize.NewLineJSON(),
+		Store:      store,
+		Manifest:   core.Manifest{SchemaVersion: "v1alpha1"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pipeline.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.records) != 2 {
+		t.Fatalf("got %d records, want 2", len(store.records))
+	}
+	if !store.records[0].TS.Equal(t0) || !store.records[1].TS.Equal(t1) {
+		t.Errorf("ts = %v, %v; want %v, %v", store.records[0].TS, store.records[1].TS, t0, t1)
+	}
+}
