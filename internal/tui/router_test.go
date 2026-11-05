@@ -41,7 +41,11 @@ func (s stubCaptureSession) CanSend() bool              { return false }
 func (s stubCaptureSession) Send(string, sources.LineEnding) (time.Time, error) {
 	return time.Time{}, nil
 }
-func (s stubCaptureSession) SetReconnect(on bool) { *s.reconnect = append(*s.reconnect, on) }
+func (s stubCaptureSession) SetReconnect(on bool) {
+	if s.reconnect != nil {
+		*s.reconnect = append(*s.reconnect, on)
+	}
+}
 
 // cfgCapturePort records the config Start was given.
 type cfgCapturePort struct {

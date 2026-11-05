@@ -105,7 +105,6 @@ type App struct {
 	// Reconnect state. setReconnect is nil when the source cannot reconnect.
 	setReconnect     func(bool)
 	reconnecting     bool
-	reconnectAttempt int
 	reconnectedUntil time.Time
 	now              func() time.Time
 }
@@ -650,9 +649,9 @@ func (a *App) renderStatus() string {
 
 	if a.setReconnect != nil {
 		if a.prefs.Reconnect {
-			statusText += " • " + StyleMuted.Render("Reconnect on")
+			statusText += " • " + StyleMuted.Render("↻ on")
 		} else {
-			statusText += " • " + StyleMuted.Render("Reconnect off")
+			statusText += " • " + StyleMuted.Render("↻ off")
 		}
 	}
 
@@ -674,7 +673,7 @@ func (a *App) renderInput() string {
 	case a.disconnected:
 		line = StyleMuted.Render("Device disconnected. ctrl+w saves the run.")
 	case a.reconnecting:
-		line = StyleWarning.Render(a.reconnectHint())
+		line = StyleWarning.Render(reconnectHint)
 	case a.inputMode:
 		line = a.input.View()
 		if a.sending {

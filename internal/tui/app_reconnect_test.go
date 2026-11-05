@@ -109,8 +109,8 @@ func TestApp_ReconnectKeyTogglesAndSaves(t *testing.T) {
 
 	var got []bool
 	app.EnableReconnect(func(on bool) { got = append(got, on) })
-	if s := app.renderStatus(); !strings.Contains(s, "Reconnect on") {
-		t.Errorf("status = %q, want Reconnect on", s)
+	if s := app.renderStatus(); !strings.Contains(s, "↻ on") {
+		t.Errorf("status = %q, want ↻ on", s)
 	}
 	_, cmd := app.Update(keyRunes("r"))
 	run(app, cmd)
@@ -121,8 +121,8 @@ func TestApp_ReconnectKeyTogglesAndSaves(t *testing.T) {
 	if len(*saved) != 1 || (*saved)[0].Reconnect {
 		t.Fatalf("saved = %+v, want one save with Reconnect off", *saved)
 	}
-	if s := app.renderStatus(); !strings.Contains(s, "Reconnect off") {
-		t.Errorf("status = %q, want Reconnect off", s)
+	if s := app.renderStatus(); !strings.Contains(s, "↻ off") {
+		t.Errorf("status = %q, want ↻ off", s)
 	}
 }
 
