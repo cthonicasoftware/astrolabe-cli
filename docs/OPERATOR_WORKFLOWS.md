@@ -19,9 +19,34 @@ astrolabe tui
 3. Choose port from list
 4. Set baud rate (common: 9600, 115200)
 5. Press Enter to start capture
-6. Run your test on the device
-7. Press `s` to save when complete
+6. Run your test on the device (see [Sending to the Device](#sending-to-the-device))
+7. Press `ctrl+w` to stop and save when complete
 8. Select **Upload Data** to send to backend
+
+### Sending to the Device
+
+Serial and TCP live captures accept input, so you can type commands without
+switching to another terminal.
+
+| Key | Where | Action |
+|-----|-------|--------|
+| `i` | view | Start typing to the device |
+| `enter` | typing | Send the line (empty line sends just the line ending) |
+| `↑` / `↓` | typing | Recall earlier lines from this session |
+| `esc` | typing | Stop typing; view keys work again |
+| `e` | view | Cycle line ending: LF → CRLF → CR → None |
+| `o` | view | Toggle echo of sent lines in the view |
+
+- The status line shows the current line ending and echo setting. Both are
+  remembered in `~/.astrolabe/send_prefs.json`.
+- Echoed lines appear on their own line with a `→` prefix. Echo only affects
+  the view: every sent line is saved in the run as a `tx` record.
+- Serial sends go out one character at a time, 5ms apart, the way typed keys
+  would. Many firmware shells drop characters when a whole line arrives at
+  once. A send that the device doesn't accept within 3 seconds fails with an
+  error instead of hanging.
+- If the device disconnects, the view shows **DISCONNECTED** and typing is
+  disabled. You can still press `ctrl+w` to save what was captured.
 
 ### CLI Method
 
@@ -122,7 +147,8 @@ astrolabe tui
 3. Select or enter port number
 4. Connection validates automatically
 5. Press Enter to start streaming
-6. Press `s` to save when complete
+6. Press `i` to send commands (same keys as [serial](#sending-to-the-device))
+7. Press `ctrl+w` to stop and save when complete
 
 ### CLI Method
 

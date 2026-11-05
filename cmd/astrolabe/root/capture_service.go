@@ -68,6 +68,9 @@ func (s *captureService) Run(ctx context.Context, req CaptureRequest) (CaptureRe
 		Store:      store,
 		Manifest:   components.Manifest,
 		Capture:    components.CaptureSettings,
+		// Headless runs never send, but tag RX records from serial/TCP so
+		// the record schema is the same as interactive runs.
+		Bidirectional: sources.IsWritable(components.Source),
 	})
 	if err != nil {
 		return CaptureResult{}, fmt.Errorf("build pipeline: %w", err)

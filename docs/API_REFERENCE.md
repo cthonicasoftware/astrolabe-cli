@@ -99,6 +99,8 @@ Accepted success status codes:
 - `completed_at` is omitted if the run has not been marked complete.
 - `client_version` is the Astrolabe CLI SemVer (no leading `v`, e.g. `1.2.3`). Unreleased builds report a `git describe` string such as `1.2.3-4-gabc1234` or `dev`.
 - `manifest`, `source`, and `capture` are forwarded from the local run metadata without reshaping.
+- For serial and TCP runs, `manifest.attributes.tx_records` holds the number of lines the operator sent during capture, as a string. `records_count` includes those sent records.
+- `data.jsonl` records from serial and TCP runs carry `envelope.direction` (`"rx"` or `"tx"`); sent lines use `type: "tx"`. The backend stores `data.jsonl` as an opaque artifact.
 - The CLI uses the local run ID as the idempotency key so retried create requests can be safely deduplicated by the backend.
 
 ## Endpoint: Request Artifact Upload URL

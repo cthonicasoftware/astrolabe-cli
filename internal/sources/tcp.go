@@ -22,6 +22,10 @@ type TCPConfig struct {
 	BufferSize     int           // read buffer size in bytes
 }
 
+// DefaultTCPWriteTimeout bounds how long a send may block on a peer that
+// is not reading.
+const DefaultTCPWriteTimeout = 3 * time.Second
+
 // DefaultTCPConfig returns the standard TCP defaults.
 func DefaultTCPConfig() TCPConfig {
 	return TCPConfig{
@@ -164,6 +168,25 @@ func (t *TCP) readLoop(ctx context.Context) {
 	}
 }
 
+// Write sends p over the open TCP connection. It is safe to call
+// concurrently with the read loop.
+func (t *TCP) Write(p []byte) (int, error) {
+	t.mu.Lock()
+	conn := t.conn
+	t.mu.Unlock()
+
+	if conn == nil {
+		return 0, fmt.Errorf("TCP connection to %s is not open", t.Address())
+	}
+	// Bound the write so a peer that stops reading can't hang the sender.
+	_ = conn.SetWriteDeadline(time.Now().Add(DefaultTCPWriteTimeout))
+	n, err := conn.Write(p)
+	if err != nil {
+		return n, fmt.Errorf("write to %s: %w", t.Address(), err)
+	}
+	return n, nil
+}
+
 // Frames returns the channel for receiving TCP data.
 func (t *TCP) Frames() <-chan []byte {
 	return t.ch
@@ -184,12 +207,14 @@ func (t *TCP) Close() error {
 		t.cancel()
 	}
 
-	// Close the connection
+	// Close the connection once; later calls are no-ops.
 	t.mu.Lock()
-	defer t.mu.Unlock()
+	conn := t.conn
+	t.conn = nil
+	t.mu.Unlock()
 
-	if t.conn != nil {
-		return t.conn.Close()
+	if conn != nil {
+		return conn.Close()
 	}
 	return nil
 }

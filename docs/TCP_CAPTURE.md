@@ -253,9 +253,15 @@ Data is normalized using LineJSON (same as serial):
   "type": "sample",
   "payload": {
     "line": "measurement: 3.3V"
+  },
+  "envelope": {
+    "direction": "rx"
   }
 }
 ```
+
+Lines sent from the TUI live view are recorded as `type: "tx"` with
+`envelope.direction: "tx"`. See [Directory Structure](DIRECTORY_STRUCTURE.md#datajsonl).
 
 ## Error Handling
 

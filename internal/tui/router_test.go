@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/cthonicasoftware/astrolabe-cli/internal/core"
+	"github.com/cthonicasoftware/astrolabe-cli/internal/sources"
 )
 
 type stubModel struct{}
@@ -34,6 +35,10 @@ type stubCaptureSession struct {
 func (s stubCaptureSession) Feed() <-chan string        { return s.feed }
 func (s stubCaptureSession) Stop() CaptureSessionResult { return CaptureSessionResult{} }
 func (s stubCaptureSession) RequestSave()               {}
+func (s stubCaptureSession) CanSend() bool              { return false }
+func (s stubCaptureSession) Send(string, sources.LineEnding) error {
+	return nil
+}
 
 type stubMetadataPort struct {
 	values  MetadataValues

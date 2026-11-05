@@ -62,6 +62,7 @@ func runTUI(out *cliout.Printer, appCfg config.Config, initialScreen tui.ScreenI
 		CapturePort:   capturePort,
 		MetadataPort:  metadataPort,
 		UploadPort:    uploadPort,
+		SendPrefsPort: sendPrefsAdapter{},
 		RunsCacheRoot: appCfg.OfflineCache,
 	})
 }
