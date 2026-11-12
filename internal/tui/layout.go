@@ -3,6 +3,7 @@ package tui
 import (
 	"charm.land/bubbles/v2/viewport"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // scrollStandIn marks where a scroll area goes in a layout passed to
@@ -31,4 +32,49 @@ func sizeScrollArea(vp *viewport.Model, maxWidth, termHeight int, layout string,
 	vp.SetWidth(width)
 	wrapped := lipgloss.NewStyle().Width(width).Render(content)
 	vp.SetHeight(min(lipgloss.Height(wrapped), avail))
+}
+
+var (
+	// layerBackdropStyle dims whatever sits under an open layer.
+	layerBackdropStyle = lipgloss.NewStyle().Foreground(ColorMuted)
+	// layerStyle frames a screen's own layers (run details, data).
+	layerStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(ColorPrimary).
+			Padding(0, 2)
+)
+
+// Each layer deeper in a stack is inset this many columns and rows further
+// on every side, so the layers below stay visible around it.
+const (
+	layerInsetX = 4
+	layerInsetY = 1
+)
+
+// layerBounds is the largest outer size of a layer at depth (1 = first layer
+// over the screen) in a width x height terminal.
+func layerBounds(width, height, depth int) (w, h int) {
+	return max(width-2*depth*layerInsetX, 20), max(height-2*depth*layerInsetY, 3)
+}
+
+// overlayLayer composites top as a layer centered over base in a width x
+// height frame. base is repainted in one muted color so the layer stands
+// out; its own colors would otherwise compete with it. Overlaying again
+// stacks another layer, dimming every one below.
+func overlayLayer(base, top string, width, height int) string {
+	if width <= 0 {
+		width = max(lipgloss.Width(base), lipgloss.Width(top))
+	}
+	if height <= 0 {
+		height = max(lipgloss.Height(base), lipgloss.Height(top))
+	}
+	x := max(0, (width-lipgloss.Width(top))/2)
+	y := max(0, (height-lipgloss.Height(top))/2)
+
+	backdrop := layerBackdropStyle.Render(ansi.Strip(base))
+	comp := lipgloss.NewCompositor(
+		lipgloss.NewLayer(backdrop),
+		lipgloss.NewLayer(top).X(x).Y(y).Z(1),
+	)
+	return lipgloss.NewCanvas(width, height).Compose(comp).Render()
 }

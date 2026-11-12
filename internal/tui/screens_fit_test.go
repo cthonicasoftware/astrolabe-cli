@@ -104,7 +104,8 @@ func TestScreensFitTerminal(t *testing.T) {
 		"help-over-live": func(w, h int) string {
 			app := NewApp("Live Capture", nil)
 			app.EnableSend(func(string, sources.LineEnding) (time.Time, error) { return time.Time{}, nil })
-			return renderHelpDialog(sized(app, w, h), w, h)
+			s := sized(app, w, h)
+			return overlayHelp(s.View(), s, w, h)
 		},
 	}
 

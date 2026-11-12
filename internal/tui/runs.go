@@ -21,14 +21,9 @@ import (
 
 var (
 	runsTableContainerStyle = lipgloss.NewStyle().
-				BorderStyle(lipgloss.NormalBorder()).
-				BorderForeground(ColorMuted).
-				Padding(0, 1)
-
-	runsDetailContainerStyle = lipgloss.NewStyle().
-					BorderStyle(lipgloss.NormalBorder()).
-					BorderForeground(ColorPrimary).
-					Padding(1, 2)
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(ColorMuted).
+		Padding(0, 1)
 )
 
 const (
@@ -89,21 +84,21 @@ type runsViewModel struct {
 	width  int
 	height int
 
-	mode                runsViewMode
-	detailSummary       runs.Summary
-	detailViewport      viewport.Model
-	payloadViewport     viewport.Model
-	payloadContent      string
-	payloadLoading      bool
-	payloadErr          error
-	payloadTruncated    bool
-	payloadTotalBytes   int64
-	payloadReadBytes    int64
-	payloadLineCount    int
-	payloadPath         string
-	payloadOriginal     string
+	mode              runsViewMode
+	detailSummary     runs.Summary
+	detailViewport    viewport.Model
+	payloadViewport   viewport.Model
+	payloadContent    string
+	payloadLoading    bool
+	payloadErr        error
+	payloadTruncated  bool
+	payloadTotalBytes int64
+	payloadReadBytes  int64
+	payloadLineCount  int
+	payloadPath       string
+	payloadOriginal   string
 	// compactWarnings folds the warning list into one line on short terminals.
-	compactWarnings bool
+	compactWarnings     bool
 	payloadCheckedPaths []string
 }
 
@@ -233,22 +228,39 @@ func (m *runsViewModel) View() string {
 		return m.centerContent(strings.Join(content, "\n"))
 	}
 
-	sections := m.headerSections()
-	switch m.mode {
-	case modeDetail:
-		help := StyleHelp.Render("↑/↓: scroll • d: view data • esc: back • ?: help")
-		m.fitViewport(&m.detailViewport, sections, help, false)
-		sections = append(sections, runsDetailContainerStyle.Render(m.detailViewport.View()), help)
-		return m.centerContent(strings.Join(sections, "\n\n"))
-	case modePayload:
-		help := StyleHelp.Render("↑/↓: scroll • esc: back • ?: help")
-		sections = append(sections, m.renderPayloadInfo())
-		m.fitViewport(&m.payloadViewport, sections, help, true)
-		sections = append(sections, runsDetailContainerStyle.Render(m.payloadBody()), help)
-		return m.centerContent(strings.Join(sections, "\n\n"))
+	// The table is the screen; a run's details open as a layer over it and
+	// its data as another layer over those.
+	screen := m.centerContent(m.listView(m.headerSections()))
+	if m.mode == modeTable {
+		return screen
 	}
+	screen = overlayLayer(screen, m.detailLayer(), m.width, m.height)
+	if m.mode == modePayload {
+		screen = overlayLayer(screen, m.payloadLayer(), m.width, m.height)
+	}
+	return screen
+}
 
-	return m.centerContent(m.listView(sections))
+// detailLayer renders the selected run's details as the first layer. It
+// fills its bounds so the data layer, one inset deeper, always sits inside
+// it with the details' border showing around it.
+func (m *runsViewModel) detailLayer() string {
+	help := StyleHelp.UnsetMargins().Render("↑/↓: scroll • d: view data • esc: back • ?: help")
+	m.fitLayerViewport(&m.detailViewport, 1, nil, help, true)
+	return layerStyle.Render(m.detailViewport.View() + "\n\n" + help)
+}
+
+// payloadLayer renders the run's data as the second layer, over the details.
+func (m *runsViewModel) payloadLayer() string {
+	w, _ := layerBounds(m.width, m.height, 2)
+	inner := w - layerStyle.GetHorizontalFrameSize()
+	head := []string{
+		StyleTitle.UnsetMargins().Render("Run data"),
+		lipgloss.NewStyle().Width(inner).Render(m.renderPayloadInfo()),
+	}
+	help := StyleHelp.UnsetMargins().Render("↑/↓: scroll • esc: back • ?: help")
+	m.fitLayerViewport(&m.payloadViewport, 2, head, help, true)
+	return layerStyle.Render(strings.Join(append(head, m.payloadBody(), help), "\n\n"))
 }
 
 // headerSections are the title and cache root shown above every mode.
@@ -381,15 +393,19 @@ func (m *runsViewModel) handleRunsKey(msg tea.KeyPressMsg) (Screen, tea.Cmd) {
 	}
 }
 
-// fitViewport sizes vp so the boxed viewport, the sections above it and the
-// help line below fit the terminal. Rows are measured, not assumed: a frame
-// taller than the terminal loses its bottom rows. With fill the box takes all
-// spare space; otherwise it hugs the content and scrolls only when needed.
-func (m *runsViewModel) fitViewport(vp *viewport.Model, above []string, help string, fill bool) {
-	box := runsDetailContainerStyle
-	parts := append(append([]string{}, above...), box.Render(scrollStandIn), help)
-	maxWidth := max(m.width-box.GetHorizontalFrameSize(), 20)
-	sizeScrollArea(vp, maxWidth, m.height, strings.Join(parts, "\n\n"), fill)
+// fitLayerViewport sizes vp so a layer at depth, laid out as head, the
+// viewport and help, fits that depth's layerBounds. Rows are measured, not
+// assumed: a frame taller than the terminal loses its bottom rows. With fill
+// the viewport takes all spare space; otherwise it hugs the content and
+// scrolls only when needed.
+func (m *runsViewModel) fitLayerViewport(vp *viewport.Model, depth int, head []string, help string, fill bool) {
+	if m.width <= 0 || m.height <= 0 {
+		return
+	}
+	w, h := layerBounds(m.width, m.height, depth)
+	parts := append(append([]string{}, head...), scrollStandIn, help)
+	layout := layerStyle.Render(strings.Join(parts, "\n\n"))
+	sizeScrollArea(vp, w-layerStyle.GetHorizontalFrameSize(), h, layout, fill)
 }
 
 func (m *runsViewModel) resizeTable() {
@@ -591,7 +607,7 @@ func (m *runsViewModel) renderPayloadInfo() string {
 		infoLines = append(infoLines, StyleMuted.Render(fmt.Sprintf("Checked paths: %s", strings.Join(paths, ", "))))
 	}
 
-	return runsDetailContainerStyle.Render(strings.Join(infoLines, "\n"))
+	return strings.Join(infoLines, "\n")
 }
 
 // payloadBody returns the unboxed payload area.
