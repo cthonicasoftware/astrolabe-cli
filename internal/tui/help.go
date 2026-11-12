@@ -6,6 +6,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // KeyHelp is one row of the help dialog: the keys and what they do.
@@ -77,14 +78,16 @@ var (
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(ColorPrimary).
 			Padding(1, 2)
-	helpKeyStyle     = lipgloss.NewStyle().Foreground(ColorPrimary).Bold(true)
-	helpSectionStyle = lipgloss.NewStyle().Foreground(ColorSecondary).Bold(true)
+	// helpBackdropStyle dims the screen behind the open help dialog.
+	helpBackdropStyle = lipgloss.NewStyle().Foreground(ColorMuted)
+	helpKeyStyle      = lipgloss.NewStyle().Foreground(ColorPrimary).Bold(true)
+	helpSectionStyle  = lipgloss.NewStyle().Foreground(ColorSecondary).Bold(true)
 )
 
 // helpColumnGap separates side-by-side columns in the help dialog.
 const helpColumnGap = "    "
 
-// renderHelpDialog draws the help dialog centered in a width x height
+// renderHelpDialog draws the help dialog box sized to fit a width x height
 // screen. Sections go in as few columns as fit the terminal's height, since
 // rows past the bottom would push the dialog's top off screen.
 func renderHelpDialog(screen Screen, width, height int) string {
@@ -114,7 +117,31 @@ func renderHelpDialog(screen Screen, width, height int) string {
 			break // more columns only get wider
 		}
 	}
-	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, best)
+	return best
+}
+
+// overlayHelp composites the help dialog as a layer centered over the
+// screen's own view, so the screen stays visible around the dialog.
+func overlayHelp(base string, screen Screen, width, height int) string {
+	dialog := renderHelpDialog(screen, width, height)
+	if width <= 0 {
+		width = max(lipgloss.Width(base), lipgloss.Width(dialog))
+	}
+	if height <= 0 {
+		height = max(lipgloss.Height(base), lipgloss.Height(dialog))
+	}
+	x := max(0, (width-lipgloss.Width(dialog))/2)
+	y := max(0, (height-lipgloss.Height(dialog))/2)
+
+	// Repaint the screen in one muted color so the dialog stands out;
+	// the screen's own colors would otherwise compete with it.
+	backdrop := helpBackdropStyle.Render(ansi.Strip(base))
+
+	comp := lipgloss.NewCompositor(
+		lipgloss.NewLayer(backdrop),
+		lipgloss.NewLayer(dialog).X(x).Y(y).Z(1),
+	)
+	return lipgloss.NewCanvas(width, height).Compose(comp).Render()
 }
 
 // helpColumns lays sections out in n columns, in order, keeping columns
