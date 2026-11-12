@@ -143,10 +143,11 @@ func (r *router) View() tea.View {
 
 // render returns the frame content as a string.
 func (r *router) render() string {
+	view := r.current.View()
 	if r.helpOpen {
-		return renderHelpDialog(r.current, r.width, r.height)
+		return overlayHelp(view, r.current, r.width, r.height)
 	}
-	return r.current.View()
+	return view
 }
 
 func (r *router) navigate(msg NavigateMsg) tea.Cmd {

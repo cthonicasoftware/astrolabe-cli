@@ -84,7 +84,7 @@ var (
 // helpColumnGap separates side-by-side columns in the help dialog.
 const helpColumnGap = "    "
 
-// renderHelpDialog draws the help dialog centered in a width x height
+// renderHelpDialog draws the help dialog box sized to fit a width x height
 // screen. Sections go in as few columns as fit the terminal's height, since
 // rows past the bottom would push the dialog's top off screen.
 func renderHelpDialog(screen Screen, width, height int) string {
@@ -114,7 +114,13 @@ func renderHelpDialog(screen Screen, width, height int) string {
 			break // more columns only get wider
 		}
 	}
-	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, best)
+	return best
+}
+
+// overlayHelp composites the help dialog as a layer centered over the
+// screen's own view, so the screen stays visible around the dialog.
+func overlayHelp(base string, screen Screen, width, height int) string {
+	return overlayLayer(base, renderHelpDialog(screen, width, height), width, height)
 }
 
 // helpColumns lays sections out in n columns, in order, keeping columns

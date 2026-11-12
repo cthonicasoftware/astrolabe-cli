@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // keyScreen records the keys it receives and can claim text focus.
@@ -152,5 +153,32 @@ func TestHelpDialogFitsSmallTerminal(t *testing.T) {
 		if w := lipgloss.Width(view); w > size[0] {
 			t.Errorf("%dx%d: dialog is %d cols", size[0], size[1], w)
 		}
+	}
+}
+
+func TestHelpOverlaysScreen(t *testing.T) {
+	const w, h = 120, 40
+	base := strings.Repeat(strings.Repeat("#", w)+"\n", h-1) + strings.Repeat("#", w)
+	view := ansi.Strip(overlayHelp(base, &keyScreen{}, w, h))
+
+	if got := lipgloss.Height(view); got != h {
+		t.Errorf("overlay is %d rows, want %d", got, h)
+	}
+	if got := lipgloss.Width(view); got != w {
+		t.Errorf("overlay is %d cols, want %d", got, w)
+	}
+	if !strings.Contains(view, "Keyboard shortcuts") {
+		t.Error("dialog missing from overlay")
+	}
+	// The backdrop is the screen with its own styling replaced by the
+	// muted color, so a styled base still comes out dimmed.
+	styled := StyleTitle.Render("bright")
+	if got := overlayHelp(styled, &keyScreen{}, w, h); strings.Contains(got, styled) {
+		t.Error("screen behind the dialog kept its own styling; want it dimmed")
+	}
+
+	lines := strings.Split(view, "\n")
+	if !strings.HasPrefix(lines[0], "####") || !strings.HasPrefix(lines[h/2], "#") {
+		t.Error("screen underneath should stay visible around the dialog")
 	}
 }

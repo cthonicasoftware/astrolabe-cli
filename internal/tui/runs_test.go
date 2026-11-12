@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/cthonicasoftware/astrolabe-cli/internal/runs"
 )
 
@@ -86,7 +87,8 @@ func TestRunsViewFitsTerminal(t *testing.T) {
 				m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 				m.View() // sizes the detail viewport
 				m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
-				if m.detailViewport.YOffset() == 0 {
+				overflows := m.detailViewport.TotalLineCount() > m.detailViewport.Height()
+				if overflows && m.detailViewport.YOffset() == 0 {
 					t.Errorf("%dx%d detail view did not scroll on down", size[0], size[1])
 				}
 			}},
@@ -102,4 +104,42 @@ func TestRunsViewFitsTerminal(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestRunsLayersStackOverTable(t *testing.T) {
+	const w, h = 100, 24
+	m := NewRunsViewer("").(*runsViewModel)
+	m.Update(tea.WindowSizeMsg{Width: w, Height: h})
+	m.Update(runsLoadedMsg{result: manyRuns()})
+	table := ansi.Strip(m.View())
+	tableHelp := "enter: details • q: back"
+
+	check := func(stage, want string, layers int) {
+		t.Helper()
+		view := ansi.Strip(m.View())
+		if got := lipgloss.Height(view); got != h {
+			t.Errorf("%s: %d rows, want %d", stage, got, h)
+		}
+		if !strings.Contains(view, want) {
+			t.Errorf("%s: missing %q", stage, want)
+		}
+		if !strings.Contains(view, tableHelp) {
+			t.Errorf("%s: table should stay visible under the layers", stage)
+		}
+		// Each layer's top-left corner shows, so the stack is visible.
+		if got := strings.Count(view, "╭"); got != layers {
+			t.Errorf("%s: %d layer corners, want %d", stage, got, layers)
+		}
+	}
+
+	if strings.Contains(table, "╭") {
+		t.Fatal("table view should have no layers")
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	check("details", "Run Details", 1)
+	m.Update(tea.KeyPressMsg{Code: 'd', Text: "d"})
+	m.Update(payloadLoadedMsg{original: m.payloadOriginal, content: strings.Repeat("line\n", 50), lines: 50})
+	check("data", "Run data", 2)
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	check("back to details", "Run Details", 1)
 }
