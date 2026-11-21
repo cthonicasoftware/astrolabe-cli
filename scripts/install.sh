@@ -30,7 +30,7 @@ fi
 
 # Configuration
 BINARY_NAME="astrolabe"
-VERSION="0.1.0"
+INSTALLED_VERSION="unknown"  # read from the installed binary, not hardcoded
 CONFIG_DIR="$HOME/.astrolabe"
 DEFAULT_INSTALL_DIR="$HOME/.local/bin"
 SYSTEM_INSTALL_DIR="/usr/local/bin"
@@ -481,6 +481,11 @@ validate_installation() {
         exit 1
     fi
 
+    INSTALLED_VERSION="$("$INSTALL_DIR/$BINARY_NAME" version --json 2>/dev/null \
+        | tr -d '\n' \
+        | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+    [[ -n "$INSTALLED_VERSION" ]] || INSTALLED_VERSION="unknown"
+
     log_success "Installation validated successfully"
 }
 
@@ -488,7 +493,7 @@ validate_installation() {
 show_summary() {
     log_header "Installation Complete!"
 
-    echo "${GREEN}✓${RESET} Astrolabe v$VERSION installed to: ${CYAN}$INSTALL_DIR/$BINARY_NAME${RESET}"
+    echo "${GREEN}✓${RESET} Astrolabe $INSTALLED_VERSION installed to: ${CYAN}$INSTALL_DIR/$BINARY_NAME${RESET}"
     echo "${GREEN}✓${RESET} Configuration directory: ${CYAN}$CONFIG_DIR${RESET}"
     echo
 
@@ -519,7 +524,7 @@ show_summary() {
 
 # Main installation flow
 main() {
-    log_header "Astrolabe Installer v$VERSION"
+    log_header "Astrolabe Installer"
 
     parse_args "$@"
 
