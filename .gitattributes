@@ -18,9 +18,6 @@
 # Shell scripts must be LF or they break on Linux.
 *.sh text eol=lf
 
-# Git hooks are shell scripts (no extension); force LF or they break.
-.githooks/** text eol=lf
-
 # PowerShell scripts: CRLF for native Windows tooling.
 *.ps1 text eol=crlf
 
