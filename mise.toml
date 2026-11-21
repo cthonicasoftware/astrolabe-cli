@@ -7,13 +7,16 @@ GOCACHE = "{{config_root}}/.gocache"
 
 # Release binaries are built by GoReleaser (.goreleaser.yml), not mise.
 
+# On Windows, `bash` can resolve to WSL and build a Linux binary with WSL's Go,
+# so Windows uses the PowerShell twin of ldflags.sh instead.
 [tasks.build]
-shell = "bash -c"
-run = 'go build -ldflags "$(bash scripts/ldflags.sh)" -o astrolabe.exe ./cmd/astrolabe'
+run = 'go build -ldflags "$(bash scripts/ldflags.sh)" -o astrolabe ./cmd/astrolabe'
+run_windows = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build.ps1"
 description = "Build the astrolabe CLI with version stamping"
 
 [tasks."build:version"]
 run = "bash scripts/ldflags.sh"
+run_windows = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ldflags.ps1"
 description = "Print version ldflags"
 
 [tasks.test]
