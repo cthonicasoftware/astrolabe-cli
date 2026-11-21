@@ -8,6 +8,9 @@
 *.so
 *.dylib
 
+# Linux/macOS build output from `mise run build`
+/astrolabe
+
 # Test binary, built with `go test -c`
 *.test
 
