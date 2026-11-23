@@ -4,9 +4,9 @@ go 1.27.4
 
 require (
 	charm.land/bubbles/v2 v2.2.1
-	charm.land/bubbletea/v2 v2.1.1
-	charm.land/lipgloss/v2 v2.1.0
-	github.com/charmbracelet/x/ansi v0.11.9
+	charm.land/bubbletea/v2 v2.1.2
+	charm.land/lipgloss/v2 v2.1.1
+	github.com/charmbracelet/x/ansi v0.11.10
 	github.com/oklog/ulid/v2 v2.1.2
 	github.com/prometheus/client_golang v1.25.0
 	github.com/spf13/cobra v1.10.2
